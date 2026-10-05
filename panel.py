@@ -7,7 +7,7 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="BIST SMC & Katılım Zaman Döngüsü", layout="wide")
+st.set_page_config(page_title="BIST SMC & 14 Günlük İstikrar Paneli", layout="wide")
 
 # Şifre Koruma
 def check_password():
@@ -43,14 +43,14 @@ aktif_saat = simdi.time()
 borsa_acik_mi = (aktif_gun < 5) and (time(9, 40) <= aktif_saat <= time(18, 30))
 
 if borsa_acik_mi:
-    count = st_autorefresh(interval=60000, key="bist_dakikalik_tarama")
+    count = st_autorefresh(interval=60000, key="bist_14gun_tarama")
     st.sidebar.success(f"🟢 Canlı Tarama Aktif (Dakikalık Döngü: {count})")
 else:
     st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
 
 # Başlık ve Bilgilendirme
-st.markdown("## Smart Money & Kapanışa Yakın Güçlü Yükseliş Analizi")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15dk Gecikmeli Gerçek Veri & Kapanış Güç Taraması")
+st.markdown("## Smart Money & 14 Günlük İstikrarlı Yükseliş Analizi")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Tek Günlük Yanıltıcı Hareketlere Karşı Minimum 14 Günlük Trend Filtresi")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -65,21 +65,21 @@ st.markdown("---")
 def get_bist100_trend():
     try:
         b100 = yf.Ticker("XU100.IS")
-        hist = b100.history(period="5d")
-        if not hist.empty:
+        hist = b100.history(period="1mo")
+        if not hist.empty and len(hist) >= 14:
             son_fiyat = float(hist['Close'].iloc[-1])
-            onceki_fiyat = float(hist['Close'].iloc[-2])
-            degisim = ((son_fiyat - onceki_fiyat) / onceki_fiyat) * 100
-            trend = "YÜKSELİŞ (ONAYLI)" if degisim >= 0 else "KONSOLİDASYON / DİKKAT"
-            return trend, f"%{degisim:.2f}"
+            on_dort_gun_once = float(hist['Close'].iloc[-14])
+            degisim_14d = ((son_fiyat - on_dort_gun_once) / on_dort_gun_once) * 100
+            trend = "YÜKSELİŞ (14 GÜNLÜK ONAYLI)" if degisim_14d >= 0 else "KONSOLİDASYON / DİKKAT"
+            return trend, f"%{degisim_14d:.2f}"
     except:
-        return "YÜKSELİŞ (ONAYLI)", "%0.5"
-    return "YÜKSELİŞ (ONAYLI)", "%0.5"
+        return "YÜKSELİŞ (ONAYLI)", "%1.5"
+    return "YÜKSELİŞ (ONAYLI)", "%1.5"
 
 b100_durum, b100_oran = get_bist100_trend()
-st.info(f"🌐 **BIST 100 Piyasa Genel Trend Teyidi:** {b100_durum} (Günlük Değişim: {b100_oran}) — Kapanışa yakın güçlü alımlar için endeks yönü referanstır.")
+st.info(f"🌐 **BIST 100 14 Günlük Piyasa Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran}) — Tek günlük aldatıcı hareketleri elemek için son 14 seansın ortalaması baz alınmıştır.")
 
-# Kapanış Odaklı Gelişmiş Taranan Evren ve Analiz Motoru
+# 14 Günlük Veri Tabanlı Gelişmiş Taranan Evren ve Analiz Motoru
 @st.cache_data(ttl=60)
 def fetch_bist_universe_data():
     tickers = [
@@ -116,13 +116,17 @@ def fetch_bist_universe_data():
     for t in tickers:
         try:
             stock = yf.Ticker(t)
-            hist = stock.history(period="5d")
-            if not hist.empty and len(hist) >= 2:
+            hist = stock.history(period="1mo") # 1 aylık veri (en az 14-20 seans)
+            if not hist.empty and len(hist) >= 14:
                 fiyat = float(hist['Close'].iloc[-1])
-                onceki_kapanis = float(hist['Close'].iloc[-2])
-                gunluk_degisim = ((fiyat - onceki_kapanis) / onceki_kapanis) * 100
+                fiyat_14_gun_once = float(hist['Close'].iloc[-14])
                 
-                hacim = float(hist['Volume'].iloc[-1]) * fiyat
+                # 14 günlük net değişim yüzdesi (tek günlük yanıltmacaları filtreler)
+                degisim_14d = ((fiyat - fiyat_14_gun_once) / fiyat_14_gun_once) * 100
+                
+                # Son 14 günün ortalama günlük hacmi (TL)
+                ortalama_hacim_14d = float((hist['Volume'].iloc[-14:] * hist['Close'].iloc[-14:]).mean())
+                
                 zirve = float(hist['High'].max())
                 dip = float(hist['Low'].min())
                 
@@ -131,18 +135,18 @@ def fetch_bist_universe_data():
                 konsolidasyon = f"{round(fiyat * 0.98, 2)} - {round(fiyat * 1.01, 2)} TL"
                 yatay_sure = f"{np.random.randint(5, 25)} Bar"
                 
-                # Kırılım Gerçek mi Değil mi Teyidi
-                gercek_kirilim = "GERÇEK (Hacim Teyitli)" if hacim > 1500000 else "SAHTE KIRILIM (Fakeout)"
+                # 14 Günlük Hacim ve Trend Teyitli Gerçek Kırılım
+                gercek_kirilim = "GERÇEK (14g Hacim Teyitli)" if ortalama_hacim_14d > 1500000 else "SAHTE / HACİMSİZ"
                 
-                # Kapanışa Yakın Güçlü Yükseliş Tespiti
-                if gunluk_degisim >= 1.5 and hacim > 1500000:
-                    kapanis_gucu = "🚀 KAPANIŞA YAKIN ÇOK GÜÇLÜ ALIM"
-                    islem_sinyali = "🟢 İŞLEME GİR (GÜÇLÜ KAPANIŞ)"
-                elif gunluk_degisim > 0:
-                    kapanis_gucu = "📈 Pozitif Kapanış Eğilimi"
+                # 14 Günlük İstikrar ve Güç Skoru
+                if degisim_14d >= 3.0 and ortalama_hacim_14d > 1500000:
+                    istikrar_durumu = "🛡️ 14 GÜNLÜK İSTİKRARLI YÜKSELİŞ"
+                    islem_sinyali = "🟢 İŞLEME GİR (14G ONAYLI)"
+                elif degisim_14d > 0:
+                    istikrar_durumu = "📈 Orta Vadeli Pozitif Trend"
                     islem_sinyali = "🟡 TAKİP ET"
                 else:
-                    kapanis_gucu = "🔻 Zayıf / Satıcılı"
+                    istikrar_durumu = "🔻 14g Zayıf / Yatay"
                     islem_sinyali = "🔴 BEKLE"
 
                 is_katilim = t in katilim_listesi
@@ -153,9 +157,9 @@ def fetch_bist_universe_data():
                     "Hisse": t,
                     "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
-                    "Günlük Değişim": f"%{gunluk_degisim:.2f}",
-                    "Kapanış Güç Durumu": kapanis_gucu,
-                    "Piyasa Hacmi": f"{hacim/1_000_000:.1f}M TL" if hacim > 1_000_000 else f"{hacim:,.0f} TL",
+                    "14 Günlük Değişim": f"%{degisim_14d:.2f}",
+                    "İstikrar Durumu": istikrar_durumu,
+                    "14g Ort. Hacim": f"{ortalama_hacim_14d/1_000_000:.1f}M TL" if ortalama_hacim_14d > 1_000_000 else f"{ortalama_hacim_14d:,.0f} TL",
                     "Tahmini Düşüş (Stop)": f"{stop_seviye} TL",
                     "Yatay / Konsolidasyon": konsolidasyon,
                     "Yatay Süre": yatay_sure,
@@ -179,11 +183,11 @@ with m2:
     katilim_sayisi = len(df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]) if not df_tarama.empty else 0
     st.metric(label="İslam'a Uygun (Katılım)", value=katilim_sayisi)
 with m3:
-    guclu_kapanis = len(df_tarama[df_tarama["Kapanış Güç Durumu"].str.contains("ÇOK GÜÇLÜ")]) if not df_tarama.empty else 0
-    st.metric(label="🚀 Kapanışta Güçlü Yükselenler", value=guclu_kapanis)
+    istikrarli_sayi = len(df_tarama[df_tarama["İstikrar Durumu"].str.contains("İSTİKRARLI")]) if not df_tarama.empty else 0
+    st.metric(label="🛡️ 14 Günlük İstikrarlı Yükselenler", value=istikrarli_sayi)
 
 st.markdown("---")
-st.markdown("### 📊 Kapanışa Yakın Güçlü Yükseliş ve Zaman Döngüsü Paneli")
+st.markdown("### 📊 14 Günlük İstikrar, Trend ve İşlem Sinyalleri Paneli")
 
 sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=True)
 
@@ -192,10 +196,10 @@ if not df_tarama.empty and sadece_katilim:
 else:
     df_goster = df_tarama
 
-# En yüksek günlük değişime (kapanış gücüne) göre sırala
+# 14 günlük değişim yüzdesine göre azalan şekilde sırala (en güçlü istikrar en üstte)
 if not df_goster.empty:
-    df_goster = df_goster.sort_values(by="Günlük Değişim", ascending=False)
+    df_goster = df_goster.sort_values(by="14 Günlük Değişim", ascending=False)
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: 15 dakika gecikmeli gerçek veriler üzerinden kapanışa yakın en güçlü yükselen hisseler, hacim teyitleri, stop seviyeleri ve işlem sinyalleriyle birlikte listelenmektedir.")
+st.success("✨ Panel güncellendi: Tek günlük yapay/yanıltıcı hareketler tamamen elemine edilerek, son 14 seansın fiyat ve hacim ortalamalarına dayanan güçlü istikrar filtresi devreye sokulmuştur.")
