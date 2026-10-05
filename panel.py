@@ -19,7 +19,8 @@ def check_password():
         submitted = st.form_submit_button("Giriş Yap")
         
         if submitted:
-            if username == "Cuma Babacan" and password == "784512":
+            # .strip() komutu ile olası yanlışlıkla eklenen boşluklar temizlenir
+            if username.strip() == "Cuma Babacan" and password.strip() == "784512":
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
