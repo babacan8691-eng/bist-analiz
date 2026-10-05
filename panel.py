@@ -65,4 +65,4 @@ if not df.empty:
     st.dataframe(df, use_container_width=True)
 else:
     st.warning("Veriler yüklenirken geçici bir sorun oluştu.")
-  
+    
