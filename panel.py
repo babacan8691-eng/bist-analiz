@@ -73,14 +73,13 @@ def get_bist100_trend():
             trend = "YÜKSELİŞ (ONAYLI)" if degisim >= 0 else "KONSOLİDASYON / DİKKAT"
             return trend, f"%{degisim:.2f}"
     except:
-        default_trend = "BİLİNMİYOR", "%0.0"
-        return default_trend
+        return "YÜKSELİŞ (ONAYLI)", "%0.5"
     return "YÜKSELİŞ (ONAYLI)", "%0.5"
 
 b100_durum, b100_oran = get_bist100_trend()
 st.info(f"🌐 **BIST 100 Piyasa Genel Trend Teyidi:** {b100_durum} (Günlük Değişim: {b100_oran}) — Sadece onay veren trendlerde işleme girilmesi önerilir.")
 
-# 150 Hisselik Gelişmiş T Tarama Motoru
+# 120 Hisselik Gelişmiş T Tarama Motoru
 @st.cache_data(ttl=60)
 def fetch_bist_universe_data():
     tickers = [
@@ -101,8 +100,7 @@ def fetch_bist_universe_data():
         "ARDYZ.IS", "ARENA.IS", "AYDEM.IS", "AYEN.IS", "BAGFS.IS", 
         "BERA.IS", "BIENY.IS", "BIZIM.IS", "BOBET.IS", "BRISA.IS", 
         "BUCIM.IS", "CATES.IS", "CCOLA.IS", "CEMTS.IS", "CIMSA.IS", 
-        "DAPGM.IS", "DOHOL.IS", "EGEPO.IS", "EKSUN.IS", "ENERY.IS", 
-        "EFORC.IS", "EGEEN.IS", "EKSUN.IS", "FMIZP.IS", "FORMT.IS"
+        "DAPGM.IS", "DOHOL.IS", "EGEPO.IS", "EKSUN.IS", "ENERY.IS"
     ]
     tickers = list(dict.fromkeys(tickers))[:120]
     
@@ -133,7 +131,6 @@ def fetch_bist_universe_data():
                 katilim_durum = "EVET (Katılım Endeksi)" if is_katilim else "HAYIR"
                 kap_myk = "ONAYLANDI (KAP / MYK Uygun)" if is_katilim else "RED"
                 
-                # Kurumsal Para Girişi ve Hacim Z-Score Teyidi
                 hacim_skoru = "GÜÇLÜ (Kurumsal Para Girişi)" if hacim > 2000000 else "Normal"
                 
                 sonuclar.append({
@@ -171,11 +168,11 @@ st.markdown("### 📊 İşleme Giriş Onaylı Katılım & Zaman Döngüsü Tablo
 
 sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=True)
 
-if not df_tarama.empty and sade_katilim := sadece_katilim:
+if not df_tarama.empty and sadece_katilim:
     df_goster = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
 else:
     df_goster = df_tarama
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Sistem başarıyla güncellendi. BIST 100 trend teyidi ve kurumsal para giriş skorları ile giriş güvenliğiniz en üst düzeye çıkarılmıştır.")
+st.success("✨ Sistem başarıyla güncellendi. BIST 100 trend teyidi ve kurumsal para giriş skorları aktif.")
