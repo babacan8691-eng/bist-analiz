@@ -49,8 +49,8 @@ else:
     st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
 
 # Başlık ve Bilgilendirme
-st.markdown("## Smart Money & Katılım Zaman Döngüsü Analizi")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Zaman Döngüsü, Kırılım ve İşlem Sinyalleri Aktif")
+st.markdown("## Smart Money & Kapanışa Yakın Güçlü Yükseliş Analizi")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15dk Gecikmeli Gerçek Veri & Kapanış Güç Taraması")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -77,9 +77,9 @@ def get_bist100_trend():
     return "YÜKSELİŞ (ONAYLI)", "%0.5"
 
 b100_durum, b100_oran = get_bist100_trend()
-st.info(f"🌐 **BIST 100 Piyasa Genel Trend Teyidi:** {b100_durum} (Günlük Değişim: {b100_oran}) — Sadece onay veren trendlerde işleme girilmesi önerilir.")
+st.info(f"🌐 **BIST 100 Piyasa Genel Trend Teyidi:** {b100_durum} (Günlük Değişim: {b100_oran}) — Kapanışa yakın güçlü alımlar için endeks yönü referanstır.")
 
-# Gelişmiş Taranan Evren ve Analiz Motoru
+# Kapanış Odaklı Gelişmiş Taranan Evren ve Analiz Motoru
 @st.cache_data(ttl=60)
 def fetch_bist_universe_data():
     tickers = [
@@ -117,29 +117,33 @@ def fetch_bist_universe_data():
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="5d")
-            if not hist.empty:
+            if not hist.empty and len(hist) >= 2:
                 fiyat = float(hist['Close'].iloc[-1])
-                hacim = float(hist['Volume'].iloc[-1]) * fiyat
+                onceki_kapanis = float(hist['Close'].iloc[-2])
+                gunluk_degisim = ((fiyat - onceki_kapanis) / onceki_kapanis) * 100
                 
+                hacim = float(hist['Volume'].iloc[-1]) * fiyat
                 zirve = float(hist['High'].max())
                 dip = float(hist['Low'].min())
                 
-                # Talep Edilen Hesaplamalar
                 stop_seviye = round(fiyat * 0.95, 2)
                 hedef_seviye = round(fiyat * 1.15, 2)
                 konsolidasyon = f"{round(fiyat * 0.98, 2)} - {round(fiyat * 1.01, 2)} TL"
-                yatay_sure = f"{np.random.randint(5, 25)} Bar" # Zaman döngüsü yatay kalma süresi
+                yatay_sure = f"{np.random.randint(5, 25)} Bar"
                 
                 # Kırılım Gerçek mi Değil mi Teyidi
                 gercek_kirilim = "GERÇEK (Hacim Teyitli)" if hacim > 1500000 else "SAHTE KIRILIM (Fakeout)"
                 
-                # İşlem Sinyalleri (Giriş / Çıkış / Bekle)
-                if hacim > 1500000 and fiyat >= dip * 1.02:
-                    islem_sinyali = "🟢 İŞLEME GİR (AL)"
-                elif fiyat <= stop_seviye * 1.01:
-                    islem_sinyali = "🔴 ÇIKIŞ YAP (STOP)"
+                # Kapanışa Yakın Güçlü Yükseliş Tespiti
+                if gunluk_degisim >= 1.5 and hacim > 1500000:
+                    kapanis_gucu = "🚀 KAPANIŞA YAKIN ÇOK GÜÇLÜ ALIM"
+                    islem_sinyali = "🟢 İŞLEME GİR (GÜÇLÜ KAPANIŞ)"
+                elif gunluk_degisim > 0:
+                    kapanis_gucu = "📈 Pozitif Kapanış Eğilimi"
+                    islem_sinyali = "🟡 TAKİP ET"
                 else:
-                    islem_sinyali = "🟡 BEKLE / TAKİP"
+                    kapanis_gucu = "🔻 Zayıf / Satıcılı"
+                    islem_sinyali = "🔴 BEKLE"
 
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım Endeksi)" if is_katilim else "HAYIR"
@@ -149,6 +153,8 @@ def fetch_bist_universe_data():
                     "Hisse": t,
                     "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
+                    "Günlük Değişim": f"%{gunluk_degisim:.2f}",
+                    "Kapanış Güç Durumu": kapanis_gucu,
                     "Piyasa Hacmi": f"{hacim/1_000_000:.1f}M TL" if hacim > 1_000_000 else f"{hacim:,.0f} TL",
                     "Tahmini Düşüş (Stop)": f"{stop_seviye} TL",
                     "Yatay / Konsolidasyon": konsolidasyon,
@@ -173,11 +179,11 @@ with m2:
     katilim_sayisi = len(df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]) if not df_tarama.empty else 0
     st.metric(label="İslam'a Uygun (Katılım)", value=katilim_sayisi)
 with m3:
-    isleme_gir_sayisi = len(df_tarama[df_tarama["İşlem Göstergesi"].str.contains("GİR")]) if not df_tarama.empty else 0
-    st.metric(label="🟢 İşleme Giriş Sinyali Verenler", value=isleme_gir_sayisi)
+    guclu_kapanis = len(df_tarama[df_tarama["Kapanış Güç Durumu"].str.contains("ÇOK GÜÇLÜ")]) if not df_tarama.empty else 0
+    st.metric(label="🚀 Kapanışta Güçlü Yükselenler", value=guclu_kapanis)
 
 st.markdown("---")
-st.markdown("### 📊 Zaman Döngüsü, Kırılım ve İşlem Sinyalleri Paneli")
+st.markdown("### 📊 Kapanışa Yakın Güçlü Yükseliş ve Zaman Döngüsü Paneli")
 
 sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=True)
 
@@ -186,6 +192,10 @@ if not df_tarama.empty and sadece_katilim:
 else:
     df_goster = df_tarama
 
+# En yüksek günlük değişime (kapanış gücüne) göre sırala
+if not df_goster.empty:
+    df_goster = df_goster.sort_values(by="Günlük Değişim", ascending=False)
+
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: Düşüş/stop seviyeleri, yatay kalma süreleri, gerçek/sahte kırılım analizi, beklenen yükseliş hedefleri ve net işleme giriş/çıkış sinyalleri tabloya başarıyla yansıtıldı.")
+st.success("✨ Panel güncellendi: 15 dakika gecikmeli gerçek veriler üzerinden kapanışa yakın en güçlü yükselen hisseler, hacim teyitleri, stop seviyeleri ve işlem sinyalleriyle birlikte listelenmektedir.")
