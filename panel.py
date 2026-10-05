@@ -3,43 +3,35 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-# Sayfa Yapılandırması
 st.set_page_config(page_title="BIST Profesyonel Takip Paneli", layout="wide")
 
-# Şifre ve Kullanıcı Adı Koruma Mekanizması
 def check_password():
-    def credentials_entered():
-        if st.session_state["username"] == "Cuma Babacan" and st.session_state["password"] == "784512":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
-        st.subheader("🔐 Yetkili Giriş Paneli")
-        st.text_input("Kullanıcı Adı:", key="username")
-        st.text_input("Erişim Şifresi:", type="password", key="password")
-        st.button("Giriş Yap", on_click=credentials_entered)
-        return False
-    elif not st.session_state["password_correct"]:
-        st.subheader("🔐 Yetkili Giriş Paneli")
-        st.text_input("Kullanıcı Adı:", key="username")
-        st.text_input("Erişim Şifresi:", type="password", key="password")
-        st.button("Giriş Yap", on_click=credentials_entered)
-        st.error("😕 Hatalı Kullanıcı Adı veya Şifre")
-        return False
-    else:
+        st.session_state["password_correct"] = False
+
+    if st.session_state["password_correct"]:
         return True
+
+    st.subheader("🔐 Yetkili Giriş Paneli")
+    with st.form("login_form"):
+        username = st.text_input("Kullanıcı Adı:")
+        password = st.text_input("Erişim Şifresi:", type="password")
+        submitted = st.form_submit_button("Giriş Yap")
+        
+        if submitted:
+            if username == "Cuma Babacan" and password == "784512":
+                st.session_state["password_correct"] = True
+                st.rerun()
+            else:
+                st.error("😕 Hatalı Kullanıcı Adı veya Şifre")
+    return False
 
 if not check_password():
     st.stop()
 
-# Ana Panel İçeriği
 st.title("📈 BIST 70 Profesyonel Takip Paneli")
 st.write("Hoş geldiniz, Cuma Babacan. Sistem başarıyla aktif edildi, canlı veriler yükleniyor...")
 
-# Örnek BIST Hisseleri
 tickers = ["THYAO.IS", "GARAN.IS", "EREGL.IS", "AKBNK.IS", "KCHOL.IS"]
 
 @st.cache_data(ttl=300)
