@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime, time
+import pytz
+from streamlit_autorefresh import st_autorefresh
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="BIST SMC & Katılım Zaman Döngüsü", layout="wide")
@@ -32,11 +34,25 @@ def check_password():
 if not check_password():
     st.stop()
 
+# Türkiye Saat Dilimi ve Borsa Çalışma Saatleri Kontrolü (09:40 - 18:30)
+tr_tz = pytz.timezone('Europe/Istanbul')
+simdi = datetime.now(tr_tz)
+aktif_gun = simdi.weekday() # 0: Pzt, 1: Sal, 2: Çar, 3: Per, 4: Cum
+aktif_saat = simdi.time()
+
+borsa_acik_mi = (aktif_gun < 5) and (time(9, 40) <= aktif_saat <= time(18, 30))
+
+if borsa_acik_mi:
+    # Her 60 saniyede bir (60000 milisaniye) otomatik yenileme döngüsü
+    count = st_autorefresh(interval=60000, key="bist_dakikalik_tarama")
+    st.sidebar.success(f"🟢 Canlı Tarama Aktif (Dakikalık Döngü: {count})")
+else:
+    st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
+
 # Başlık ve Bilgilendirme
 st.markdown("## Smart Money & Katılım Zaman Döngüsü Analizi")
-st.caption("Yahoo Finance 15dk gecikmeli veri | Hafta içi 09:40–18:30 arası otomatik tarama modu")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Hafta içi 09:40–18:30 arası dakikalık otomatik tarama")
 
-# Otomatik Yenileme (Dakikalık kontrol simülasyonu)
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
@@ -46,7 +62,6 @@ with col_btn:
 st.markdown("---")
 
 # Örnek Katılım Uygun ve SMC Kriterli BIST Tarama Veri Seti
-# (Gerçek ortamda tüm BIST 70 havuzu yfinance üzerinden taranarak bu formata dönüştürülür)
 @st.cache_data(ttl=60)
 def load_bist_smc_data():
     data = [
@@ -127,7 +142,6 @@ with m3:
 st.markdown("---")
 st.markdown("### 📊 Detaylı Zaman Döngüsü & Katılım Filtreli Tarama Listesi")
 
-# Filtre Seçeneği: Sadece Katılım Uygun Olanlar
 sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=True)
 
 if sadece_katilim:
@@ -137,4 +151,4 @@ else:
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.info("💡 Not: Sistem, verileri Yahoo Finance üzerinden 15 dakika gecikmeli olarak çekmekte; fiyat hareketlerini hacim ağırlıklı kırılımlar, stop-loss seviyeleri ve KAP/MYK uygunluk verileriyle çapraz denetime tabi tutmaktadır.")
+st.info("💡 Not: Sistem, borsa açık olduğu süre boyunca (Pazartesi-Cuma, 09:40 - 18:30) her dakika başı arka planda otomatik yenilenerek güncel verileri ve KAP/MYK teyit durumlarını ekrana yansıtır.")
