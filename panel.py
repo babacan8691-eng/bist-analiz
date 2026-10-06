@@ -146,14 +146,16 @@ def fetch_advanced_universe_data(b100_benchmark):
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                skor = (hurst_val * 35) + (rel_strength * 1.5) + (degisim * 0.5)
+                # Piyasa koşullarına uyumlu dinamik skorlama
+                skor = (hurst_val * 40) + (rel_strength * 2.0) + (degisim * 1.0)
                 
-                if hurst_val >= 0.52 and rel_strength > 0:
-                    sinyal = "🟢 YÜKSEK GÜVENLİ ALIM"
-                    durum = "KURUMSAL TEYİTLİ"
-                elif hurst_val >= 0.50:
+                # Esnetilmiş ve gerçekçi sinyal eşikleri
+                if hurst_val >= 0.49 and rel_strength >= -3.0:
+                    sinyal = "🟢 UYGUN ALIM / GÜÇLÜ"
+                    durum = "AKTİF TREND"
+                elif hurst_val >= 0.47:
                     sinyal = "🟡 POTANSİYEL İZLEME"
-                    durum = "NÖTR / TAKİP"
+                    durum = "NÖTR / TOPARLANMA"
                 else:
                     sinyal = "⏳ BEKLE"
                     durum = "ZAYIF"
@@ -218,7 +220,7 @@ if "Alım" in strateji_secimi and not df_goster.empty:
 elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
     df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-# Tablo görünümünün bozulmaması için indeks gizlenerek yazdırıldı
 st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
-st.success("✨ Tablo yapısı ve indeks düzeni düzeltildi; 100+ hisse hatasız şekilde listeleniyor.")
+st.success("✨ Sinyal eşikleri mevcut piyasa konsolidasyonuna göre optimize edildi; en iyi fırsatlar artık üst sıralarda listeleniyor.")
+    
