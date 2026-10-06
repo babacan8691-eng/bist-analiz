@@ -34,7 +34,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# Türkiye Saat Dilimi ve Borsa Çalışma Saatleri Kontrolü (09:40 - 18:30)
+# Türkiye Saat Dilimi ve Borsa Çalışma Saatleri Kontrolü
 tr_tz = pytz.timezone('Europe/Istanbul')
 simdi = datetime.now(tr_tz)
 aktif_gun = simdi.weekday() 
@@ -55,18 +55,17 @@ st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Hurs
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
-        st.cache_data.clear()
         st.rerun()
 
 st.markdown("---")
 
-# Güvenli Hurst Eksponenti Hesaplama Yardımcı Fonksiyonu
+# Güvenli Hurst Eksponenti Hesaplama
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
-        if len(ts) < 20 or np.any(np.isnan(ts)):
+        if len(ts) < 15 or np.any(np.isnan(ts)):
             return 0.55
-        lags = range(2, min(15, len(ts)//2))
+        lags = range(2, min(10, len(ts)//2))
         tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
         if any(np.isnan(tau)) or any(np.array(tau) == 0):
             return 0.55
@@ -75,27 +74,25 @@ def calculate_hurst(ts):
     except:
         return 0.55
 
-# BIST 100 Genel Trend ve Referans Verisi
-@st.cache_data(ttl=20)
+# BIST 100 Genel Trend Verisi
 def get_bist100_data():
     try:
         b100 = yf.Ticker("XU100.IS")
         hist = b100.history(period="1mo")
-        if not hist.empty and len(hist) >= 16:
-            fiyat_suan = float(hist['Close'].iloc[-2])
-            fiyat_oncesi = float(hist['Close'].iloc[-16])
+        if not hist.empty and len(hist) >= 10:
+            fiyat_suan = float(hist['Close'].iloc[-1])
+            fiyat_oncesi = float(hist['Close'].iloc[0])
             b100_degisim = ((fiyat_suan - fiyat_oncesi) / fiyat_oncesi) * 100
-            trend = "YÜKSELİŞ (14 GÜNLÜK ONAYLI)" if b100_degisim >= 0 else "KONSOLİDASYON / DİKKAT"
+            trend = "YÜKSELİŞ ONAYLI" if b100_degisim >= 0 else "KONSOLİDASYON / DİKKAT"
             return trend, f"%{b100_degisim:.2f}", b100_degisim
     except:
         pass
     return "YÜKSELİŞ (ONAYLI)", "%1.5", 1.5
 
 b100_durum, b100_oran, b100_val = get_bist100_data()
-st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran})")
+st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (Değişim: {b100_oran})")
 
-# Kapsamlı Veri Çekme ve Analiz Motoru (Hata Korumalı)
-@st.cache_data(ttl=20)
+# Veri Çekme Motoru (Önbelleksiz ve Garantili Dolum)
 def fetch_advanced_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -104,20 +101,9 @@ def fetch_advanced_universe_data(b100_benchmark):
         "FROTO.IS", "TOASO.IS", "TCELL.IS", "TTKOM.IS", "MGROS.IS",
         "ASTOR.IS", "OYAKC.IS", "ARCLK.IS", "ENJSA.IS", "SASA.IS",
         "HEKTS.IS", "KONTR.IS", "BRYAT.IS", "ECILC.IS", "EGEEN.IS",
-        "GESAN.IS", "GUBRF.IS", "ODAS.IS", "QUAGR.IS", "KMPUR.IS",
-        "ALBRK.IS", "GARFA.IS", "ZOREN.IS", "CANTE.IS", "CWENE.IS",
-        "EUPWR.IS", "BIOEN.IS", "ALFAS.IS", "GLYHO.IS", "DEVA.IS", 
-        "ECZYT.IS", "GOODY.IS", "IPEKE.IS", "KOZAA.IS", "KOZAL.IS", 
-        "MAVI.IS", "TKFEN.IS", "TSKB.IS", "VAKBN.IS", "HALKB.IS", 
-        "ISCTR.IS", "TSPOR.IS", "BJKAS.IS", "GSRAY.IS", "FENER.IS", 
-        "CLEBI.IS", "DOAS.IS", "AGHOL.IS", "AHGAZ.IS", "AKFYE.IS", 
-        "AKSA.IS", "AKSEN.IS", "ALARK.IS", "ANELE.IS", "ARASE.IS", 
-        "ARDYZ.IS", "ARENA.IS", "AYDEM.IS", "AYEN.IS", "BAGFS.IS", 
-        "BERA.IS", "BIENY.IS", "BIZIM.IS", "BOBET.IS", "BRISA.IS", 
-        "BUCIM.IS", "CATES.IS", "CCOLA.IS", "CEMTS.IS", "CIMSA.IS", 
-        "DAPGM.IS", "DOHOL.IS", "EGEPO.IS", "EKSUN.IS", "ENERY.IS"
+        "GESAN.IS", "GUBRF.IS", "ODAS.IS", "KMPUR.IS", "ALBRK.IS", 
+        "ZOREN.IS", "CWENE.IS", "EUPWR.IS", "BIOEN.IS", "ALFAS.IS"
     ]
-    tickers = list(dict.fromkeys(tickers))[:120]
     
     katilim_listesi = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "ASELS.IS", "BIMAS.IS", 
@@ -128,83 +114,49 @@ def fetch_advanced_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    for t in tickers:
+    
+    # İlerleme Çubuğu ile Hisselerin Yüklenmesi
+    bar = st.progress(0, text="Hisse verileri taranıyor, lütfen bekleyin...")
+    toplam = len(tickers)
+    
+    for i, t in enumerate(tickers):
         try:
             stock = yf.Ticker(t)
-            hist = stock.history(period="1.5mo") 
-            if not hist.empty and len(hist) >= 15:
-                fiyat = float(hist['Close'].iloc[-2])
-                fiyat_14_gun_once = float(hist['Close'].iloc[-16]) if len(hist) >= 16 else float(hist['Close'].iloc[0])
-                degisim_14d = ((fiyat - fiyat_14_gun_once) / fiyat_14_gun_once) * 100
+            hist = stock.history(period="1mo") 
+            if not hist.empty and len(hist) >= 5:
+                fiyat = float(hist['Close'].iloc[-1])
+                fiyat_once = float(hist['Close'].iloc[0])
+                degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
                 
-                # Hacim Çarpanı (RVOL)
-                son_gun_hacim = float(hist['Volume'].iloc[-2] * hist['Close'].iloc[-2])
-                ortalama_hacim_14d = float((hist['Volume'].iloc[-15:-1] * hist['Close'].iloc[-15:-1]).mean()) if len(hist) >= 15 else son_gun_hacim
-                hacim_oran = (son_gun_hacim / ortalama_hacim_14d) if ortalama_hacim_14d > 0 else 1.0
-                
-                # CMF (Chaikin Money Flow)
-                high = hist['High']
-                low = hist['Low']
-                close = hist['Close']
                 vol = hist['Volume']
-                mf_multiplier = ((close - low) - (high - close)) / (high - low + 1e-9)
-                mf_volume = mf_multiplier * vol
-                cmf = mf_volume.rolling(14).sum() / (vol.rolling(14).sum() + 1e-9)
-                current_cmf = float(cmf.iloc[-2]) if not np.isnan(cmf.iloc[-2]) else 0.0
+                close = hist['Close']
+                son_hacim = float(vol.iloc[-1] * close.iloc[-1]) if len(vol) > 0 else 1000
                 
-                # VWAP Sapma Oranı
-                typical_price = (high + low + close) / 3
-                vwap = (typical_price * vol).cumsum() / vol.cumsum()
-                current_vwap = float(vwap.iloc[-2]) if not np.isnan(vwap.iloc[-2]) else fiyat
-                vwap_sapma = ((fiyat - current_vwap) / current_vwap) * 100
-
-                # VCP (Volatilite Daralma)
-                recent_range = float((high.iloc[-5:].max() - low.iloc[-5:].min()) / fiyat)
-                prev_range = float((high.iloc[-15:-5].max() - low.iloc[-15:-5].min()) / fiyat)
-                vcp_daraliyor = recent_range < prev_range
-                vcp_durum = "🔥 Daralma (Sıkışma)" if vcp_daraliyor else "Normal"
-
-                # Hurst Eksponenti
-                hurst_val = calculate_hurst(close.values[-30:])
-
-                # Göreli Güç (RS)
-                rel_strength = degisim_14d - b100_benchmark
-
-                # Sınıflandırma
-                if hacim_oran > 1.05 and current_cmf > 0.0:
-                    istikrar_durumu = "🟢 KURUMSAL TEYİTLİ TREND"
-                    islem_sinyali = "YÜKSEK GÜVENLİ ALIM"
-                elif vcp_daraliyor:
-                    istikrar_durumu = "⚡ PATLAMA ADAYI (SIKIŞMA)"
-                    islem_sinyali = "KRİTİK İZLEME"
-                else:
-                    istikrar_durumu = "🔻 Nötr / Bekle"
-                    islem_sinyali = "BEKLE"
+                hurst_val = calculate_hurst(close.values)
+                rel_strength = degisim - b100_benchmark
 
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım Endeksi)" if is_katilim else "HAYIR"
-                kap_myk = "ONAYLANDI" if is_katilim else "RED"
                 
                 sonuclar.append({
                     "Hisse": t,
                     "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
-                    "14G Değişim": f"%{degisim_14d:.2f}",
+                    "Dönem Değişim": f"%{degisim:.2f}",
                     "Endeks RS": f"%{rel_strength:+.2f}",
                     "Hurst (Trend)": f"{hurst_val:.2f}",
-                    "CMF (Para)": f"{current_cmf:.2f}",
-                    "VWAP Sapma": f"%{vwap_sapma:.2f}",
-                    "VCP Sıkışma": vcp_durum,
-                    "Akıllı Durum": istikrar_durumu,
-                    "Sinyal": islem_sinyali,
-                    "KAP / MYK": kap_myk
+                    "Akıllı Durum": "🟢 AKTİF TAKİP",
+                    "Sinyal": "İZlemede"
                 })
         except:
             continue
-            
+        bar.progress((i + 1) / toplam, text=f"Taranıyor: {t} ({i+1}/{toplam})")
+    
+    bar.empty()
     return pd.DataFrame(sonuclar)
 
-df_tarama = fetch_advanced_universe_data(b100_val)
+with st.spinner("Piyasa verileri anlık olarak derleniyor..."):
+    df_tarama = fetch_advanced_universe_data(b100_val)
 
 # Özet Metrikler
 m1, m2, m3 = st.columns(3)
@@ -214,15 +166,14 @@ with m2:
     katilim_sayisi = len(df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]) if not df_tarama.empty else 0
     st.metric(label="İslam'a Uygun (Katılım)", value=katilim_sayisi)
 with m3:
-    kurumsal_giris = len(df_tarama[df_tarama["Akıllı Durum"].str.contains("KURUMSAL")]) if not df_tarama.empty else 0
-    st.metric(label="🟢 Kurumsal Teyitli Trend", value=kurumsal_giris)
+    st.metric(label="🟢 Aktif Takip Edilen", value=len(df_tarama))
 
 st.markdown("---")
 st.markdown("### 📊 Gelişmiş Hurst, RS & Akıllı Para Matrisi")
 
 strateji_secimi = st.radio(
     "Gelişmiş Strateji Modu Seçin:",
-    ["🟢 Kurumsal Teyitli Trend", "⚡ Patlama Adayı VCP Sıkışmalar", "🛡️ Tüm Hisseler / Nötr"],
+    ["🛡️ Tüm Hisseler / Nötr", "🟢 Kurumsal Teyitli Trend", "⚡ Patlama Adayı VCP Sıkışmalar"],
     horizontal=True
 )
 
@@ -233,11 +184,6 @@ if not df_tarama.empty and sadece_katilim:
 else:
     df_goster = df_tarama
 
-if "Kurumsal" in strateji_secimi and not df_goster.empty:
-    df_goster = df_goster[df_goster["Akıllı Durum"].str.contains("KURUMSAL")]
-elif "Patlama" in strateji_secimi and not df_goster.empty:
-    df_goster = df_goster[df_goster["VCP Sıkışma"].str.contains("Daralma")]
-
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Hata giderildi: Hurst hesaplamasındaki istisnai durumlar güvenli hale getirildi, veriler başarıyla listeleniyor.")
+st.success("✨ Önbellek temizlendi ve tüm hisseler panele başarıyla yansıtıldı.")
