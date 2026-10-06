@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## Smart Money & İstatistiki Tahmin / Hedef Paneli")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 14 Günlük Trend, Destek, Yatay Sıkışma ve Hedef Hesaplama Motoru")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Dinamik Hacim ve Tahmin Motoru")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -60,8 +60,8 @@ with col_btn:
 
 st.markdown("---")
 
-# BIST 100 Genel Trend Teyidi
-@st.cache_data(ttl=60)
+# BIST 100 Genel Trend Teyidi (Daha kısa ttl ile canlı güncelleme)
+@st.cache_data(ttl=20)
 def get_bist100_trend():
     try:
         b100 = yf.Ticker("XU100.IS")
@@ -77,10 +77,10 @@ def get_bist100_trend():
     return "YÜKSELİŞ (ONAYLI)", "%1.5"
 
 b100_durum, b100_oran = get_bist100_trend()
-st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran}) — Piyasa genel yönü filtrelemesi aktif.")
+st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran})")
 
-# 14 Günlük Veri Tabanlı ve Gelişmiş Tahmin Algoritmalı Motor
-@st.cache_data(ttl=60)
+# Güncellenmiş Dinamik Motor (Daha esnek hacim çarpanı ve taze veri önbelleği)
+@st.cache_data(ttl=20)
 def fetch_bist_universe_data():
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -127,32 +127,28 @@ def fetch_bist_universe_data():
                 ortalama_hacim_14d = float((hist['Volume'].iloc[-15:-1] * hist['Close'].iloc[-15:-1]).mean())
                 hacim_oran = (son_gun_hacim / ortalama_hacim_14d) if ortalama_hacim_14d > 0 else 1.0
                 
-                # --- İSTATİSTİKSEL TAHMİN VE HESAPLAMA MODÜLLERİ ---
-                # 1. Tahmini Destek (Son 14 günün en düşük seviyesi)
+                # Tahmini Destek ve Seviyeler
                 tahmini_destek = round(float(hist['Low'].iloc[-14:].min()), 2)
                 
-                # 2. Yatay Süre / Akümülasyon Tahmini (Fiyat aralığı darlığına göre)
                 fiyat_araligi_yuzde = ((hist['High'].iloc[-14:].max() - hist['Low'].iloc[-14:].min()) / fiyat) * 100
                 if fiyat_araligi_yuzde < 6.0:
                     yatay_sure_tahmini = "Yatay Sıkışma (Kırılıma Çok Yakın)"
                 elif fiyat_araligi_yuzde < 12.0:
                     yatay_sure_tahmini = "Orta Vadeli Konsolidasyon (3-7 Gün)"
                 else:
-                    yatay_sure_tahmini = "Yüksek Volatilite / Yön Arama Aşamasında"
+                    yatay_sure_tahmini = "Yüksek Volatilite / Yön Arama"
 
-                # 3. Dinamik Hedef ve Stop Seviyeleri (%4 Hedef, Destek Altı Stop)
                 hedef_seviye = round(fiyat * 1.04, 2)
                 stop_seviye = round(tahmini_destek * 0.985, 2)
                 beklenen_getiri = "%4.0"
-
-                gercek_kirilim = "GERÇEK (14g Hacim Teyitli)" if ortalama_hacim_14d > 1500000 else "SAHTE / HACİMSİZ"
                 
-                if hacim_oran > 1.2 and degisim_14d > 0:
+                # Eşik değeri esnetildi (1.1x)
+                if hacim_oran > 1.1 and degisim_14d > -5:
                     istikrar_durumu = "🔥 ANLIK HACİM PATLAMASI"
                     islem_sinyali = "🟢 GÜN İÇİ ALIM FIRSATI"
-                elif degisim_14d >= 2.0 and ortalama_hacim_14d > 1500000:
-                    istikrar_durumu = "🛡️ 14 GÜNLÜK İSTİKRARLI YÜKSELİŞ"
-                    islem_sinyali = "🟡 KAPANIŞA UYGUN"
+                elif degisim_14d >= 1.0:
+                    istikrar_durumu = "🛡️ İSTİKRARLI YÜKSELİŞ"
+                    islem_sinyali = "🟡 UYGUN"
                 else:
                     istikrar_durumu = "🔻 Sakin / Beklemede"
                     islem_sinyali = "🔴 İZLE"
@@ -217,4 +213,4 @@ elif not df_goster.empty:
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: Tahmini destek seviyeleri, yatay sıkışma süreleri, dinamik hedef ve stop hesaplamaları tabloya başarıyla entegre edilmiştir.")
+st.success("✨ Panel güncellendi: Önbellek süreleri 20 saniyeye düşürüldü ve hacim çarpanı esnetilerek dakikalık değişimlere duyarlı hale getirildi.")
