@@ -7,7 +7,7 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="BIST SMC & 14 Günlük İstikrar Paneli", layout="wide")
+st.set_page_config(page_title="BIST SMC & Gelişmiş Tahmin Paneli", layout="wide")
 
 # Şifre Koruma
 def check_password():
@@ -43,14 +43,14 @@ aktif_saat = simdi.time()
 borsa_acik_mi = (aktif_gun < 5) and (time(9, 40) <= aktif_saat <= time(18, 30))
 
 if borsa_acik_mi:
-    count = st_autorefresh(interval=60000, key="bist_14gun_tarama")
+    count = st_autorefresh(interval=60000, key="bist_tahmin_tarama")
     st.sidebar.success(f"🟢 Canlı Tarama Aktif (Dakikalık Döngü: {count})")
 else:
     st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
 
 # Başlık ve Bilgilendirme
-st.markdown("## Smart Money & 14 Günlük İstikrarlı Yükseliş Analizi")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Tek Günlük Yanıltıcı Hareketlere Karşı Minimum 14 Günlük Trend Filtresi")
+st.markdown("## Smart Money & İstatistiki Tahmin / Hedef Paneli")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 14 Günlük Trend, Destek, Yatay Sıkışma ve Hedef Hesaplama Motoru")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -68,7 +68,7 @@ def get_bist100_trend():
         hist = b100.history(period="1mo")
         if not hist.empty and len(hist) >= 14:
             son_fiyat = float(hist['Close'].iloc[-2])
-            on_dort_gun_once = float(hist['Close'].iloc[-15])
+            on_dort_gun_once = float(hist['Close'].iloc[-16])
             degisim_14d = ((son_fiyat - on_dort_gun_once) / on_dort_gun_once) * 100
             trend = "YÜKSELİŞ (14 GÜNLÜK ONAYLI)" if degisim_14d >= 0 else "KONSOLİDASYON / DİKKAT"
             return trend, f"%{degisim_14d:.2f}"
@@ -77,9 +77,9 @@ def get_bist100_trend():
     return "YÜKSELİŞ (ONAYLI)", "%1.5"
 
 b100_durum, b100_oran = get_bist100_trend()
-st.info(f"🌐 **BIST 100 14 Günlük Piyasa Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran}) — Tek günlük aldatıcı hareketleri elemek için son 14 seansın ortalaması baz alınmıştır.")
+st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran}) — Piyasa genel yönü filtrelemesi aktif.")
 
-# 14 Günlük Veri Tabanlı Gelişmiş Taranan Evren ve Analiz Motoru
+# 14 Günlük Veri Tabanlı ve Gelişmiş Tahmin Algoritmalı Motor
 @st.cache_data(ttl=60)
 def fetch_bist_universe_data():
     tickers = [
@@ -117,8 +117,7 @@ def fetch_bist_universe_data():
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="1mo") 
-            if not hist.empty and len(hist) >= 15:
-                # Canlı saatlerde eksik kalan gün yerine son tam kapanan seansı baz alıyoruz (-2)
+            if not hist.empty and len(hist) >= 16:
                 fiyat = float(hist['Close'].iloc[-2])
                 fiyat_14_gun_once = float(hist['Close'].iloc[-16])
                 
@@ -126,20 +125,34 @@ def fetch_bist_universe_data():
                 
                 son_gun_hacim = float(hist['Volume'].iloc[-2] * hist['Close'].iloc[-2])
                 ortalama_hacim_14d = float((hist['Volume'].iloc[-15:-1] * hist['Close'].iloc[-15:-1]).mean())
-                
                 hacim_oran = (son_gun_hacim / ortalama_hacim_14d) if ortalama_hacim_14d > 0 else 1.0
                 
-                stop_seviye = round(fiyat * 0.98, 2)
-                hedef_seviye = round(fiyat * 1.025, 2)
+                # --- İSTATİSTİKSEL TAHMİN VE HESAPLAMA MODÜLLERİ ---
+                # 1. Tahmini Destek (Son 14 günün en düşük seviyesi)
+                tahmini_destek = round(float(hist['Low'].iloc[-14:].min()), 2)
                 
+                # 2. Yatay Süre / Akümülasyon Tahmini (Fiyat aralığı darlığına göre)
+                fiyat_araligi_yuzde = ((hist['High'].iloc[-14:].max() - hist['Low'].iloc[-14:].min()) / fiyat) * 100
+                if fiyat_araligi_yuzde < 6.0:
+                    yatay_sure_tahmini = "Yatay Sıkışma (Kırılıma Çok Yakın)"
+                elif fiyat_araligi_yuzde < 12.0:
+                    yatay_sure_tahmini = "Orta Vadeli Konsolidasyon (3-7 Gün)"
+                else:
+                    yatay_sure_tahmini = "Yüksek Volatilite / Yön Arama Aşamasında"
+
+                # 3. Dinamik Hedef ve Stop Seviyeleri (%4 Hedef, Destek Altı Stop)
+                hedef_seviye = round(fiyat * 1.04, 2)
+                stop_seviye = round(tahmini_destek * 0.985, 2)
+                beklenen_getiri = "%4.0"
+
                 gercek_kirilim = "GERÇEK (14g Hacim Teyitli)" if ortalama_hacim_14d > 1500000 else "SAHTE / HACİMSİZ"
                 
                 if hacim_oran > 1.2 and degisim_14d > 0:
                     istikrar_durumu = "🔥 ANLIK HACİM PATLAMASI"
-                    islem_sinyali = "🟢 GÜN İÇİ AVLIK (AL)"
+                    islem_sinyali = "🟢 GÜN İÇİ ALIM FIRSATI"
                 elif degisim_14d >= 2.0 and ortalama_hacim_14d > 1500000:
                     istikrar_durumu = "🛡️ 14 GÜNLÜK İSTİKRARLI YÜKSELİŞ"
-                    islem_sinyali = "🟡 KAPANIŞa UYGUN"
+                    islem_sinyali = "🟡 KAPANIŞA UYGUN"
                 else:
                     istikrar_durumu = "🔻 Sakin / Beklemede"
                     islem_sinyali = "🔴 İZLE"
@@ -153,12 +166,12 @@ def fetch_bist_universe_data():
                     "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
                     "14 Günlük Değişim": f"%{degisim_14d:.2f}",
+                    "Tahmini Destek (Dip)": f"{tahmini_destek} TL",
+                    "Tahmini Yatay / Sıkışma Süreci": yatay_sure_tahmini,
+                    "Beklenen Hedef Seviye": f"{hedef_seviye} TL ({beklenen_getiri})",
+                    "Önerilen Stop Seviyesi": f"{stop_seviye} TL",
                     "Gün İçi Hacim Gücü": f"{hacim_oran:.2f}x",
                     "İstikrar Durumu": istikrar_durumu,
-                    "14g Ort. Hacim": f"{ortalama_hacim_14d/1_000_000:.1f}M TL" if ortalama_hacim_14d > 1_000_000 else f"{ortalama_hacim_14d:,.0f} TL",
-                    "Gün İçi Stop": f"{stop_seviye} TL",
-                    "Gün İçi Hedef (%2.5)": f"{hedef_seviye} TL",
-                    "Kırılım Durumu": gercek_kirilim,
                     "İşlem Göstergesi": islem_sinyali,
                     "KAP / MYK Teyit": kap_myk
                 })
@@ -181,7 +194,7 @@ with m3:
     st.metric(label="🔥 Gün İçi Hacim Patlaması", value=hacim_patlayan)
 
 st.markdown("---")
-st.markdown("### 📊 Gün İçi Avcı ve 14 Günlük İstikrar Sinyalleri")
+st.markdown("### 📊 İstatistiki Tahmin, Destek ve Kırılım Paneli")
 
 strateji_secimi = st.radio(
     "İşlem Stratejisi Modu Seçin:",
@@ -204,4 +217,4 @@ elif not df_goster.empty:
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: Tamamlanmış son seans hacim baz alımı düzeltilerek hacim çarpanları ve filtreler aktif hale getirilmiştir.")
+st.success("✨ Panel güncellendi: Tahmini destek seviyeleri, yatay sıkışma süreleri, dinamik hedef ve stop hesaplamaları tabloya başarıyla entegre edilmiştir.")
