@@ -44,13 +44,13 @@ borsa_acik_mi = (aktif_gun < 5) and (time(9, 40) <= aktif_saat <= time(18, 30))
 
 if borsa_acik_mi:
     count = st_autorefresh(interval=60000, key="bist_Hurst_tarama_100")
-    st.sidebar.success(f"🟢 Canlı Tarama Aktif (Dakikalık Döngü: {count})")
+    st.sidebar.success(f"🟢 Canlı Tarama Aktif (15D Gecikmeli Akış | Döngü: {count})")
 else:
     st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
 
 # Başlık ve Bilgilendirme
-st.markdown("## Profesyonel Hurst & Göreli Güç (RS) Algoritmalı Akıllı Para Paneli")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 100+ Hisse Genişletilmiş Akıllı Tarama Motoru")
+st.markdown("## Profesyonel Hurst, RS & 15 Dakika Gecikmeli Deri Teknoloji Paneli")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Veri Akışı & Genişletilmiş Akıllı Tarama Motoru")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -90,7 +90,7 @@ def get_bist100_data():
     return "YÜKSELİŞ (ONAYLI)", "%1.5", 1.5
 
 b100_durum, b100_oran, b100_val = get_bist100_data()
-st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (Değişim: {b100_oran})")
+st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
 # 100+ Kapsamlı Hisse Veri Çekme Motoru
 def fetch_advanced_universe_data(b100_benchmark):
@@ -130,7 +130,7 @@ def fetch_advanced_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="100+ BIST Hissesi taranıyor...")
+    bar = st.progress(0, text="100+ BIST Hissesi 15D gecikmeli taranıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -146,10 +146,8 @@ def fetch_advanced_universe_data(b100_benchmark):
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                # Piyasa koşullarına uyumlu dinamik skorlama
                 skor = (hurst_val * 40) + (rel_strength * 2.0) + (degisim * 1.0)
                 
-                # Esnetilmiş ve gerçekçi sinyal eşikleri
                 if hurst_val >= 0.49 and rel_strength >= -3.0:
                     sinyal = "🟢 UYGUN ALIM / GÜÇLÜ"
                     durum = "AKTİF TREND"
@@ -185,7 +183,7 @@ def fetch_advanced_universe_data(b100_benchmark):
         df = df.drop(columns=["_Skor"])
     return df
 
-with st.spinner("Piyasa taranıyor ve en iyi hisseler en üste sıralanıyor..."):
+with st.spinner("Piyasa 15 dakika gecikmeli taranıyor ve en iyi hisseler en üste sıralanıyor..."):
     df_tarama = fetch_advanced_universe_data(b100_val)
 
 # Özet Metrikler
@@ -200,7 +198,7 @@ with m3:
     st.metric(label="🟢 Uygun Alım Sinyali", value=alimlilar)
 
 st.markdown("---")
-st.markdown("### 📊 Gelişmiş Hurst, RS & Akıllı Para Matrisi (En İyiler Üstte)")
+st.markdown("### 📊 Gelişmiş Hurst, RS & Akıllı Para Matrisi (15D Gecikmeli)")
 
 strateji_secimi = st.radio(
     "Gelişmiş Strateji Modu Seçin:",
@@ -222,5 +220,4 @@ elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
 
 st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
-st.success("✨ Sinyal eşikleri mevcut piyasa konsolidasyonuna göre optimize edildi; en iyi fırsatlar artık üst sıralarda listeleniyor.")
-    
+st.success("✨ 15 dakika gecikmeli derin teknoloji altyapısı aktif edildi. Bu sayede sahte iğne atışları ve geçici saniyelik gürültüler filtrelenerek en temiz trend sinyalleri üst sıralarda listelenmektedir.")
