@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## Smart Money & İstatistiki Tahmin / Hedef Paneli")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Dinamik Hacim ve Tahmin Motoru")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Düzeltilmiş Hacim & Tahmin Motoru")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -60,7 +60,7 @@ with col_btn:
 
 st.markdown("---")
 
-# BIST 100 Genel Trend Teyidi (Daha kısa ttl ile canlı güncelleme)
+# BIST 100 Genel Trend Teyidi
 @st.cache_data(ttl=20)
 def get_bist100_trend():
     try:
@@ -79,7 +79,7 @@ def get_bist100_trend():
 b100_durum, b100_oran = get_bist100_trend()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (14 Günlük Değişim: {b100_oran})")
 
-# Güncellenmiş Dinamik Motor (Daha esnek hacim çarpanı ve taze veri önbelleği)
+# Düzeltilmiş Dinamik Motor (Hacim Patlaması Filtre Mantığı Hatası Giderildi)
 @st.cache_data(ttl=20)
 def fetch_bist_universe_data():
     tickers = [
@@ -142,8 +142,8 @@ def fetch_bist_universe_data():
                 stop_seviye = round(tahmini_destek * 0.985, 2)
                 beklenen_getiri = "%4.0"
                 
-                # Eşik değeri esnetildi (1.1x)
-                if hacim_oran > 1.1 and degisim_14d > -5:
+                # Hata Düzeltildi: Hacim çarpanı 1.1x üzerindeyse doğrudan patlama sayılacak
+                if hacim_oran > 1.1:
                     istikrar_durumu = "🔥 ANLIK HACİM PATLAMASI"
                     islem_sinyali = "🟢 GÜN İÇİ ALIM FIRSATI"
                 elif degisim_14d >= 1.0:
@@ -213,4 +213,5 @@ elif not df_goster.empty:
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: Önbellek süreleri 20 saniyeye düşürüldü ve hacim çarpanı esnetilerek dakikalık değişimlere duyarlı hale getirildi.")
+st.success("✨ Hacim patlaması filtre mantığı düzeltildi: 1.1x üzeri hacim çarpanına sahip tüm hisseler artık doğrudan 'ANLIK HACİM PATLAMASI' olarak etiketlenmektedir.")
+        
