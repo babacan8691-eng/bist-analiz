@@ -49,8 +49,8 @@ else:
     st.sidebar.warning("🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)")
 
 # Başlık ve Bilgilendirme
-st.markdown("## Profesyonel Hurst, RS, Hacim & ATR Tabanlı Derin Teknoloji Paneli")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Veri Akışı & Genişletilmiş Akıllı Tarama Motoru")
+st.markdown("## Profesyonel Hurst, RS, Hacim & Günlük Al-Sat Terminali")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Veri Akışı & Katılım Özel Al-Sat Modülü")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# 100+ Kapsamlı Hisse Veri Çekme Motoru (Hacim Çarpanı ve ATR Dahil)
+# Veri Çekme Motoru (Katılım ve Günlük Al-Sat Odaklı Metriklerle)
 def fetch_advanced_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -130,7 +130,7 @@ def fetch_advanced_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="100+ BIST Hissesi Hacim ve ATR metrikleriyle taranıyor...")
+    bar = st.progress(0, text="Hisseler Günlük Al-Sat ve Katılım metrikleriyle taranıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -146,22 +146,39 @@ def fetch_advanced_universe_data(b100_benchmark):
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                # Hacim Çarpanı (Volume Multiplier) Hesaplama
+                # Hacim Çarpanı
                 vol = hist['Volume']
                 ortalama_hacim = vol.iloc[:-1].mean() if len(vol) > 1 else vol.iloc[-1]
                 son_hacim = vol.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
-                # ATR (Average True Range) Yüzdesel Hesaplama
+                # VWAP Hesaplama (Basitleştirilmiş Yaklaşım)
+                typical_price = (hist['High'] + hist['Low'] + hist['Close']) / 3
+                vwap = (typical_price * hist['Volume']).sum() / hist['Volume'].sum() if hist['Volume'].sum() > 0 else fiyat
+                vwap_sapma = ((fiyat - vwap) / vwap) * 100
+
+                # ATR Yüzdesi
                 high = hist['High']
                 low = hist['Low']
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
 
-                # Gelişmiş Skorlama (Hurst, RS, Değişim ve Hacim Çarpanı Desteğiyle)
                 skor = (hurst_val * 35) + (rel_strength * 2.0) + (degisim * 1.0) + (min(vol_ratio, 3.0) * 5.0)
                 
+                is_katilim = t in katilim_listesi
+                katilim_durum = "EVET (Katılım Endeksi)" if is_katilim else "HAYIR"
+
+                # Günlük Al-Sat / Overnight Uygunluk Puanı (Özel Mantık)
+                # Katılım ve hafif eksi/dip yapmış ama hacmi artanlar günlük al-sat için önceliklidir
+                if is_katilim:
+                    if hurst_val >= 0.45 and vol_ratio >= 1.0 and rel_strength >= -10.0:
+                        gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
+                    else:
+                        gunluk_sinyal = "⏳ BEKLE / İZLE"
+                else:
+                    gunluk_sinyal = "HARİÇ (Katılım Değil)"
+
                 if hurst_val >= 0.49 and rel_strength >= -3.0 and vol_ratio >= 1.0:
                     sinyal = "🟢 UYGUN ALIM / GÜÇLÜ"
                     durum = "AKTİF TREND & HACİMLİ"
@@ -171,14 +188,12 @@ def fetch_advanced_universe_data(b100_benchmark):
                 else:
                     sinyal = "⏳ BEKLE"
                     durum = "ZAYIF"
-
-                is_katilim = t in katilim_listesi
-                katilim_durum = "EVET (Katılım Endeksi)" if is_katilim else "HAYIR"
                 
                 sonuclar.append({
                     "Hisse": t,
                     "_Skor": skor,
                     "Sinyal": sinyal,
+                    "Günlük Al-Sat Sinyali": gunluk_sinyal,
                     "Akıllı Durum": durum,
                     "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
@@ -186,6 +201,7 @@ def fetch_advanced_universe_data(b100_benchmark):
                     "Endeks RS": f"%{rel_strength:+.2f}",
                     "Hurst (Trend)": f"{hurst_val:.2f}",
                     "Hacim Çarpanı": f"{vol_ratio:.1f}x",
+                    "VWAP Sapma": f"%{vwap_sapma:+.2f}",
                     "ATR (%)": f"%{atr_yuzde:.2f}"
                 })
         except:
@@ -199,41 +215,54 @@ def fetch_advanced_universe_data(b100_benchmark):
         df = df.drop(columns=["_Skor"])
     return df
 
-with st.spinner("Piyasa 15 dakika gecikmeli, hacim ve oynaklık metrikleriyle taranıyor..."):
+with st.spinner("Piyasa taranıyor ve günlük al-sat matrisi hesaplanıyor..."):
     df_tarama = fetch_advanced_universe_data(b100_val)
 
-# Özet Metrikler
-m1, m2, m3 = st.columns(3)
-with m1:
-    st.metric(label="Taranan Toplam Hisse", value=len(df_tarama))
-with m2:
-    katilim_sayisi = len(df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]) if not df_tarama.empty else 0
-    st.metric(label="İslam'a Uygun (Katılım)", value=katilim_sayisi)
-with m3:
-    alimlilar = len(df_tarama[df_tarama["Sinyal"].str.contains("ALIM")]) if not df_tarama.empty else 0
-    st.metric(label="🟢 Uygun Alım Sinyali", value=alimlilar)
+# Sekme Yapısı (Panelleri Ayırmak İçin)
+tab1, tab2 = st.tabs(["🛡️ Genel Piyasa & Tüm Hisseler Terminali", "⚡ Katılım Özel Günlük Al-Sat & Overnight Swing"])
 
-st.markdown("---")
-st.markdown("### 📊 Gelişmiş Hurst, RS, Hacim Çarpanı & ATR Matrisi (15D Gecikmeli)")
+with tab1:
+    st.markdown("### 📊 Gelişmiş Hurst, RS, Hacim Çarpanı & ATR Matrisi")
+    
+    strateji_secimi = st.radio(
+        "Gelişmiş Strateji Modu Seçin:",
+        ["🛡️ Tüm Hisseler / Nötr (En İyiler Üstte)", "🟢 Yüksek Güvenli Alım Sinyalleri", "⚡ İslam'a Uygun Öncüler"],
+        horizontal=True,
+        key="tab1_radio"
+    )
 
-strateji_secimi = st.radio(
-    "Gelişmiş Strateji Modu Seçin:",
-    ["🛡️ Tüm Hisseler / Nötr (En İyiler Üstte)", "🟢 Yüksek Güvenli Alım Sinyalleri", "⚡ İslam'a Uygun Öncüler"],
-    horizontal=True
-)
+    sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=False, key="tab1_check")
 
-sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım Endeksi) Hisseleri Göster", value=False)
+    if not df_tarama.empty and sadece_katilim:
+        df_goster = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
+    else:
+        df_goster = df_tarama
 
-if not df_tarama.empty and sadece_katilim:
-    df_goster = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
-else:
-    df_goster = df_tarama
+    if "Alım" in strateji_secimi and not df_goster.empty:
+        df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
+    elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
+        df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-if "Alım" in strateji_secimi and not df_goster.empty:
-    df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
-elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
-    df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+    st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
-st.dataframe(df_goster, use_container_width=True, hide_index=True)
+with tab2:
+    st.markdown("### 🚀 Katılım Endeksi Günlük Al-Sat & Overnight Swing Sinyalleri")
+    st.caption("Bu sekme yalnızca İslam'a uygun (Katılım) hisseler arasından, akşam kapanışında alınıp sabah açılışında değerlendirilebilecek hacimli ve dirençli adayları filtreler.")
 
-st.success("✨ Hacim Çarpanı (Volume Multiplier) ve ATR (Oynaklık) tabanlı dinamik risk filtreleri panele başarıyla entegre edildi. Artık sahte hareketler yüksek hacim teyidiyle çok daha güçlü filtrelenmektedir.")
+    if not df_tarama.empty:
+        # Sadece Katılım ve Günlük al-sat uygun olanları süz
+        df_gunluk = df_tarama[
+            (df_tarama["Katılım Uygun"].str.contains("EVET")) & 
+            (df_tarama["Günlük Al-Sat Sinyali"].str.contains("GÜNLÜK AL-SAT UYGUN"))
+        ]
+        
+        if not df_gunluk.empty:
+            st.success(f"Bugün için kriterleri sağlayan **{len(df_gunluk)} adet** Katılım hissesi bulundu.")
+            st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
+        else:
+            st.warning("Şu an zayıf piyasa koşullarında günlük al-sat kriterlerini tam sağlayan Katılım hissesi bulunamadı. Alternatif olarak tüm Katılım hisselerinin anlık VWAP ve Hacim durumunu aşağıdan inceleyebilirsiniz:")
+            df_katilim_tumu = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
+            st.dataframe(df_katilim_tumu, use_container_width=True, hide_index=True)
+
+st.success("✨ Paneliniz artık iki ayrı profesyonel sekme ile güçlendirildi. 'Katılım Özel Günlük Al-Sat' sekmesinden doğrudan aradığınız kriterdeki hisseleri takip edebilirsiniz.")
+            
