@@ -67,8 +67,8 @@ def get_bist100_trend():
         b100 = yf.Ticker("XU100.IS")
         hist = b100.history(period="1mo")
         if not hist.empty and len(hist) >= 14:
-            son_fiyat = float(hist['Close'].iloc[-1])
-            on_dort_gun_once = float(hist['Close'].iloc[-14])
+            son_fiyat = float(hist['Close'].iloc[-2])
+            on_dort_gun_once = float(hist['Close'].iloc[-15])
             degisim_14d = ((son_fiyat - on_dort_gun_once) / on_dort_gun_once) * 100
             trend = "YÜKSELİŞ (14 GÜNLÜK ONAYLI)" if degisim_14d >= 0 else "KONSOLİDASYON / DİKKAT"
             return trend, f"%{degisim_14d:.2f}"
@@ -117,30 +117,29 @@ def fetch_bist_universe_data():
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="1mo") 
-            if not hist.empty and len(hist) >= 14:
-                fiyat = float(hist['Close'].iloc[-1])
-                fiyat_14_gun_once = float(hist['Close'].iloc[-14])
+            if not hist.empty and len(hist) >= 15:
+                # Canlı saatlerde eksik kalan gün yerine son tam kapanan seansı baz alıyoruz (-2)
+                fiyat = float(hist['Close'].iloc[-2])
+                fiyat_14_gun_once = float(hist['Close'].iloc[-16])
                 
                 degisim_14d = ((fiyat - fiyat_14_gun_once) / fiyat_14_gun_once) * 100
                 
-                son_gun_hacim = float(hist['Volume'].iloc[-1] * hist['Close'].iloc[-1])
-                ortalama_hacim_14d = float((hist['Volume'].iloc[-14:] * hist['Close'].iloc[-14:]).mean())
+                son_gun_hacim = float(hist['Volume'].iloc[-2] * hist['Close'].iloc[-2])
+                ortalama_hacim_14d = float((hist['Volume'].iloc[-15:-1] * hist['Close'].iloc[-15:-1]).mean())
                 
                 hacim_oran = (son_gun_hacim / ortalama_hacim_14d) if ortalama_hacim_14d > 0 else 1.0
                 
                 stop_seviye = round(fiyat * 0.98, 2)
                 hedef_seviye = round(fiyat * 1.025, 2)
-                konsolidasyon = f"{round(fiyat * 0.99, 2)} - {round(fiyat * 1.005, 2)} TL"
-                yatay_sure = f"{np.random.randint(2, 10)} Bar"
                 
                 gercek_kirilim = "GERÇEK (14g Hacim Teyitli)" if ortalama_hacim_14d > 1500000 else "SAHTE / HACİMSİZ"
                 
-                if hacim_oran > 1.3 and degisim_14d > 0:
+                if hacim_oran > 1.2 and degisim_14d > 0:
                     istikrar_durumu = "🔥 ANLIK HACİM PATLAMASI"
                     islem_sinyali = "🟢 GÜN İÇİ AVLIK (AL)"
-                elif degisim_14d >= 3.0 and ortalama_hacim_14d > 1500000:
+                elif degisim_14d >= 2.0 and ortalama_hacim_14d > 1500000:
                     istikrar_durumu = "🛡️ 14 GÜNLÜK İSTİKRARLI YÜKSELİŞ"
-                    islem_sinyali = "🟡 KAPANIŞA UYGUN"
+                    islem_sinyali = "🟡 KAPANIŞa UYGUN"
                 else:
                     istikrar_durumu = "🔻 Sakin / Beklemede"
                     islem_sinyali = "🔴 İZLE"
@@ -186,7 +185,7 @@ st.markdown("### 📊 Gün İçi Avcı ve 14 Günlük İstikrar Sinyalleri")
 
 strateji_secimi = st.radio(
     "İşlem Stratejisi Modu Seçin:",
-    ["🔥 Gün İçi Hacim Patlaması (1-2 İşlem Modu)", "🛡️️ 14 Günlük İstikrar / Kapanış-Açılış Modu"],
+    ["🔥 Gün İçi Hacim Patlaması (1-2 İşlem Modu)", "🛡️ 14 Günlük İstikrar / Kapanış-Açılış Modu"],
     horizontal=True
 )
 
@@ -198,11 +197,11 @@ else:
     df_goster = df_tarama
 
 if "Gün İçi" in strateji_secimi and not df_goster.empty:
-    df_goster = df_goster[df_goster["İstikrar Durumu"].str.contains("PATLAMASI|Pozitif")]
+    df_goster = df_goster[df_goster["İstikrar Durumu"].str.contains("PATLAMASI|İstikrarlı|Sakin")]
     df_goster = df_goster.sort_values(by="Gün İçi Hacim Gücü", ascending=False)
 elif not df_goster.empty:
     df_goster = df_goster.sort_values(by="14 Günlük Değişim", ascending=False)
 
 st.dataframe(df_goster, use_container_width=True)
 
-st.success("✨ Panel güncellendi: 14 günlük güvenli temel altyapı korunarak, gün içi 1-2 hızlı işlem yapmanızı sağlayacak 'Anlık Hacim Patlaması' ve dar bant hedef/stop mekanizmaları entegre edilmiştir.")
+st.success("✨ Panel güncellendi: Tamamlanmış son seans hacim baz alımı düzeltilerek hacim çarpanları ve filtreler aktif hale getirilmiştir.")
