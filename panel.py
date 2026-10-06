@@ -113,10 +113,10 @@ def fetch_advanced_universe_data(b100_benchmark):
         "ULKER.IS", "VAKBN.IS", "VESBE.IS", "YEOTK.IS", "YYLGD.IS",
         "AHGAZ.IS", "AKFYE.IS", "ANELE.IS", "ARASE.IS", "ARDYZ.IS", 
         "ARENA.IS", "AYDEM.IS", "AYEN.IS", "BAGFS.IS", "CATES.IS", 
-        "DAPGM.IS", "DEVA.IS", "ECZYT.IS", "EGEPO.IS", "EUPWR.IS", 
-        "FADE.IS", "FORMT.IS", "GENIL.IS", "GIPTA.IS", "GOODY.IS"
+        "DAPGM.IS", "DEVA.IS", "ECZYT.IS", "EGEPO.IS", "FADE.IS", 
+        "FORMT.IS", "GENIL.IS", "GIPTA.IS", "GOODY.IS"
     ]
-    tickers = list(dict.fromkeys(tickers)) # Tekrarları önle
+    tickers = list(dict.fromkeys(tickers))
     
     katilim_listesi = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "ASELS.IS", "BIMAS.IS", 
@@ -142,13 +142,10 @@ def fetch_advanced_universe_data(b100_benchmark):
                 fiyat_once = float(hist['Close'].iloc[0])
                 degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
                 
-                vol = hist['Volume']
                 close = hist['Close']
-                
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                # Akıllı Skor ve Sinyal Üretimi
                 skor = (hurst_val * 35) + (rel_strength * 1.5) + (degisim * 0.5)
                 
                 if hurst_val >= 0.52 and rel_strength > 0:
@@ -166,7 +163,7 @@ def fetch_advanced_universe_data(b100_benchmark):
                 
                 sonuclar.append({
                     "Hisse": t,
-                    "_Skor": skor, # Sıralama için gizli skor
+                    "_Skor": skor,
                     "Sinyal": sinyal,
                     "Akıllı Durum": durum,
                     "Katılım Uygun": katilim_durum,
@@ -182,7 +179,6 @@ def fetch_advanced_universe_data(b100_benchmark):
     bar.empty()
     df = pd.DataFrame(sonuclar)
     if not df.empty:
-        # En iyi ve uygun hisseleri en üste almak için skora göre azalan sıralama
         df = df.sort_values(by="_Skor", ascending=False).reset_index(drop=True)
         df = df.drop(columns=["_Skor"])
     return df
@@ -222,6 +218,7 @@ if "Alım" in strateji_secimi and not df_goster.empty:
 elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
     df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-st.dataframe(df_goster, use_container_width=True)
+# Tablo görünümünün bozulmaması için indeks gizlenerek yazdırıldı
+st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
-st.success("✨ Genişletilmiş 100+ hisse havuzu aktif; en iyi giriş sinyalleri verenler tablonun en üstüne yerleştirildi.")
+st.success("✨ Tablo yapısı ve indeks düzeni düzeltildi; 100+ hisse hatasız şekilde listeleniyor.")
