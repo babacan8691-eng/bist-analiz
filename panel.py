@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Geometrik & Matematiksel Nicel Motor (BIST 300 Havuzu)")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli İleri Düzey Matematiksel & Geometrik Motor (BIST 300)")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -59,7 +59,7 @@ with col_btn:
 
 st.markdown("---")
 
-# Güvenli Hurst Eksponenti Hesaplama (Geometrik Trend Ölçütü)
+# Güvenli Hurst Eksponenti Hesaplama
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Gelişmiş Matematiksel ve Geometrik Tarama Motoru
+# BIST 300 Gelişmiş Matematiksel Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -163,7 +163,7 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 profesyonel matematiksel matris hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 ileri düzey matematiksel matris hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -187,12 +187,12 @@ def fetch_final_universe_data(b100_benchmark):
                 son_hacim = volume.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
-                # Geometrik VWAP ve Sapma Hesaplama
+                # VWAP ve Sapma
                 typical_price = (high + low + close) / 3
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # Volatilite ve ATR
+                # ATR ve Volatilite
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
@@ -201,20 +201,30 @@ def fetch_final_universe_data(b100_benchmark):
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                # Donchian / Volatilite Sıkışma Oranı (Compression)
+                # Sıkışma Oranı (Compression)
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
+                # --- YENİ EKLENEN PROFESYONEL MATEMATİKSEL KATMANLAR ---
+                # 1. Doğrusal Regresyon Eğimi (Linear Regression Slope - Son 5 bar)
+                y_vals = close.iloc[-5:].values
+                x_vals = np.arange(len(y_vals))
+                reg_slope = float(np.polyfit(x_vals, y_vals, 1)[0] / fiyat * 100) # Yüzdesel eğim
+
+                # 2. Chaikin Money Flow (CMF - Kurumsal Para Akışı / 5 Bar)
+                mf_multiplier = ((close.iloc[-5:] - low.iloc[-5:]) - (high.iloc[-5:] - close.iloc[-5:])) / (high.iloc[-5:] - low.iloc[-5:] + 1e-9)
+                cmf = float((mf_multiplier * volume.iloc[-5:]).sum() / (volume.iloc[-5:].sum() + 1e-9))
+
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-                # --- BAĞIMSIZ VE GELİŞMİŞ SKORLAMA ---
+                # Skorlama Motorları
                 skor_genel = (hurst_val * 40) + (rel_strength * 2.5) + (clv * 10.0)
                 
-                # Günlük Al-Sat için Gecikme Toleranslı Matematiksel Momentum Skoru
-                skor_gunluk = (vol_ratio * 35.0) + (max(0, clv) * 45.0) + ((1.0 - compression_ratio) * 20.0)
+                # Günlük Al-Sat için Regresyon ve CMF Destekli Güçlü Momentum Skoru
+                skor_gunluk = (vol_ratio * 30.0) + (max(0, clv) * 30.0) + (max(0, reg_slope) * 20.0) + (max(0, cmf) * 20.0)
 
-                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (max(0, clv) * 15.0)
+                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (max(0, cmf) * 15.0)
                 ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
                 
                 is_katilim = t in katilim_listesi
@@ -228,9 +238,9 @@ def fetch_final_universe_data(b100_benchmark):
                 else:
                     sinyal = "⏳ BEKLE"
 
-                # Günlük Kısa Vade Al-Sat Sinyali (Matematiksel Sıkışma & Hacim Filtresi)
+                # Günlük Kısa Vade Al-Sat Sinyali (Regresyon + CMF + Hacim Filtresi)
                 if is_katilim:
-                    if vol_ratio >= 1.15 and clv >= 0.15 and compression_ratio <= 0.95 and atr_yuzde >= 2.0:
+                    if vol_ratio >= 1.15 and reg_slope > 0.0 and cmf > 0.05 and atr_yuzde >= 2.0:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -264,7 +274,7 @@ def fetch_final_universe_data(b100_benchmark):
     df = pd.DataFrame(sonuclar)
     return df
 
-with st.spinner("BIST 300 havuzu profesyonel matrislerle taranıyor..."):
+with st.spinner("BIST 300 ileri düzey matematiksel matris taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
@@ -312,5 +322,5 @@ with tab2:
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Matematiksel Al-Sat Motoru Aktif")
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Regresyon/CMF Motoru Aktif")
                 
