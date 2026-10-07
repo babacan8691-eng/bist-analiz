@@ -64,7 +64,7 @@ st.markdown("---")
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
-        if len(ts) < 20 or np.any(np.isnan(ts)):
+        if len(ts) < 15 or np.any(np.isnan(ts)):
             return 0.50
         lags = range(2, min(10, len(ts)//2))
         tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
@@ -75,7 +75,7 @@ def calculate_hurst(ts):
     except:
         return 0.50
 
-# RSI Hesaplama Fonksiyonu
+# RSI Hesaplama Fonksiyonu (Yeni İndikatör Modülü)
 def calculate_rsi(series, period=14):
     try:
         delta = series.diff()
@@ -179,24 +179,25 @@ def fetch_final_universe_data(b100_benchmark):
     
     sonuclar = []
     
-    st.info("🔄 BIST 300 Veri Havuzu Tek Seferde İndiriliyor...")
+    # Hız Optimizasyonu: Tüm veriyi tek bir istekte indirme
+    st.info("🔄 BIST 300 Veri Havuzu İndiriliyor...")
     try:
         tum_hisse_verileri = yf.download(tickers, period="1mo", group_by='ticker', progress=False)
     except Exception as e:
-        st.error(f"Veri indirme sırasında bir hata oluştu: {e}")
+        st.error(f"Veri çekilemedi: {e}")
         return pd.DataFrame()
-        
-    bar = st.progress(0, text="Metrikler hesaplanıyor...")
+
+    bar = st.progress(0, text="BIST 300 havuzu nicel metrikler hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
         try:
-            if t in tum_hisse_verileri.columns.levels[0]:
+            if t in tum_hisse_verileri.columns.levels:
                 hist = tum_hisse_verileri[t].dropna()
             else:
                 continue
-                
-            if not hist.empty and len(hist) >= 15:
+
+            if not hist.empty and len(hist) >= 5:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
                 degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
@@ -217,11 +218,10 @@ def fetch_final_universe_data(b100_benchmark):
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # Rakamsal Z-Skoru
+                # Yeni Yöntem 1: Rakamsal Z-Skor Entegrasyonu (Uzaklık İstikrarı)
                 std_sapma = close.std()
                 ortalama_fiyat = close.mean()
                 z_skoru = ((fiyat - ortalama_fiyat) / std_sapma) if std_sapma > 0 else 0.0
 
-                # RSI Sıkışması
-                rsi_serisi = calculate_rsi(close, period=14)
-                
+                # Yeni Yöntem 2: Kapanış RSI Sıkışması Takibi
+        
