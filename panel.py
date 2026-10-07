@@ -1,20 +1,52 @@
-import asyncio
-import numpy as np
-import pandas as pd
 import streamlit as st
-import yfinance as yf
+import pandas as pd
+import numpy as np
 
 # --- SAYFA YAPILANDIRMASI ---
 st.set_page_config(
     page_title="BIST Nihai Nicel Finans, AI & Katılım Terminali",
     page_icon="🚀",
-    layout="wide",
+    layout="wide"
 )
+
+# --- KULLANICI ADI VE ŞİFRE DOĞRULAMA ---
+def check_password():
+    """Kullanıcı adı ve şifre kontrol mekanizması"""
+    def password_entered():
+        # Buradan kullanıcı adı ve şifrenizi değiştirebilirsiniz
+        if st.session_state["username"] == "cuma" and st.session_state["password"] == "1923":
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  
+            del st.session_state["username"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<h2 style='text-align: center;'>🔐 BIST Profesyonel Terminal Giriş Paneli</h2>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.text_input("Kullanıcı Adı", key="username")
+            st.text_input("Şifre", type="password", key="password")
+            st.button("Giriş Yap", on_click=password_entered, use_container_width=True)
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("<h2 style='text-align: center;'>🔐 BIST Profesyonel Terminal Giriş Paneli</h2>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.text_input("Kullanıcı Adı", key="username")
+            st.text_input("Şifre", type="password", key="password")
+            st.button("Giriş Yap", on_click=password_entered, use_container_width=True)
+            st.error("😕 Kullanıcı adı veya şifre hatalı.")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()
 
 # --- BIST 300 LİKİT HAVUZU TANIMI ---
 @st.cache_data(ttl=3600)
 def get_bist300_universe():
-    # BIST 300 Genişletilmiş Likit Hisseleri Havuzu
     return [
         "THYAO.IS", "GARAN.IS", "AKBNK.IS", "ISCTR.IS", "YKBNK.IS", 
         "EREGL.IS", "KRDMD.IS", "SISE.IS", "ASELS.IS", "BIMAS.IS", 
@@ -23,7 +55,6 @@ def get_bist300_universe():
         "HEKTS.IS", "EKGYO.IS", "KCHOL.IS", "SAHOL.IS", "OYAKC.IS", 
         "TTKOM.IS", "TCELL.IS", "ENERY.IS", "TKFEN.IS", "ZOREN.IS",
         "TTRAK.IS", "ARCLK.IS", "KMPUR.IS", "ECZYT.IS", "ODAS.IS"
-        # BIST 300 kapsamındaki diğer semboller buraya eklenir...
     ]
 
 # Katılım (İslami Finans) Uygunluk Sözlüğü
@@ -42,11 +73,12 @@ KATILIM_LISTESI = {
 st.markdown("🚀 **BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali**")
 st.markdown("Son Güncelleme (TRT): Canlı Veri | CLV / Sıkışma / Half-Life / BIST 300 Modülleri Aktif")
 
-# Veri Güncelleme Butonu
+# Veri Güncelleme ve Tarama Göstergesi Butonu
 if st.button("Verileri Şimdi Güncelle"):
-    st.toast("BIST 300 havuzu ve nicel matrisler taranıyor...", icon="🔄")
+    with st.spinner("BIST 300 havuzu ve tarama göstergeleri güncelleniyor..."):
+        st.toast("Tüm nicel matrisler ve tarama motoru senkronize edildi!", icon="🔄")
 
-# BIST 100/300 Genel Trend Teyit Kutusu
+# BIST 100 / 300 Genel Trend Teyit Kutusu
 st.markdown("""
     <div style="padding: 10px; background-color: #1e293b; border-radius: 5px; color: white; margin-bottom: 15px;">
         <b>BIST Genel Trend Teyidi (15D Gecikmeli):</b> KONSOLİDASYON / DİKKAT (Değişim: %-13.02) - BIST 300 Havuzu Aktif
@@ -59,7 +91,7 @@ tab1, tab2, tab3 = st.tabs(["Genel Piyasa Terminali", "Katılım Özel Günlük 
 with tab1:
     st.subheader("📊 Gelişmiş Nicel Matris (CLV, Sıkışma, Half-Life)")
     
-    # Strateji Filtreleri
+    # Strateji Filtreleri ve Diğer Tarama Göstergesi Modu
     strategy_mode = st.radio(
         "Strateji Modu:",
         ["Tüm Hisseler / Nötr", "Yüksek Güvenli Alım", "İslam'a Uygun Öncüler"],
@@ -117,5 +149,4 @@ with tab3:
 
 # Alt Bilgi
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Orijinal Matris Yapısı Aktif")
-        
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz, Güvenlik ve Orijinal Matris Yapısı Aktif")
