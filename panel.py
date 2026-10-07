@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Veri & CLV / Sıkışma / Half-Life Modülleri (BIST 300 Havuzu)")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Gerçek Veri & Bağımsız Nicel Modüller (BIST 300 Havuzu)")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -59,7 +59,7 @@ with col_btn:
 
 st.markdown("---")
 
-# Güvenli Hurst Eksponenti Hesaplama
+# Güvenli Hurst Eksponenti Hesaplama (Geometrik Trend Ölçütü)
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Temizlenmiş Genişletilmiş Tarama Motoru
+# BIST 300 Bağımsız ve Profesyonel Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -163,7 +163,7 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 havuzu nicel metrikler hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 havuzu profesyonel nicel matrislerle hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -180,56 +180,71 @@ def fetch_final_universe_data(b100_benchmark):
                 low = hist['Low']
                 volume = hist['Volume']
                 
+                # 1. Orta Vade Trend Göstergesi (Hurst)
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
+                # 2. Kısa Vade Hacim ve Sıkışma (Volume & Compression)
                 ortalama_hacim = volume.iloc[:-1].mean() if len(volume) > 1 else volume.iloc[-1]
                 son_hacim = volume.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
+                # 3. VWAP Sapma
                 typical_price = (high + low + close) / 3
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
+                # 4. ATR Yüzdesi (Volatilite)
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
 
+                # 5. Close Location Value (CLV - Gizli Alım)
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
+                # 6. Volatilite Sıkışma Bandı (Compression Ratio)
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
+                # 7. Ortalama Dönüş Süresi (Half-Life)
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-                ai_prob = 40.0 + (hurst_val * 25.0) + (min(vol_ratio, 3.0) * 8.0) + (max(0, clv) * 10.0)
-                ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
+                # --- BAĞIMSIZ PUANLAMA MOTORLARI ---
+                # A. Genel Piyasa Skor (Orta Vade Trend Ağırlıklı)
+                skor_genel = (hurst_val * 40) + (rel_strength * 2.5) + (clv * 10.0)
+                
+                # B. Günlük Kısa Vade Al-Sat Skor (Hacim, CLV ve Sıkışma Odaklı)
+                skor_gunluk = (vol_ratio * 30.0) + (max(0, clv) * 40.0) + ((1.0 - compression_ratio) * 30.0)
 
-                skor = (hurst_val * 30) + (rel_strength * 2.0) + (clv * 10.0) + (min(vol_ratio, 3.0) * 5.0)
+                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (max(0, clv) * 15.0)
+                ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
                 
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
-                if is_katilim:
-                    if hurst_val >= 0.40 and vol_ratio >= 0.8 and ai_prob >= 40.0:
-                        gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
-                    else:
-                        gunluk_sinyal = "⏳ BEKLE"
-                else:
-                    gunluk_sinyal = "HARİÇ"
-
-                if hurst_val >= 0.45 and rel_strength >= -5.0:
+                # Bağımsız Sinyal Mantığı
+                if hurst_val >= 0.48 and rel_strength >= -3.0:
                     sinyal = "🟢 GÜÇLÜ ALIM"
                 elif hurst_val >= 0.42:
                     sinyal = "🟡 TOPARLANMA"
                 else:
                     sinyal = "⏳ BEKLE"
+
+                # Günlük Al-Sat Bağımsız Sinyal (Kısa Vade Momentum)
+                if is_katilim:
+                    if vol_ratio >= 1.2 and clv >= 0.2 and compression_ratio <= 0.95:
+                        gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
+                    else:
+                        gunluk_sinyal = "⏳ BEKLE"
+                else:
+                    gunluk_sinyal = "HARİÇ"
                 
                 sonuclar.append({
                     "Hisse": t,
-                    "_Skor": skor,
+                    "_SkorGenel": skor_genel,
+                    "_SkorGunluk": skor_gunluk,
                     "Sinyal": sinyal,
                     "Günlük Al-Sat": gunluk_sinyal,
                     "AI Olasılık": f"%{ai_prob:.1f}",
@@ -251,15 +266,12 @@ def fetch_final_universe_data(b100_benchmark):
     
     bar.empty()
     df = pd.DataFrame(sonuclar)
-    if not df.empty:
-        df = df.sort_values(by="_Skor", ascending=False).reset_index(drop=True)
-        df = df.drop(columns=["_Skor"])
     return df
 
-with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
+with st.spinner("BIST 300 havuzu profesyonel nicel matrislerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
-# Sekme Yapısı (Orijinal Başlıklar ve Düzen Korundu)
+# Sekme Yapısı (Orijinal Tasarım ve İsimler)
 tab1, tab2 = st.tabs([
     "Genel Piyasa Terminali", 
     "Katılım Özel Günlük Al-Sat"
@@ -279,6 +291,8 @@ with tab1:
 
     if not df_tarama.empty:
         df_goster = df_tarama.copy()
+        df_goster = df_goster.sort_values(by="_SkorGenel", ascending=False).reset_index(drop=True)
+        
         if sadece_katilim:
             df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
         
@@ -287,6 +301,7 @@ with tab1:
         elif "İslam'a Uygun" in strateji_secimi:
             df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
+        df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
         st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
 with tab2:
@@ -294,10 +309,13 @@ with tab2:
     st.info("Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım) kriterlerine uyan ve hacim/sıkışma patlaması yaşayan tahtaları listeler.")
     
     if not df_tarama.empty:
+        # Günlük al-sat sekmesi, genel piyasadan tamamen bağımsız olarak kısa vade skoruna göre sıralanır
         df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")].copy()
-        df_gunluk = df_gunluk.sort_values(by="AI Olasılık", ascending=False).reset_index(drop=True)
+        df_gunluk = df_gunluk.sort_values(by="_SkorGunluk", ascending=False).reset_index(drop=True)
+        
+        df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Katılım Algoritması Aktif")
-                
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Bağımsız Katılım Algoritması Aktif")
+                    
