@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Kapsamlı Genişletilmiş Tarama Motoru
+# BIST 300 Temizlenmiş Genişletilmiş Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -115,42 +115,41 @@ def fetch_final_universe_data(b100_benchmark):
         "ARENA.IS", "AYDEM.IS", "AYEN.IS", "BAGFS.IS", "CATES.IS", 
         "DAPGM.IS", "DEVA.IS", "ECZYT.IS", "EGEPO.IS", "FADE.IS", 
         "FORMT.IS", "GENIL.IS", "GIPTA.IS", "GOODY.IS", "ANACM.IS",
-        "TRKCM.IS", "SODA.IS", "HEKTS.IS", "ISDMR.IS", "IZMDC.IS",
+        "TRKCM.IS", "SODA.IS", "ISDMR.IS", "IZMDC.IS",
         "KARSN.IS", "KFEIN.IS", "KOCMT.IS", "KRONT.IS", "LOGO.IS",
         "LUKSK.IS", "MAALT.IS", "MERKO.IS", "METUR.IS", "MIPAZ.IS",
         "NTHOL.IS", "OYYAT.IS", "PNSUT.IS", "PRKME.IS", "PSGYO.IS",
         "RTALB.IS", "RYSAS.IS", "SARKY.IS", "SELEC.IS", "SELGD.IS",
-        "SKBNK.IS", "SUNTK.IS", "TATGD.IS", "TAVHL.IS", "TBORG.IS",
+        "SKBNK.IS", "SUNTK.IS", "TATGD.IS", "TBORG.IS",
         "TMSN.IS", "TRGYO.IS", "TRILC.IS", "ULUUN.IS", "UNLU.IS",
         "VAKFN.IS", "VBTYZ.IS", "VERTU.IS", "VKGYO.IS", "YAPRK.IS",
-        "YATAS.IS", "YGGYO.IS", "YKSLN.IS", "ZOREN.IS", "ACSEL.IS",
+        "YATAS.IS", "YGGYO.IS", "YKSLN.IS", "ACSEL.IS",
         "ADEL.IS", "ADESE.IS", "AFYON.IS", "AGESA.IS", "AGHOL.IS",
         "AGROT.IS", "AKENR.IS", "AKFGY.IS", "AKSGY.IS", "ALCAR.IS",
-        "ALCTL.IS", "ALMAD.IS", "ANELE.IS", "ANGEN.IS", "ARFYO.IS",
+        "ALCTL.IS", "ALMAD.IS", "ANGEN.IS", "ARFYO.IS",
         "ARSAN.IS", "ARTMS.IS", "ARZUM.IS", "ASUZU.IS", "ATAKP.IS",
         "ATEKS.IS", "ATLAS.IS", "AVOD.IS", "AVTUR.IS", "AYCES.IS",
         "AZTEK.IS", "BAKAB.IS", "BALAT.IS", "BANVT.IS", "BARMA.IS",
         "BASCM.IS", "BASGZ.IS", "BAYRK.IS", "BEGYO.IS", "BEYAZ.IS",
         "BJKAS.IS", "BLCYT.IS", "BMSCH.IS", "BMSTL.IS", "BNTAS.IS",
         "BOSSA.IS", "BRKSN.IS", "BRSAN.IS", "BTGYO.IS", "BURCE.IS",
-        "BURVA.IS", "BVSAN.IS", "CANTE.IS", "Casa.IS", "CASBE.IS",
-        "CCOLA.IS", "CELHA.IS", "CEMAS.IS", "CEOEM.IS", "CUSAN.IS",
-        "DAGI.IS", "DAMAT.IS", "DAPGM.IS", "DENGE.IS", "DERHL.IS",
+        "BURVA.IS", "BVSAN.IS", "CANTE.IS", "CELHA.IS", "CEMAS.IS", "CEOEM.IS", "CUSAN.IS",
+        "DAGI.IS", "DENGE.IS", "DERHL.IS",
         "DERIM.IS", "DESA.IS", "DESPC.IS", "DIRIT.IS", "DMSAS.IS",
         "DNISI.IS", "DOBUR.IS", "DOCO.IS", "DOGUB.IS", "DOKTA.IS",
         "DURDO.IS", "DYOBY.IS", "DZGYO.IS", "EBEBK.IS", "EDIP.IS",
         "EGGUB.IS", "EMKEL.IS", "ENSRI.IS", "EPLAS.IS", "ERCB.IS",
         "ERSU.IS", "ESCAR.IS", "ESEN.IS", "ETILR.IS", "EUHOL.IS",
-        "EUKYO.IS", "EUPWR.IS", "EVYOT.IS", "EYGYO.IS", "FADE.IS",
-        "FENER.IS", "FLAP.IS", "FNTES.IS", "FONET.IS", "FORMT.IS",
+        "EUKYO.IS", "EVYOT.IS", "EYGYO.IS",
+        "FENER.IS", "FLAP.IS", "FONET.IS",
         "FRIGO.IS", "GARFA.IS", "GEDIK.IS", "GEDZA.IS", "GENTS.IS",
-        "GEREL.IS", "GESAN.IS", "GLBER.IS", "GLRYH.IS", "GMTAS.IS",
-        "GOLTS.IS", "GOODY.IS", "GRNYO.IS", "GZNMI.IS", "HALKB.IS",
+        "GEREL.IS", "GLRYH.IS", "GMTAS.IS",
+        "GOLTS.IS", "GRNYO.IS", "GZNMI.IS",
         "HATSN.IS", "HEDEF.IS", "HKTM.IS", "HLGYO.IS", "HTTBT.IS",
-        "HUBVC.IS", "HURGZ.IS", "ICBCT.IS", "IDEAS.IS", "IDFH.IS",
-        "IHEVA.IS", "IHGZT.IS", "IHLAS.IS", "IHLGM.IS", "<bos>100.IS"
+        "HUBVC.IS", "HURGZ.IS", "ICBCT.IS", "IDEAS.IS",
+        "IHEVA.IS", "IHGZT.IS", "IHLAS.IS", "IHLGM.IS"
     ]
-    tickers = list(dict.fromkeys(tickers))[:300] # Kesinlikle ilk 300 hisse ile sınırlandırıldı
+    tickers = list(dict.fromkeys(tickers))[:300]
     
     katilim_listesi = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "ASELS.IS", "BIMAS.IS", 
@@ -164,7 +163,7 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 havuzu nicel metrikleri (CLV, Sıkışma, Half-Life) hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 havuzu nicel metrikler hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -184,34 +183,27 @@ def fetch_final_universe_data(b100_benchmark):
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                # 1. Hacim Çarpanı
                 ortalama_hacim = volume.iloc[:-1].mean() if len(volume) > 1 else volume.iloc[-1]
                 son_hacim = volume.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
-                # 2. VWAP Sapma
                 typical_price = (high + low + close) / 3
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # 3. ATR Yüzdesi
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
 
-                # 4. Close Location Value (CLV) - Gizli Alım Göstergesi (-1 ile +1 arası)
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                # 5. Volatilite Sıkışma Bandı (Compression Ratio)
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                # 6. Ortalama Dönüş Süresi (Half-Life Ölçütü - Gün)
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-                # Yapay Zeka Başarı Olasılığı
                 ai_prob = 40.0 + (hurst_val * 25.0) + (min(vol_ratio, 3.0) * 8.0) + (max(0, clv) * 10.0)
                 ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
 
@@ -221,17 +213,17 @@ def fetch_final_universe_data(b100_benchmark):
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
                 if is_katilim:
-                    if hurst_val >= 0.45 and vol_ratio >= 1.0 and ai_prob >= 60.0:
+                    if hurst_val >= 0.40 and vol_ratio >= 0.8 and ai_prob >= 40.0:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
                 else:
                     gunluk_sinyal = "HARİÇ"
 
-                if hurst_val >= 0.49 and rel_strength >= -3.0 and vol_ratio >= 1.0:
+                if hurst_val >= 0.45 and rel_strength >= -5.0:
                     sinyal = "🟢 GÜÇLÜ ALIM"
                     durum = "TREND & HACİMLİ"
-                elif hurst_val >= 0.47:
+                elif hurst_val >= 0.42:
                     sinyal = "🟡 TOPARLANMA"
                     durum = "NÖTR"
                 else:
@@ -267,7 +259,7 @@ def fetch_final_universe_data(b100_benchmark):
         df = df.drop(columns=["_Skor"])
     return df
 
-with st.spinner("BIST 300 havuzu nihai nicel metriklerle taranıyor..."):
+with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
 # Sekme Yapısı
@@ -304,11 +296,7 @@ with tab1:
 with tab2:
     st.markdown("### 🚀 Katılım Günlük Al-Sat & Overnight Swing Sinyalleri")
     if not df_tarama.empty:
-        df_gunluk = df_tarama[
-            (df_tarama["Katılım Uygun"].str.contains("EVET")) & 
-            (df_gunluk_check := df_tarama["Günlük Al-Sat"].str.contains("GÜNLÜK AL-SAT UYGUN"))
-        ] if "df_gunluk_check" else df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
-        
+        df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 with tab3:
@@ -319,5 +307,5 @@ with tab3:
         if st.form_submit_button("Test Mesajı Gönder"):
             st.success("✅ Telegram Bot altyapısı aktif!")
 
-st.success("✨ Tüm nicel metrikler (CLV, Sıkışma, Half-Life) ve BIST 300 havuzu sisteme başarıyla işlenmiştir.")
-        
+st.success("✨ BIST 300 tarama matrisi güncellenmiştir.")
+                
