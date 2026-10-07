@@ -9,7 +9,7 @@ from streamlit_autorefresh import st_autorefresh
 # Sayfa Yapılandırması
 st.set_page_config(page_title="BIST Profesyonel Nihai Nicel & Katılım Terminali", layout="wide")
 
-# Şifre Koruma (Cuma Babacan / 784512)
+# Şifre Koruma
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
@@ -173,7 +173,7 @@ def fetch_final_universe_data(b100_benchmark):
             if not hist.empty and len(hist) >= 5:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
-                degisim = ((fiyat - fiyat_oncesi) / fiyat_oncesi) * 100
+                degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
                 
                 close = hist['Close']
                 high = hist['High']
@@ -212,9 +212,8 @@ def fetch_final_universe_data(b100_benchmark):
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
-                # Günlük al-sat için daha esnek veya dinamik koşul
                 if is_katilim:
-                    if hurst_val >= 0.42 and vol_ratio >= 0.9:
+                    if hurst_val >= 0.40 and vol_ratio >= 0.8 and ai_prob >= 40.0:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -260,18 +259,18 @@ def fetch_final_universe_data(b100_benchmark):
 with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
-# Sekme Yapısı (Birbirinden Bağımsız Filtre Yapısı)
+# Sekme Yapısı (Orijinal Başlıklar ve Düzen Korundu)
 tab1, tab2 = st.tabs([
-    "🛡️ Genel Piyasa Terminali", 
-    "⚡ Katılım Özel Günlük Al-Sat"
+    "Genel Piyasa Terminali", 
+    "Katılım Özel Günlük Al-Sat"
 ])
 
 with tab1:
-    st.markdown("### 📊 Gelişmiş Nihai Nicel Matris (BIST 300 Genel Tarama)")
+    st.subheader("📊 Gelişmiş Nicel Matris (CLV, Sıkışma, Half-Life)")
     
     strateji_secimi = st.radio(
         "Strateji Modu:",
-        ["🛡️ Tüm Hisseler / Nötr", "🟢 Yüksek Güvenli Alım", "⚡ İslam'a Uygun Öncüler"],
+        ["Tüm Hisseler / Nötr", "Yüksek Güvenli Alım", "İslam'a Uygun Öncüler"],
         horizontal=True,
         key="t1_r"
     )
@@ -291,16 +290,14 @@ with tab1:
         st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
 with tab2:
-    st.markdown("### 🚀 Katılım Günlük Al-Sat & Momentum Sinyalleri")
-    st.caption("Bu sekme yalnızca Katılım kriterine uyan ve günlük işlem potansiyeli barındıran hisseleri listeler.")
+    st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
+    st.info("Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım) kriterlerine uyan ve hacim/sıkışma patlaması yaşayan tahtaları listeler.")
     
     if not df_tarama.empty:
-        # Sadece Katılım hisseleri filtrelenir ve günlük al-sat skoruna göre sıralanır
         df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")].copy()
-        
-        # Kullanıcının günlük al-sat sekmesinde daha rahat takip edebilmesi için performans sıralaması
         df_gunluk = df_gunluk.sort_values(by="AI Olasılık", ascending=False).reset_index(drop=True)
-        
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
-st.success("✨ Sekmeler ve filtreleme mantığı birbirinden bağımsız ve hatasız çalışacak şekilde güncellenmiştir.")
+st.markdown("---")
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Katılım Algoritması Aktif")
+                
