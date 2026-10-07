@@ -55,6 +55,8 @@ st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 D
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
+        if "df_tarama" in st.session_state:
+            del st.session_state["df_tarama"]
         st.rerun()
 
 st.markdown("---")
@@ -92,7 +94,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Profesyonel Tarama Motoru
+# BIST 300 Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -256,11 +258,14 @@ def fetch_final_universe_data(b100_benchmark):
         bar.progress((i + 1) / toplam, text=f"Taranıyor: {t} ({i+1}/{toplam})")
     
     bar.empty()
-    df = pd.DataFrame(sonuclar)
-    return df
+    return pd.DataFrame(sonuclar)
 
-with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
-    df_tarama = fetch_final_universe_data(b100_val)
+# Veriyi Session State içinde saklayarak kaybolmasını önleme
+if "df_tarama" not in st.session_state or st.session_state["df_tarama"].empty:
+    with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
+        st.session_state["df_tarama"] = fetch_final_universe_data(b100_val)
+
+df_tarama = st.session_state["df_tarama"]
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
 tab1, tab2 = st.tabs([
@@ -283,7 +288,6 @@ with tab1:
     if not df_tarama.empty:
         df_goster = df_tarama.copy()
         
-        # Strateji Modu Güvenli Filtreleme
         if "Alım" in strateji_secimi:
             df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
         elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
