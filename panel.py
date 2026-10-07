@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli İleri Düzey Matematiksel & Geometrik Motor (BIST 300)")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Z-Score & Dinamik Momentum Motoru (BIST 300)")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Gelişmiş Matematiksel Tarama Motoru
+# BIST 300 Profesyonel Z-Score ve Dinamik Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -163,17 +163,17 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 ileri düzey matematiksel matris hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 profesyonel Z-Score matrisi hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="1mo") 
-            if not hist.empty and len(hist) >= 5:
+            if not hist.empty and len(hist) >= 10:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
-                degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
+                degisim = ((fiyat - fiyat_once) / fiyat_oncesi) * 100
                 
                 close = hist['Close']
                 high = hist['High']
@@ -201,30 +201,35 @@ def fetch_final_universe_data(b100_benchmark):
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                # Sıkışma Oranı (Compression)
+                # Sıkışma Oranı
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                # --- YENİ EKLENEN PROFESYONEL MATEMATİKSEL KATMANLAR ---
-                # 1. Doğrusal Regresyon Eğimi (Linear Regression Slope - Son 5 bar)
-                y_vals = close.iloc[-5:].values
-                x_vals = np.arange(len(y_vals))
-                reg_slope = float(np.polyfit(x_vals, y_vals, 1)[0] / fiyat * 100) # Yüzdesel eğim
+                # --- PROFESYONEL Z-SCORE VE DİNAMİK MOMENTUM ---
+                # Fiyatın son 15 günlük Z-Score (Standart Sapma Değeri)
+                ma15 = close.rolling(window=15).mean().iloc[-1]
+                std15 = close.rolling(window=15).std().iloc[-1]
+                z_score = float((fiyat - ma15) / (std15 + 1e-9))
 
-                # 2. Chaikin Money Flow (CMF - Kurumsal Para Akışı / 5 Bar)
-                mf_multiplier = ((close.iloc[-5:] - low.iloc[-5:]) - (high.iloc[-5:] - close.iloc[-5:])) / (high.iloc[-5:] - low.iloc[-5:] + 1e-9)
-                cmf = float((mf_multiplier * volume.iloc[-5:]).sum() / (volume.iloc[-5:].sum() + 1e-9))
+                # Kısa vade RSI hızı
+                delta = close.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=5).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=5).mean()
+                rs = gain / (loss + 1e-9)
+                rsi_val = 100 - (100 / (1 + rs)).iloc[-1]
 
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
                 # Skorlama Motorları
                 skor_genel = (hurst_val * 40) + (rel_strength * 2.5) + (clv * 10.0)
                 
-                # Günlük Al-Sat için Regresyon ve CMF Destekli Güçlü Momentum Skoru
-                skor_gunluk = (vol_ratio * 30.0) + (max(0, clv) * 30.0) + (max(0, reg_slope) * 20.0) + (max(0, cmf) * 20.0)
+                # Günlük Al-Sat için Z-Score Dip Dönüşü ve Hacim Odaklı Dinamik Skor
+                # Z-score -2'ye ne kadar yakınsa veya oradan toparlıyorsa puanı artar, statik kalmaz.
+                z_puani_etken = max(0, 3.0 - abs(z_score)) if z_score < 0 else (1.0 + z_score)
+                skor_gunluk = (vol_ratio * 35.0) + (z_puani_etken * 35.0) + (max(0, clv) * 30.0)
 
-                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (max(0, cmf) * 15.0)
+                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (z_puani_etken * 10.0)
                 ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
                 
                 is_katilim = t in katilim_listesi
@@ -238,9 +243,9 @@ def fetch_final_universe_data(b100_benchmark):
                 else:
                     sinyal = "⏳ BEKLE"
 
-                # Günlük Kısa Vade Al-Sat Sinyali (Regresyon + CMF + Hacim Filtresi)
+                # Günlük Kısa Vade Al-Sat Sinyali (Dinamik Z-Score ve Hacim Patlaması)
                 if is_katilim:
-                    if vol_ratio >= 1.15 and reg_slope > 0.0 and cmf > 0.05 and atr_yuzde >= 2.0:
+                    if vol_ratio >= 1.1 and z_score <= 0.5 and clv >= 0.1 and rsi_val > 30:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -274,7 +279,7 @@ def fetch_final_universe_data(b100_benchmark):
     df = pd.DataFrame(sonuclar)
     return df
 
-with st.spinner("BIST 300 ileri düzey matematiksel matris taranıyor..."):
+with st.spinner("BIST 300 profesyonel Z-Score matrisi taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
@@ -322,5 +327,5 @@ with tab2:
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Regresyon/CMF Motoru Aktif")
-                
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Z-Score Dinamik Al-Sat Motoru Aktif")
+        
