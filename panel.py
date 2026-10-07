@@ -163,14 +163,14 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 profesyonel Z-Score matrisi hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 tarama matrisi güncelleniyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="1mo") 
-            if not hist.empty and len(hist) >= 10:
+            if not hist.empty and len(hist) >= 5:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
                 degisim = ((fiyat - fiyat_once) / fiyat_oncesi) * 100
@@ -187,65 +187,46 @@ def fetch_final_universe_data(b100_benchmark):
                 son_hacim = volume.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
-                # VWAP ve Sapma
                 typical_price = (high + low + close) / 3
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # ATR ve Volatilite
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
 
-                # CLV (Gizli Alım Gücü)
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                # Sıkışma Oranı
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                # --- PROFESYONEL Z-SCORE VE DİNAMİK MOMENTUM ---
-                # Fiyatın son 15 günlük Z-Score (Standart Sapma Değeri)
+                # Z-Score Hesaplama
                 ma15 = close.rolling(window=15).mean().iloc[-1]
                 std15 = close.rolling(window=15).std().iloc[-1]
                 z_score = float((fiyat - ma15) / (std15 + 1e-9))
 
-                # Kısa vade RSI hızı
-                delta = close.diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=5).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=5).mean()
-                rs = gain / (loss + 1e-9)
-                rsi_val = 100 - (100 / (1 + rs)).iloc[-1]
-
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-                # Skorlama Motorları
-                skor_genel = (hurst_val * 40) + (rel_strength * 2.5) + (clv * 10.0)
-                
-                # Günlük Al-Sat için Z-Score Dip Dönüşü ve Hacim Odaklı Dinamik Skor
-                # Z-score -2'ye ne kadar yakınsa veya oradan toparlıyorsa puanı artar, statik kalmaz.
-                z_puani_etken = max(0, 3.0 - abs(z_score)) if z_score < 0 else (1.0 + z_score)
-                skor_gunluk = (vol_ratio * 35.0) + (z_puani_etken * 35.0) + (max(0, clv) * 30.0)
+                skor_genel = (hurst_val * 30) + (rel_strength * 2.0) + (clv * 10.0)
+                skor_gunluk = (vol_ratio * 25.0) + (max(0, clv) * 25.0) + (max(0, 2.0 - abs(z_score)) * 25.0)
 
-                ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (z_puani_etken * 10.0)
+                ai_prob = 40.0 + (hurst_val * 25.0) + (min(vol_ratio, 3.0) * 10.0)
                 ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
                 
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
-                # Genel Sinyal Mantığı
-                if hurst_val >= 0.48 and rel_strength >= -3.0:
+                if hurst_val >= 0.45:
                     sinyal = "🟢 GÜÇLÜ ALIM"
-                elif hurst_val >= 0.42:
+                elif hurst_val >= 0.40:
                     sinyal = "🟡 TOPARLANMA"
                 else:
                     sinyal = "⏳ BEKLE"
 
-                # Günlük Kısa Vade Al-Sat Sinyali (Dinamik Z-Score ve Hacim Patlaması)
                 if is_katilim:
-                    if vol_ratio >= 1.1 and z_score <= 0.5 and clv >= 0.1 and rsi_val > 30:
+                    if vol_ratio >= 0.8 and z_score <= 1.0:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -279,7 +260,7 @@ def fetch_final_universe_data(b100_benchmark):
     df = pd.DataFrame(sonuclar)
     return df
 
-with st.spinner("BIST 300 profesyonel Z-Score matrisi taranıyor..."):
+with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
@@ -327,5 +308,5 @@ with tab2:
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Z-Score Dinamik Al-Sat Motoru Aktif")
-        
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Dinamik Tarama Aktif")
+            
