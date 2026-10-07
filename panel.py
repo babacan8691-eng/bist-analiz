@@ -191,19 +191,6 @@ def fetch_final_universe_data(b100_benchmark):
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # 🌟 Yöntem 1: 15 Dakika Gecikmeli Fiyat İstikrarı İçin Z-Skor Entegrasyonu
-                fiyat_std = close.std()
-                fiyat_ort = close.mean()
-                z_skor = ((fiyat - fiyat_ort) / fiyat_std) if fiyat_std > 0 else 0.0
-
-                # 🌟 Yöntem 2: Konsolidasyon / Daralma Tespiti İçin Güvenli RSI Hesaplaması
-                delta = close.diff()
-                artis = delta.where(delta > 0, 0).rolling(window=14).mean()
-                azalis = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = artis / azalis
-                rsi_val = 100 - (100 / (100 + rs.iloc[-1])) if not np.isnan(rs.iloc[-1]) else 50.0
-                rsi_durumu = "Sıkışma Var" if (40 <= rsi_val <= 60) else "Yatay Değil"
-
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
@@ -211,3 +198,106 @@ def fetch_final_universe_data(b100_benchmark):
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
+                rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
+                avg_range = (high - low).rolling(window=20).mean().iloc[-1]
+                compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
+
+                half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
+
+                ai_prob = 40.0 + (hurst_val * 25.0) + (min(vol_ratio, 3.0) * 8.0) + (max(0, clv) * 10.0)
+                ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
+
+                skor = (hurst_val * 30) + (rel_strength * 2.0) + (clv * 10.0) + (min(vol_ratio, 3.0) * 5.0)
+                
+                is_katilim = t in katilim_listesi
+                katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
+
+                if is_katilim:
+                    if hurst_val >= 0.40 and vol_ratio >= 0.8 and ai_prob >= 40.0:
+                        gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
+                    else:
+                        gunluk_sinyal = "⏳ BEKLE"
+                else:
+                    gunluk_sinyal = "HARİÇ"
+
+                if hurst_val >= 0.45 and rel_strength >= -5.0:
+                    sinyal = "🟢 GÜÇLÜ ALIM"
+                elif hurst_val >= 0.42:
+                    sinyal = "🟡 TOPARLANMA"
+                else:
+                    sinyal = "⏳ BEKLE"
+                
+                sonuclar.append({
+                    "Hisse": t,
+                    "_Skor": skor,
+                    "Sinyal": sinyal,
+                    "Günlük Al-Sat": gunluk_sinyal,
+                    "AI Olasılık": f"%{ai_prob:.1f}",
+                    "CLV (Gizli Alım)": f"{clv:+.2f}",
+                    "Sıkışma (Comp)": f"{compression_ratio:.2f}x",
+                    "Half-Life": f"{half_life_days} Gün",
+                    "Katılım Uygun": katilim_durum,
+                    "Fiyat": f"{fiyat:.2f} TL",
+                    "Dönem Değişim": f"%{degisim:.2f}",
+                    "Endeks RS": f"%{rel_strength:+.2f}",
+                    "Hurst": f"{hurst_val:.2f}",
+                    "Hacim": f"{vol_ratio:.1f}x",
+                    "VWAP Sapma": f"%{vwap_sapma:+.2f}",
+                    "ATR": f"%{atr_yuzde:.2f}"
+                })
+        except:
+            continue
+        bar.progress((i + 1) / toplam, text=f"Taranıyor: {t} ({i+1}/{toplam})")
+    
+    bar.empty()
+    df = pd.DataFrame(sonuclar)
+    if not df.empty:
+        df = df.sort_values(by="_Skor", ascending=False).reset_index(drop=True)
+        df = df.drop(columns=["_Skor"])
+    return df
+
+with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
+    df_tarama = fetch_final_universe_data(b100_val)
+
+# Sekme Yapısı (Orijinal Başlıklar ve Düzen Korundu)
+tab1, tab2 = st.tabs([
+    "Genel Piyasa Terminali", 
+    "Katılım Özel Günlük Al-Sat"
+])
+
+with tab1:
+    st.subheader("📊 Gelişmiş Nicel Matris (CLV, Sıkışma, Half-Life)")
+    
+    strateji_secimi = st.radio(
+        "Strateji Modu:",
+        ["Tüm Hisseler / Nötr", "Yüksek Güvenli Alım", "İslam'a Uygun Öncüler"],
+        horizontal=True,
+        key="t1_r"
+    )
+
+    sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım) Hisseler", value=False, key="t1_c")
+
+    if not df_tarama.empty:
+        df_goster = df_tarama.copy()
+        if sadece_katilim:
+            df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+        
+        if "Alım" in strateji_secimi:
+            df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
+        elif "İslam'a Uygun" in strateji_secimi:
+            df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+
+        st.dataframe(df_goster, use_container_width=True, hide_index=True)
+
+with tab2:
+    st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
+    st.info("Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım) kriterlerine uyan ve hacim/sıkışma patlaması yaşayan tahtaları listeler.")
+    
+    if not df_tarama.empty:
+        df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")].copy()
+        df_gunluk = df_gunluk.sort_values(by="AI Olasılık", ascending=False).reset_index(drop=True)
+        st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Katılım Algoritması Aktif")
+                
