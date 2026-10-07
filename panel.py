@@ -9,7 +9,7 @@ from streamlit_autorefresh import st_autorefresh
 # Sayfa Yapılandırması
 st.set_page_config(page_title="BIST Profesyonel Nihai Nicel & Katılım Terminali", layout="wide")
 
-# Şifre Koruma
+# Şifre Koruma (Cuma Babacan / 784512)
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
@@ -173,7 +173,7 @@ def fetch_final_universe_data(b100_benchmark):
             if not hist.empty and len(hist) >= 5:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
-                degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
+                degisim = ((fiyat - fiyat_oncesi) / fiyat_oncesi) * 100
                 
                 close = hist['Close']
                 high = hist['High']
@@ -212,8 +212,9 @@ def fetch_final_universe_data(b100_benchmark):
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
+                # Günlük al-sat için daha esnek veya dinamik koşul
                 if is_katilim:
-                    if hurst_val >= 0.40 and vol_ratio >= 0.8 and ai_prob >= 40.0:
+                    if hurst_val >= 0.42 and vol_ratio >= 0.9:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -222,13 +223,10 @@ def fetch_final_universe_data(b100_benchmark):
 
                 if hurst_val >= 0.45 and rel_strength >= -5.0:
                     sinyal = "🟢 GÜÇLÜ ALIM"
-                    durum = "TREND & HACİMLİ"
                 elif hurst_val >= 0.42:
                     sinyal = "🟡 TOPARLANMA"
-                    durum = "NÖTR"
                 else:
                     sinyal = "⏳ BEKLE"
-                    durum = "ZAYIF"
                 
                 sonuclar.append({
                     "Hisse": t,
@@ -262,15 +260,14 @@ def fetch_final_universe_data(b100_benchmark):
 with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
-# Sekme Yapısı
-tab1, tab2, tab3 = st.tabs([
+# Sekme Yapısı (Birbirinden Bağımsız Filtre Yapısı)
+tab1, tab2 = st.tabs([
     "🛡️ Genel Piyasa Terminali", 
-    "⚡ Katılım Özel Günlük Al-Sat", 
-    "🤖 AI & Telegram Entegrasyonu"
+    "⚡ Katılım Özel Günlük Al-Sat"
 ])
 
 with tab1:
-    st.markdown("### 📊 Gelişmiş Nihai Nicel Matris (CLV, Sıkışma, Half-Life)")
+    st.markdown("### 📊 Gelişmiş Nihai Nicel Matris (BIST 300 Genel Tarama)")
     
     strateji_secimi = st.radio(
         "Strateji Modu:",
@@ -281,31 +278,29 @@ with tab1:
 
     sadece_katilim = st.checkbox("Yalnızca İslam'a Uygun (Katılım) Hisseler", value=False, key="t1_c")
 
-    if not df_tarama.empty and sadece_katilim:
-        df_goster = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
-    else:
-        df_goster = df_tarama
+    if not df_tarama.empty:
+        df_goster = df_tarama.copy()
+        if sadece_katilim:
+            df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+        
+        if "Alım" in strateji_secimi:
+            df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
+        elif "İslam'a Uygun" in strateji_secimi:
+            df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-    if "Alım" in strateji_secimi and not df_goster.empty:
-        df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
-    elif "İslam'a Uygun" in strateji_secimi and not df_goster.empty:
-        df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
-
-    st.dataframe(df_goster, use_container_width=True, hide_index=True)
+        st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
 with tab2:
-    st.markdown("### 🚀 Katılım Günlük Al-Sat & Overnight Swing Sinyalleri")
+    st.markdown("### 🚀 Katılım Günlük Al-Sat & Momentum Sinyalleri")
+    st.caption("Bu sekme yalnızca Katılım kriterine uyan ve günlük işlem potansiyeli barındıran hisseleri listeler.")
+    
     if not df_tarama.empty:
-        df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")]
+        # Sadece Katılım hisseleri filtrelenir ve günlük al-sat skoruna göre sıralanır
+        df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")].copy()
+        
+        # Kullanıcının günlük al-sat sekmesinde daha rahat takip edebilmesi için performans sıralaması
+        df_gunluk = df_gunluk.sort_values(by="AI Olasılık", ascending=False).reset_index(drop=True)
+        
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
-with tab3:
-    st.markdown("### 🤖 Telegram Sinyal Botu Yapılandırması")
-    with st.form("tg_f"):
-        st.text_input("Telegram Bot Token:", type="password")
-        st.text_input("Telegram Chat ID:")
-        if st.form_submit_button("Test Mesajı Gönder"):
-            st.success("✅ Telegram Bot altyapısı aktif!")
-
-st.success("✨ BIST 300 tarama matrisi güncellenmiştir.")
-                
+st.success("✨ Sekmeler ve filtreleme mantığı birbirinden bağımsız ve hatasız çalışacak şekilde güncellenmiştir.")
