@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Profesyonel Z-Score ve Dinamik Tarama Motoru
+# BIST 300 Profesyonel Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -163,7 +163,7 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 tarama matrisi güncelleniyor...")
+    bar = st.progress(0, text="BIST 300 tarama matrisi yükleniyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -202,7 +202,6 @@ def fetch_final_universe_data(b100_benchmark):
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                # Z-Score Hesaplama
                 ma15 = close.rolling(window=15).mean().iloc[-1]
                 std15 = close.rolling(window=15).std().iloc[-1]
                 z_score = float((fiyat - ma15) / (std15 + 1e-9))
@@ -226,7 +225,7 @@ def fetch_final_universe_data(b100_benchmark):
                     sinyal = "⏳ BEKLE"
 
                 if is_katilim:
-                    if vol_ratio >= 0.8 and z_score <= 1.0:
+                    if vol_ratio >= 0.8 and z_score <= 1.5:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -283,16 +282,14 @@ with tab1:
 
     if not df_tarama.empty:
         df_goster = df_tarama.copy()
-        df_goster = df_goster.sort_values(by="_SkorGenel", ascending=False).reset_index(drop=True)
         
-        if sadece_katilim:
-            df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
-        
+        # Strateji Modu Güvenli Filtreleme
         if "Alım" in strateji_secimi:
             df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
-        elif "İslam'a Uygun" in strateji_secimi:
+        elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
             df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
+        df_goster = df_goster.sort_values(by="_SkorGenel", ascending=False).reset_index(drop=True)
         df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
         st.dataframe(df_goster, use_container_width=True, hide_index=True)
 
@@ -309,4 +306,4 @@ with tab2:
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Dinamik Tarama Aktif")
-            
+    
