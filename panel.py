@@ -55,7 +55,6 @@ st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 D
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
-        st.cache_data.clear()
         st.rerun()
 
 st.markdown("---")
@@ -75,20 +74,7 @@ def calculate_hurst(ts):
     except:
         return 0.50
 
-# RSI Hesaplama Fonksiyonu (Yeni İndikatör Modülü)
-def calculate_rsi(series, period=14):
-    try:
-        delta = series.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (100 + rs))
-        return rsi
-    except:
-        return pd.Series(index=series.index, data=50.0)
-
 # BIST 100 Genel Trend Verisi
-@st.cache_data(ttl=60)
 def get_bist100_data():
     try:
         b100 = yf.Ticker("XU100.IS")
@@ -107,7 +93,6 @@ b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
 # BIST 300 Temizlenmiş Genişletilmiş Tarama Motoru
-@st.cache_data(ttl=60)
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -178,25 +163,13 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    
-    # Hız Optimizasyonu: Tüm veriyi tek bir istekte indirme
-    st.info("🔄 BIST 300 Veri Havuzu İndiriliyor...")
-    try:
-        tum_hisse_verileri = yf.download(tickers, period="1mo", group_by='ticker', progress=False)
-    except Exception as e:
-        st.error(f"Veri çekilemedi: {e}")
-        return pd.DataFrame()
-
     bar = st.progress(0, text="BIST 300 havuzu nicel metrikler hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
         try:
-            if t in tum_hisse_verileri.columns.levels:
-                hist = tum_hisse_verileri[t].dropna()
-            else:
-                continue
-
+            stock = yf.Ticker(t)
+            hist = stock.history(period="1mo") 
             if not hist.empty and len(hist) >= 5:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
@@ -218,10 +191,23 @@ def fetch_final_universe_data(b100_benchmark):
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # Yeni Yöntem 1: Rakamsal Z-Skor Entegrasyonu (Uzaklık İstikrarı)
-                std_sapma = close.std()
-                ortalama_fiyat = close.mean()
-                z_skoru = ((fiyat - ortalama_fiyat) / std_sapma) if std_sapma > 0 else 0.0
+                # 🌟 Yöntem 1: 15 Dakika Gecikmeli Fiyat İstikrarı İçin Z-Skor Entegrasyonu
+                fiyat_std = close.std()
+                fiyat_ort = close.mean()
+                z_skor = ((fiyat - fiyat_ort) / fiyat_std) if fiyat_std > 0 else 0.0
 
-                # Yeni Yöntem 2: Kapanış RSI Sıkışması Takibi
-        
+                # 🌟 Yöntem 2: Konsolidasyon / Daralma Tespiti İçin Güvenli RSI Hesaplaması
+                delta = close.diff()
+                artis = delta.where(delta > 0, 0).rolling(window=14).mean()
+                azalis = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = artis / azalis
+                rsi_val = 100 - (100 / (100 + rs.iloc[-1])) if not np.isnan(rs.iloc[-1]) else 50.0
+                rsi_durumu = "Sıkışma Var" if (40 <= rsi_val <= 60) else "Yatay Değil"
+
+                tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
+                atr_val = float(tr.mean())
+                atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
+
+                h_l_diff = high.iloc[-1] - low.iloc[-1]
+                clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
+
