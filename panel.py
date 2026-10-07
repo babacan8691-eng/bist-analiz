@@ -55,8 +55,6 @@ st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 D
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
-        if "df_tarama" in st.session_state:
-            del st.session_state["df_tarama"]
         st.rerun()
 
 st.markdown("---")
@@ -65,9 +63,9 @@ st.markdown("---")
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
-        if len(ts) < 15 or np.any(np.isnan(ts)):
+        if len(ts) < 10 or np.any(np.isnan(ts)):
             return 0.50
-        lags = range(2, min(10, len(ts)//2))
+        lags = range(2, min(8, len(ts)//2))
         tau = [np.sqrt(np.std(np.subtract(ts[lag:], ts[:-lag]))) for lag in lags]
         if any(np.isnan(tau)) or any(np.array(tau) == 0):
             return 0.50
@@ -81,7 +79,7 @@ def get_bist100_data():
     try:
         b100 = yf.Ticker("XU100.IS")
         hist = b100.history(period="1mo")
-        if not hist.empty and len(hist) >= 10:
+        if not hist.empty and len(hist) >= 5:
             fiyat_suan = float(hist['Close'].iloc[-1])
             fiyat_oncesi = float(hist['Close'].iloc[0])
             b100_degisim = ((fiyat_suan - fiyat_oncesi) / fiyat_oncesi) * 100
@@ -94,7 +92,8 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Tarama Motoru
+# BIST 300 Güvenli ve Hızlı Tarama Motoru
+@st.cache_data(ttl=300)
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -125,33 +124,9 @@ def fetch_final_universe_data(b100_benchmark):
         "SKBNK.IS", "SUNTK.IS", "TATGD.IS", "TBORG.IS",
         "TMSN.IS", "TRGYO.IS", "TRILC.IS", "ULUUN.IS", "UNLU.IS",
         "VAKFN.IS", "VBTYZ.IS", "VERTU.IS", "VKGYO.IS", "YAPRK.IS",
-        "YATAS.IS", "YGGYO.IS", "YKSLN.IS", "ACSEL.IS",
-        "ADEL.IS", "ADESE.IS", "AFYON.IS", "AGESA.IS", "AGHOL.IS",
-        "AGROT.IS", "AKENR.IS", "AKFGY.IS", "AKSGY.IS", "ALCAR.IS",
-        "ALCTL.IS", "ALMAD.IS", "ANGEN.IS", "ARFYO.IS",
-        "ARSAN.IS", "ARTMS.IS", "ARZUM.IS", "ASUZU.IS", "ATAKP.IS",
-        "ATEKS.IS", "ATLAS.IS", "AVOD.IS", "AVTUR.IS", "AYCES.IS",
-        "AZTEK.IS", "BAKAB.IS", "BALAT.IS", "BANVT.IS", "BARMA.IS",
-        "BASCM.IS", "BASGZ.IS", "BAYRK.IS", "BEGYO.IS", "BEYAZ.IS",
-        "BJKAS.IS", "BLCYT.IS", "BMSCH.IS", "BMSTL.IS", "BNTAS.IS",
-        "BOSSA.IS", "BRKSN.IS", "BRSAN.IS", "BTGYO.IS", "BURCE.IS",
-        "BURVA.IS", "BVSAN.IS", "CANTE.IS", "CELHA.IS", "CEMAS.IS", "CEOEM.IS", "CUSAN.IS",
-        "DAGI.IS", "DENGE.IS", "DERHL.IS",
-        "DERIM.IS", "DESA.IS", "DESPC.IS", "DIRIT.IS", "DMSAS.IS",
-        "DNISI.IS", "DOBUR.IS", "DOCO.IS", "DOGUB.IS", "DOKTA.IS",
-        "DURDO.IS", "DYOBY.IS", "DZGYO.IS", "EBEBK.IS", "EDIP.IS",
-        "EGGUB.IS", "EMKEL.IS", "ENSRI.IS", "EPLAS.IS", "ERCB.IS",
-        "ERSU.IS", "ESCAR.IS", "ESEN.IS", "ETILR.IS", "EUHOL.IS",
-        "EUKYO.IS", "EVYOT.IS", "EYGYO.IS",
-        "FENER.IS", "FLAP.IS", "FONET.IS",
-        "FRIGO.IS", "GARFA.IS", "GEDIK.IS", "GEDZA.IS", "GENTS.IS",
-        "GEREL.IS", "GLRYH.IS", "GMTAS.IS",
-        "GOLTS.IS", "GRNYO.IS", "GZNMI.IS",
-        "HATSN.IS", "HEDEF.IS", "HKTM.IS", "HLGYO.IS", "HTTBT.IS",
-        "HUBVC.IS", "HURGZ.IS", "ICBCT.IS", "IDEAS.IS",
-        "IHEVA.IS", "IHGZT.IS", "IHLAS.IS", "IHLGM.IS"
+        "YATAS.IS", "YGGYO.IS", "YKSLN.IS"
     ]
-    tickers = list(dict.fromkeys(tickers))[:300]
+    tickers = list(dict.fromkeys(tickers))
     
     katilim_listesi = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "ASELS.IS", "BIMAS.IS", 
@@ -165,17 +140,14 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 tarama matrisi yükleniyor...")
-    toplam = len(tickers)
-    
-    for i, t in enumerate(tickers):
+    for t in tickers:
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="1mo") 
-            if not hist.empty and len(hist) >= 5:
+            if not hist.empty and len(hist) >= 3:
                 fiyat = float(hist['Close'].iloc[-1])
                 fiyat_once = float(hist['Close'].iloc[0])
-                degisim = ((fiyat - fiyat_once) / fiyat_oncesi) * 100
+                degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
                 
                 close = hist['Close']
                 high = hist['High']
@@ -200,34 +172,34 @@ def fetch_final_universe_data(b100_benchmark):
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
-                avg_range = (high - low).rolling(window=20).mean().iloc[-1]
+                rolling_range = (high - low).rolling(window=3).mean().iloc[-1]
+                avg_range = (high - low).rolling(window=10).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                ma15 = close.rolling(window=15).mean().iloc[-1]
-                std15 = close.rolling(window=15).std().iloc[-1]
-                z_score = float((fiyat - ma15) / (std15 + 1e-9))
+                ma10 = close.rolling(window=10).mean().iloc[-1]
+                std10 = close.rolling(window=10).std().iloc[-1]
+                z_score = float((fiyat - ma10) / (std10 + 1e-9))
 
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
                 skor_genel = (hurst_val * 30) + (rel_strength * 2.0) + (clv * 10.0)
                 skor_gunluk = (vol_ratio * 25.0) + (max(0, clv) * 25.0) + (max(0, 2.0 - abs(z_score)) * 25.0)
 
-                ai_prob = 40.0 + (hurst_val * 25.0) + (min(vol_ratio, 3.0) * 10.0)
-                ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
+                ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
+                ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
                 
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
                 if hurst_val >= 0.45:
                     sinyal = "🟢 GÜÇLÜ ALIM"
-                elif hurst_val >= 0.40:
+                elif hurst_val >= 0.38:
                     sinyal = "🟡 TOPARLANMA"
                 else:
                     sinyal = "⏳ BEKLE"
 
                 if is_katilim:
-                    if vol_ratio >= 0.8 and z_score <= 1.5:
+                    if vol_ratio >= 0.7:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -255,17 +227,11 @@ def fetch_final_universe_data(b100_benchmark):
                 })
         except:
             continue
-        bar.progress((i + 1) / toplam, text=f"Taranıyor: {t} ({i+1}/{toplam})")
-    
-    bar.empty()
+            
     return pd.DataFrame(sonuclar)
 
-# Veriyi Session State içinde saklayarak kaybolmasını önleme
-if "df_tarama" not in st.session_state or st.session_state["df_tarama"].empty:
-    with st.spinner("BIST 300 havuzu nicel metriklerle taranıyor..."):
-        st.session_state["df_tarama"] = fetch_final_universe_data(b100_val)
-
-df_tarama = st.session_state["df_tarama"]
+with st.spinner("BIST havuzu taranıyor ve veriler yükleniyor..."):
+    df_tarama = fetch_final_universe_data(b100_val)
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
 tab1, tab2 = st.tabs([
@@ -296,6 +262,8 @@ with tab1:
         df_goster = df_goster.sort_values(by="_SkorGenel", ascending=False).reset_index(drop=True)
         df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
         st.dataframe(df_goster, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
 
 with tab2:
     st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
@@ -307,7 +275,8 @@ with tab2:
         
         df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Dinamik Tarama Aktif")
-    
+st.caption("© 2026 BIST Nicel Terminal | BIST Havuzu ve Dinamik Tarama Aktif")
