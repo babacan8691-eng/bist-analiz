@@ -50,7 +50,7 @@ else:
 
 # Başlık ve Bilgilendirme
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
-st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Gerçek Veri & Bağımsız Nicel Modüller (BIST 300 Havuzu)")
+st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika Gecikmeli Geometrik & Matematiksel Nicel Motor (BIST 300 Havuzu)")
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
@@ -92,7 +92,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Bağımsız ve Profesyonel Tarama Motoru
+# BIST 300 Gelişmiş Matematiksel ve Geometrik Tarama Motoru
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
         "THYAO.IS", "EREGL.IS", "KCHOL.IS", "GARAN.IS", "AKBNK.IS", 
@@ -163,7 +163,7 @@ def fetch_final_universe_data(b100_benchmark):
     ]
     
     sonuclar = []
-    bar = st.progress(0, text="BIST 300 havuzu profesyonel nicel matrislerle hesaplanıyor...")
+    bar = st.progress(0, text="BIST 300 profesyonel matematiksel matris hesaplanıyor...")
     toplam = len(tickers)
     
     for i, t in enumerate(tickers):
@@ -180,43 +180,39 @@ def fetch_final_universe_data(b100_benchmark):
                 low = hist['Low']
                 volume = hist['Volume']
                 
-                # 1. Orta Vade Trend Göstergesi (Hurst)
                 hurst_val = calculate_hurst(close.values)
                 rel_strength = degisim - b100_benchmark
 
-                # 2. Kısa Vade Hacim ve Sıkışma (Volume & Compression)
                 ortalama_hacim = volume.iloc[:-1].mean() if len(volume) > 1 else volume.iloc[-1]
                 son_hacim = volume.iloc[-1]
                 vol_ratio = float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
 
-                # 3. VWAP Sapma
+                # Geometrik VWAP ve Sapma Hesaplama
                 typical_price = (high + low + close) / 3
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # 4. ATR Yüzdesi (Volatilite)
+                # Volatilite ve ATR
                 tr = np.maximum(high - low, np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1))))
                 atr_val = float(tr.mean())
                 atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
 
-                # 5. Close Location Value (CLV - Gizli Alım)
+                # CLV (Gizli Alım Gücü)
                 h_l_diff = high.iloc[-1] - low.iloc[-1]
                 clv = ((close.iloc[-1] - low.iloc[-1]) - (high.iloc[-1] - close.iloc[-1])) / h_l_diff if h_l_diff > 0 else 0.0
 
-                # 6. Volatilite Sıkışma Bandı (Compression Ratio)
+                # Donchian / Volatilite Sıkışma Oranı (Compression)
                 rolling_range = (high - low).rolling(window=5).mean().iloc[-1]
                 avg_range = (high - low).rolling(window=20).mean().iloc[-1]
                 compression_ratio = float(rolling_range / avg_range) if avg_range > 0 else 1.0
 
-                # 7. Ortalama Dönüş Süresi (Half-Life)
                 half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-                # --- BAĞIMSIZ PUANLAMA MOTORLARI ---
-                # A. Genel Piyasa Skor (Orta Vade Trend Ağırlıklı)
+                # --- BAĞIMSIZ VE GELİŞMİŞ SKORLAMA ---
                 skor_genel = (hurst_val * 40) + (rel_strength * 2.5) + (clv * 10.0)
                 
-                # B. Günlük Kısa Vade Al-Sat Skor (Hacim, CLV ve Sıkışma Odaklı)
-                skor_gunluk = (vol_ratio * 30.0) + (max(0, clv) * 40.0) + ((1.0 - compression_ratio) * 30.0)
+                # Günlük Al-Sat için Gecikme Toleranslı Matematiksel Momentum Skoru
+                skor_gunluk = (vol_ratio * 35.0) + (max(0, clv) * 45.0) + ((1.0 - compression_ratio) * 20.0)
 
                 ai_prob = 40.0 + (hurst_val * 20.0) + (min(vol_ratio, 3.0) * 10.0) + (max(0, clv) * 15.0)
                 ai_prob = float(np.clip(ai_prob, 15.0, 95.0))
@@ -224,7 +220,7 @@ def fetch_final_universe_data(b100_benchmark):
                 is_katilim = t in katilim_listesi
                 katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
-                # Bağımsız Sinyal Mantığı
+                # Genel Sinyal Mantığı
                 if hurst_val >= 0.48 and rel_strength >= -3.0:
                     sinyal = "🟢 GÜÇLÜ ALIM"
                 elif hurst_val >= 0.42:
@@ -232,9 +228,9 @@ def fetch_final_universe_data(b100_benchmark):
                 else:
                     sinyal = "⏳ BEKLE"
 
-                # Günlük Al-Sat Bağımsız Sinyal (Kısa Vade Momentum)
+                # Günlük Kısa Vade Al-Sat Sinyali (Matematiksel Sıkışma & Hacim Filtresi)
                 if is_katilim:
-                    if vol_ratio >= 1.2 and clv >= 0.2 and compression_ratio <= 0.95:
+                    if vol_ratio >= 1.15 and clv >= 0.15 and compression_ratio <= 0.95 and atr_yuzde >= 2.0:
                         gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
                     else:
                         gunluk_sinyal = "⏳ BEKLE"
@@ -268,10 +264,10 @@ def fetch_final_universe_data(b100_benchmark):
     df = pd.DataFrame(sonuclar)
     return df
 
-with st.spinner("BIST 300 havuzu profesyonel nicel matrislerle taranıyor..."):
+with st.spinner("BIST 300 havuzu profesyonel matrislerle taranıyor..."):
     df_tarama = fetch_final_universe_data(b100_val)
 
-# Sekme Yapısı (Orijinal Tasarım ve İsimler)
+# Sekme Yapısı (Orijinal Tasarım Korundu)
 tab1, tab2 = st.tabs([
     "Genel Piyasa Terminali", 
     "Katılım Özel Günlük Al-Sat"
@@ -309,7 +305,6 @@ with tab2:
     st.info("Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım) kriterlerine uyan ve hacim/sıkışma patlaması yaşayan tahtaları listeler.")
     
     if not df_tarama.empty:
-        # Günlük al-sat sekmesi, genel piyasadan tamamen bağımsız olarak kısa vade skoruna göre sıralanır
         df_gunluk = df_tarama[df_tarama["Katılım Uygun"].str.contains("EVET")].copy()
         df_gunluk = df_gunluk.sort_values(by="_SkorGunluk", ascending=False).reset_index(drop=True)
         
@@ -317,5 +312,5 @@ with tab2:
         st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Bağımsız Katılım Algoritması Aktif")
-                    
+st.caption("© 2026 BIST Nicel Terminal | BIST 300 Genişletilmiş Havuz ve Matematiksel Al-Sat Motoru Aktif")
+                
