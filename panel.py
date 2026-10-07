@@ -55,12 +55,12 @@ st.caption(f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 D
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
     if st.button("🔄 Verileri Şimdi Güncelle"):
-        st.cache_data.clear()  # Önbelleği temizleyerek yeni veri çekilmesini sağlar
+        st.cache_data.clear()
         st.rerun()
 
 st.markdown("---")
 
-# Güvenli Hurst Eksponenti Hesaplama (Minimum Veri Boyutu 20'ye Yükseltildi)
+# Güvenli Hurst Eksponenti Hesaplama
 def calculate_hurst(ts):
     try:
         ts = np.array(ts)
@@ -87,7 +87,7 @@ def calculate_rsi(series, period=14):
     except:
         return pd.Series(index=series.index, data=50.0)
 
-# BIST 100 Genel Trend Verisi (Önbelleklendi)
+# BIST 100 Genel Trend Verisi
 @st.cache_data(ttl=60)
 def get_bist100_data():
     try:
@@ -106,7 +106,7 @@ def get_bist100_data():
 b100_durum, b100_oran, b100_val = get_bist100_data()
 st.info(f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum} (Değişim: {b100_oran})")
 
-# BIST 300 Temizlenmiş Genişletilmiş Tarama Motoru (Hızlandırılmış ve Geliştirilmiş)
+# BIST 300 Temizlenmiş Genişletilmiş Tarama Motoru
 @st.cache_data(ttl=60)
 def fetch_final_universe_data(b100_benchmark):
     tickers = [
@@ -179,12 +179,11 @@ def fetch_final_universe_data(b100_benchmark):
     
     sonuclar = []
     
-    # Yeni Yöntem 1: Hız için toplu veri indirme (Batch Download)
     st.info("🔄 BIST 300 Veri Havuzu Tek Seferde İndiriliyor...")
     try:
         tum_hisse_verileri = yf.download(tickers, period="1mo", group_by='ticker', progress=False)
-    except:
-        st.error("Veri indirme sırasında bir hata oluştu.")
+    except Exception as e:
+        st.error(f"Veri indirme sırasında bir hata oluştu: {e}")
         return pd.DataFrame()
         
     bar = st.progress(0, text="Metrikler hesaplanıyor...")
@@ -192,7 +191,6 @@ def fetch_final_universe_data(b100_benchmark):
     
     for i, t in enumerate(tickers):
         try:
-            # Toplu indirilen veriden ilgili hissenin verisini çekme
             if t in tum_hisse_verileri.columns.levels[0]:
                 hist = tum_hisse_verileri[t].dropna()
             else:
@@ -219,5 +217,11 @@ def fetch_final_universe_data(b100_benchmark):
                 vwap = (typical_price * volume).sum() / volume.sum() if volume.sum() > 0 else fiyat
                 vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-                # Yeni Yöntem 2: Rakamsal Z-Skoru Entegrasyonu (Fiyat Sapma Kararlılığı)
+                # Rakamsal Z-Skoru
+                std_sapma = close.std()
+                ortalama_fiyat = close.mean()
+                z_skoru = ((fiyat - ortalama_fiyat) / std_sapma) if std_sapma > 0 else 0.0
+
+                # RSI Sıkışması
+                rsi_serisi = calculate_rsi(close, period=14)
                 
