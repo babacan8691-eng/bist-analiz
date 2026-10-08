@@ -13,18 +13,7 @@ st.set_page_config(
 
 # --- GELİŞMİŞ RADAR, DİNAMİK ANİMASYON VE STİLLER ---
 st.markdown(
-    "<style>@keyframes yanip-son { 0% { opacity: 1; transform: scale(1);"
-    " box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); } 50% { opacity: 0.4;"
-    " transform: scale(0.98); box-shadow: 0 0 15px rgba(255, 75, 75, 0.9); }"
-    " 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75,"
-    " 75, 0.4); } } .flash-badge { background-color: #ff4b4b; color: white;"
-    " padding: 4px 10px; border-radius: 6px; font-weight: bold; display:"
-    " inline-block; animation: yanip-son 1.5s infinite ease-in-out; } .kap-kutu"
-    " { background-color: rgba(255, 165, 0, 0.12); border-left: 4px solid"
-    " #ffaa00; padding: 10px; border-radius: 4px; margin-bottom: 8px;"
-    " font-size: 14px; } .strateji-kutu { background-color: rgba(0, 150, 255,"
-    " 0.08); border-left: 4px solid #00bfff; padding: 12px; border-radius:"
-    " 4px; margin-bottom: 12px; font-size: 14px; }</style>",
+    "<style>@keyframes yanip-son { 0% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); } 50% { opacity: 0.4; transform: scale(0.98); box-shadow: 0 0 15px rgba(255, 75, 75, 0.9); } 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); } } .flash-badge { background-color: #ff4b4b; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; display: inline-block; animation: yanip-son 1.5s infinite ease-in-out; } .kap-kutu { background-color: rgba(255, 165, 0, 0.12); border-left: 4px solid #ffaa00; padding: 10px; border-radius: 4px; margin-bottom: 8px; font-size: 14px; } .strateji-kutu { background-color: rgba(0, 150, 255, 0.08); border-left: 4px solid #00bfff; padding: 12px; border-radius: 4px; margin-bottom: 12px; font-size: 14px; }</style>",
     unsafe_allow_html=True,
 )
 
@@ -691,5 +680,8 @@ with tab3:
   )
   st.info(
       "Seans kapanışına doğru sıkışmasını tamamlayan ve gün sonu hacim patlaması"
-      " yaşayan Katılım hisselerini gösterir. Kararlar net gün sonu"
-      " verileriyle alındığı için gecik
+      " yaşayan Katılım hisselerini gösterir. Kararlar net gün sonu verileriyle"
+      " alındığı için gecikmeden etkilenmez."
+  )
+  if not df_tarama.empty:
+    df_overnight = df_tarama
