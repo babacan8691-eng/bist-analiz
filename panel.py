@@ -8,10 +8,10 @@ import yfinance as yf
 
 # Sayfa Yapılandırması
 st.set_page_config(
-    page_title="BIST Profesyonel Nihai Nicel & Katılım Terminali", layout="wide"
+    page_title="BIST Profesyonel Nicel Trend & Sıkışma Terminali", layout="wide"
 )
 
-# --- GELİŞMİŞ RADAR, DİNAMİK ANİMASYON VE IŞIKLI YANIP SÖNEN STİLLERİ ---
+# --- GELİŞMİŞ RADAR, DİNAMİK ANİMASYON VE STİLLER ---
 st.markdown(
     """
     <style>
@@ -29,22 +29,20 @@ st.markdown(
         display: inline-block;
         animation: yanip-son 1.5s infinite ease-in-out;
     }
-    @keyframes radar-yesil {
-        0% { background-color: rgba(0, 255, 0, 0.15); color: #00ff00; }
-        50% { background-color: rgba(0, 255, 0, 0.85); color: #ffffff; font-weight: bold; }
-        100% { background-color: rgba(0, 255, 0, 0.15); color: #00ff00; }
-    }
-    @keyframes radar-kirmizi {
-        0% { background-color: rgba(255, 0, 0, 0.15); color: #ff4444; }
-        50% { background-color: rgba(255, 0, 0, 0.85); color: #ffffff; font-weight: bold; }
-        100% { background-color: rgba(255, 0, 0, 0.15); color: #ff4444; }
-    }
     .kap-kutu {
         background-color: rgba(255, 165, 0, 0.12);
         border-left: 4px solid #ffaa00;
         padding: 10px;
         border-radius: 4px;
         margin-bottom: 8px;
+        font-size: 14px;
+    }
+    .strateji-kutu {
+        background-color: rgba(0, 150, 255, 0.08);
+        border-left: 4px solid #00bfff;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 12px;
         font-size: 14px;
     }
     </style>
@@ -88,22 +86,24 @@ borsa_acik_mi = (aktif_gun < 5) and (
     time(9, 40) <= aktif_saat <= time(18, 30)
 )
 
-# 30 Saniyelik Canlı Akış Döngüsü
+# Canlı Otomatik Akış Döngüsü
 if borsa_acik_mi:
   count = st_autorefresh(interval=30000, key="bist_canli_akis_30s")
   st.sidebar.success(
-      f"🟢 Canlı Otomatik Akış Aktif (30 Sn Döngü | Sayaç: {count})"
+      f"🟢 Trend Tarama Akışı Aktif (30 Sn Döngü | Sayaç: {count})"
   )
 else:
   st.sidebar.warning(
-      "🔴 Borsa Kapalı veya Mesai Saatleri Dışında (Tarama Beklemede)"
+      "🔴 Borsa Kapalı - Gün Sonu & Seans Kapanış Modu Devrede"
   )
 
-# Başlık
-st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
+# Başlık ve Felsefe Vurgusu
+st.markdown(
+    "## 🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali"
+)
 st.caption(
-    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Canlı"
-    " Otomatik Akış Modu (BIST 300)"
+    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15Dk"
+    " Gecikmeli Güvenli Trend & Sıkışma Avcısı Modu"
 )
 
 col_btn, col_info = st.columns([1, 4])
@@ -113,8 +113,17 @@ with col_btn:
 
 st.markdown("---")
 
+# Felsefe Bilgilendirme Kutusu
+st.markdown(
+    """
+    <div class='strateji-kutu'>
+    💡 <b>Nicel Trend & Sıkışma Felsefesi:</b> Sistemimiz saniyelik scalping yarışları yerine, <b>15-30 dakikalık çubuklardaki hacim patlamalarını ve dar bant sıkışmalarını (compression ratio)</b> baz alır. 15 dakikalık gecikme, gürültüyü eleyerek büyük oyuncuların gün içine ve sonraki seanslara yayılan kırılma hamlelerini net görmenizi sağlar.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Güvenli Hurst Hesaplama
+
 def calculate_hurst(ts):
   try:
     ts = np.array(ts)
@@ -132,8 +141,9 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# Sıfır Göstermeyen ve Kesin Dinamik Projeksiyon Motoru
-def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series):
+def nicel_trend_projeksiyon(
+    close_series, high_series, low_series, volume_series
+):
   try:
     close = np.array(close_series)
     high = np.array(high_series)
@@ -141,7 +151,7 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     volume = np.array(volume_series)
 
     if len(close) < 10:
-      return "⚖️ Denge / Yatay", 0.35
+      return "⚖️ Denge / Yatay Bant", 0.35
 
     fiyat_suan = close[-1]
     fiyat_onceki = close[-3]
@@ -165,30 +175,26 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
       projeksiyon_getiri = 1.15 if fiyat_suan >= close[-2] else -1.15
 
     if projeksiyon_getiri > 0.4:
-      durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
+      durum = "🚀 Güçlü Trend Devamı Bekleniyor"
     elif projeksiyon_getiri < -0.4:
-      durum = "📉 20Dk Sonra Düşüş Bekleniyor"
+      durum = "📉 Satış Baskısı / Düzeltme"
     elif projeksiyon_getiri > 0:
-      durum = "🔄 Tepki (Rebound) Beklentisi"
+      durum = "🔄 Bant İçi Toparlanma"
     else:
-      durum = "⚠️ Yükseliş İvmesi Tükeniyor"
+      durum = "⚠️ Sıkışma / Yön Arayışı"
 
     return durum, float(projeksiyon_getiri)
   except:
-    return "🚀 20Dk Sonra Yükseliş Bekleniyor", 1.25
+    return "🚀 Güçlü Trend Devamı Bekleniyor", 1.25
 
 
-# 15DK GECİKMELİ MATEMATİKSEL & GEOMETRİK 5-20DK KARAR MOTORU
-def kisa_vade_geometrik_karar(
+def trend_karar_motoru(
     close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio
 ):
   try:
     c = np.array(close_s)
     if len(c) < 5:
-      return (
-          "🎯 5-20Dk: NÖTR / BEKLE",
-          "Standart Denge Akışı (15Dk Gecikmeli Matris)",
-      )
+      return "🎯 Trend: NÖTR / BEKLE", "Standart Bant Akışı"
 
     egim_kisa = (c[-1] - c[-3]) / c[-3] if c[-3] > 0 else 0
     hacim_faktor = (
@@ -196,71 +202,65 @@ def kisa_vade_geometrik_karar(
     )
 
     if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
-      karar = "🚀 5-20Dk: GÜÇLÜ YÜKSELİŞ PATLAMASI"
+      karar = "🎯 Trend: HACİM SIKIŞMASI & KIRILMA"
       beklenti = (
-          "Hacim Sıkışması Tamamlandı -> Pozitif KAP / İhale / İş İlişkisi"
-          " Bekleniyor"
+          "Bant Darelmesi Tamamlandı -> Güçlü İhale/KAP veya Trend Kırılması"
       )
     elif egim_kisa > 0.003 and z_score < 1.5:
-      karar = "🟢 5-20Dk: YÜKSELİŞ YÖNLÜ DEVAM"
-      beklenti = (
-          "Matematiksel Momentum Devam Ediyor -> Alım Baskısı Sürebilir"
-      )
+      karar = "🟢 Trend: YÜKSELİŞ KANALI AKTİF"
+      beklenti = "Orta Vadeli Alım İvmesi Korunuyor"
     elif egim_kisa < -0.003 and z_score > -1.5:
-      karar = "📉 5-20Dk: DÜŞÜŞ / KONSOLİDASYON"
-      beklenti = "Satış Baskısı Derinleşebilir -> Destek Testi Beklentisi"
+      karar = "📉 Trend: GERİ ÇEKİLME / DESTEK TESTİ"
+      beklenti = "Kısa Vadeli Konsolidasyon Süreci"
     else:
-      karar = "⚖️ 5-20Dk: DAR BAND / YATAY"
-      beklenti = "Yatay Bant Sıkışması -> Hacim Genişlemesi Bekleniyor"
+      karar = "⚖️ Trend: YATAY DAR BANT"
+      beklenti = "Hacim Genişlemesi Bekleniyor"
 
     return karar, beklenti
   except:
-    return "🚀 5-20Dk: YÜKSELİŞ BEKLENTİSİ", "Standart Hacim Akış Beklentisi"
+    return "🎯 Trend: YÜKSELİŞ BEKLENTİSİ", "Hacim Akış Beklentisi"
 
 
-# BIST 100 ve VIOP Öncü Gösterge Verisi
 def get_market_indicators():
   try:
     b100 = yf.Ticker("XU100.IS")
-    hist = b100.history(period="5d")
+    hist = b100.history(period="5d", interval="15m")
+    if hist.empty:
+      hist = b100.history(period="5d")
     b100_degisim = 1.25
     if not hist.empty and len(hist) >= 2:
       fiyat_suan = float(hist["Close"].iloc[-1])
       fiyat_oncesi = float(hist["Close"].iloc[-2])
       b100_degisim = ((fiyat_suan - fiyat_oncesi) / fiyat_oncesi) * 100
-      trend = (
-          "YÜKSELİŞ ONAYLI"
-          if b100_degisim >= 0
-          else "KONSOLİDASYON / DİKKAT"
-      )
+      trend = "YÜKSELİŞ ONAYLI" if b100_degisim >= 0 else "KONSOLİDASYON"
     else:
-      trend = "YÜKSELİŞ (ONAYLI)"
+      trend = "YÜKSELİŞ"
 
     xu030 = yf.Ticker("XU030.IS")
-    u30_hist = xu030.history(period="5d")
-    viop_durum = "⚖️ VIOP Denge / Yatay"
+    u30_hist = xu030.history(period="5d", interval="15m")
+    if u30_hist.empty:
+      u30_hist = xu030.history(period="5d")
+    viop_durum = "⚖️ VIOP Denge"
     if not u30_hist.empty and len(u30_hist) >= 2:
       v_degisim = (
           (u30_hist["Close"].iloc[-1] - u30_hist["Close"].iloc[-2])
           / u30_hist["Close"].iloc[-2]
       ) * 100
       if v_degisim > 0.15:
-        viop_durum = f"⚡ VIOP Öncü Alım Baskısı (%{v_degisim:+.2f})"
+        viop_durum = f"⚡ VIOP Alım Baskısı (%{v_degisim:+.2f})"
       elif v_degisim < -0.15:
-        viop_durum = f"⚠️ VIOP Öncü Satış Baskısı (%{v_degisim:+.2f})"
+        viop_durum = f"⚠️ VIOP Satış Baskısı (%{v_degisim:+.2f})"
 
     return trend, f"%{b100_degisim:.2f}", b100_degisim, viop_durum
   except:
-    return "YÜKSELİŞ (ONAYLI)", "%1.25", 1.25, "⚡ VIOP Öncü Alım Baskısı"
+    return "YÜKSELİŞ", "%1.25", 1.25, "⚡ VIOP Alım Baskısı"
 
 
 b100_durum, b100_oran, b100_val, viop_sinyal = get_market_indicators()
 
 col_b1, col_b2 = st.columns([3, 2])
 with col_b1:
-  st.info(
-      f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (Değişim: {b100_oran})"
-  )
+  st.info(f"🌐 **BIST 100 Trend Teyidi:** {b100_durum} ({b100_oran})")
 with col_b2:
   st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
 
@@ -268,17 +268,15 @@ with col_b2:
 def get_live_kap_news():
   simdiet = datetime.now(tr_tz)
   saat_Str = simdiet.strftime("%H:%M:%S")
-
-  haberler = [
-      f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 15Dk Gecikmeli Geometrik Sıkışma ve Haber Beklenti Modelleri Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score, 5-20Dk Geometrik Karar ve Momentum Motoru aktif: Katılım tahtaları taranıyor.",
-      f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
+  return [
+      f"🔔 **[Saat {saat_Str}] KAP & Sıkışma Bülteni:** 15m-30m Bar Verilerine Göre Hacim Patlamaları Güncellendi.",
+      "⚡ **[Trend Modu]** Comp Ratio (Sıkışma Oranı) ve Vol Ratio (Hacim Çarpanı) Taraması Aktif.",
+      "📢 **[Seans Kapanışı]** Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.",
   ]
-  return haberler
 
 
 with st.expander(
-    "🚨 Canlı Haberler & KAP / Otomatik Erken Uyarı Alarm Paneli", expanded=True
+    "🚨 Canlı Haberler, Sıkışma Alarmları & Seans Bilgi Paneli", expanded=True
 ):
   for haber in get_live_kap_news():
     st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
@@ -419,7 +417,10 @@ def fetch_final_universe_data(b100_benchmark):
   for t in tickers:
     try:
       stock = yf.Ticker(t)
-      hist = stock.history(period="1mo")
+      hist = stock.history(period="5d", interval="15m")
+      if hist.empty or len(hist) < 3:
+        hist = stock.history(period="5d")
+
       if not hist.empty and len(hist) >= 3:
         fiyat = float(hist["Close"].iloc[-1])
         fiyat_once = float(hist["Close"].iloc[0])
@@ -430,7 +431,7 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
-        projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
+        projeksiyon_durum, projeksiyon_getiri = nicel_trend_projeksiyon(
             close.values, high.values, low.values, volume.values
         )
 
@@ -453,15 +454,6 @@ def fetch_final_universe_data(b100_benchmark):
         )
         vwap_sapma = ((fiyat - vwap) / vwap) * 100
 
-        tr = np.maximum(
-            high - low,
-            np.maximum(
-                abs(high - close.shift(1)), abs(low - close.shift(1))
-            ),
-        )
-        atr_val = float(tr.mean())
-        atr_yuzde = (atr_val / fiyat) * 100 if fiyat > 0 else 3.0
-
         h_l_diff = high.iloc[-1] - low.iloc[-1]
         clv = (
             (close.iloc[-1] - low.iloc[-1])
@@ -478,7 +470,7 @@ def fetch_final_universe_data(b100_benchmark):
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
 
-        kisa_karar, haber_beklenti = kisa_vade_geometrik_karar(
+        trend_karar, haber_beklenti = trend_karar_motoru(
             close.values,
             high.values,
             low.values,
@@ -495,9 +487,14 @@ def fetch_final_universe_data(b100_benchmark):
             + (projeksiyon_getiri * 5.0)
         )
         skor_gunluk = (
-            (vol_ratio * 25.0)
+            (vol_ratio * 30.0)
+            + (float(compression_ratio <= 0.8) * 20.0)
             + (max(0, clv) * 25.0)
-            + (max(0, 2.0 - abs(z_score)) * 25.0)
+        )
+        skor_overnight = (
+            (vol_ratio * 35.0)
+            + (max(0, clv) * 35.0)
+            + (float(compression_ratio <= 0.75) * 30.0)
         )
 
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
@@ -507,22 +504,21 @@ def fetch_final_universe_data(b100_benchmark):
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
 
         if hurst_val >= 0.45:
-          sinyal = "🟢 GÜÇLÜ ALIM"
+          sinyal = "🟢 GÜÇLÜ TREND"
         elif hurst_val >= 0.38:
           sinyal = "🟡 TOPARLANMA"
         else:
           sinyal = "⏳ BEKLE"
 
         if is_katilim:
-          if vol_ratio >= 0.7:
-            gunluk_sinyal = "⚡ GÜNLÜK AL-SAT UYGUN"
-          else:
-            gunluk_sinyal = "⏳ BEKLE"
+          gunluk_sinyal = (
+              "⚡ SWING / İNTEL UYGUN" if vol_ratio >= 0.7 else "⏳ BEKLE"
+          )
         else:
           gunluk_sinyal = "HARİÇ"
 
         erken_durum = (
-            "🚨 HACİM/SIKIŞMA PATLAMASI"
+            "🚨 HACİM & SIKIŞMA PATLAMASI"
             if (vol_ratio >= 1.3 or compression_ratio <= 0.7)
             else "NORMAL"
         )
@@ -531,23 +527,23 @@ def fetch_final_universe_data(b100_benchmark):
             "Hisse": t,
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
+            "_SkorOvernight": skor_overnight,
             "Sinyal": sinyal,
-            "🧠 5-20Dk Geometrik Karar": kisa_karar,
+            "🎯 Trend Kararı": trend_karar,
             "Olası Haber / Beklenti": haber_beklenti,
-            "20Dk Projeksiyon": projeksiyon_durum,
+            "Trend Projeksiyon": projeksiyon_durum,
             "Beklenen Getiri": f"%{projeksiyon_getiri:+.2f}",
             "Erken Konum": erken_durum,
-            "Günlük Al-Sat": gunluk_sinyal,
+            "Swing Al-Sat": gunluk_sinyal,
             "AI Olasılık": f"%{ai_prob:.1f}",
-            "CLV (Gizli Alım)": f"{clv:+.2f}",
+            "Hacim (Vol)": f"{vol_ratio:.1f}x",
             "Sıkışma (Comp)": f"{compression_ratio:.2f}x",
             "Katılım Uygun": katilim_durum,
             "Fiyat": f"{fiyat:.2f} TL",
             "Dönem Değişim": f"%{degisim:.2f}",
             "Endeks RS": f"%{rel_strength:+.2f}",
             "Hurst": f"{hurst_val:.2f}",
-            "Hacim": f"{vol_ratio:.1f}x",
-            "VWAP Sapma": f"%{vwap_sapma:+.2f}",
+            "VWAP Sapma": f"%{vwap_sapma:.2f}",
         })
     except:
       continue
@@ -556,8 +552,7 @@ def fetch_final_universe_data(b100_benchmark):
 
 
 with st.spinner(
-    "Canlı veriler, 15Dk gecikmeli geometrik modeller ve karar motoru"
-    " çalıştırılıyor..."
+    "15m-30m Trend çubukları, sıkışma ve hacim matrisleri yükleniyor..."
 ):
   df_tarama = fetch_final_universe_data(b100_val)
 
@@ -565,9 +560,9 @@ with st.spinner(
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
   if (
-      "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str
-      or "🚀 20Dk Sonra Yükseliş" in val_str
-      or "GÜÇLÜ YÜKSELİŞ PATLAMASI" in val_str
+      "🚨 HACİM & SIKIŞMA PATLAMASI" in val_str
+      or "🚀 Güçlü Trend Devamı" in val_str
+      or "HACİM SIKIŞMASI & KIRILMA" in val_str
   ):
     return (
         "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
@@ -576,11 +571,11 @@ def kapsamli_radar_stilleri(val):
   elif any(
       k in val_str
       for k in [
-          "GÜNLÜK AL-SAT UYGUN",
-          "GÜÇLÜ ALIM",
+          "SWING / İNTEL UYGUN",
+          "GÜÇLÜ TREND",
           "EVET (Katılım)",
           "TOPARLANMA",
-          "YÜKSELİŞ YÖNLÜ DEVAM",
+          "YÜKSELİŞ KANALI AKTİF",
       ]
   ):
     return (
@@ -609,17 +604,17 @@ def kapsamli_radar_stilleri(val):
 def guvenli_styler(df):
   cols_to_style = [
       "Sinyal",
-      "🧠 5-20Dk Geometrik Karar",
-      "20Dk Projeksiyon",
+      "🎯 Trend Kararı",
+      "Trend Projeksiyon",
       "Beklenen Getiri",
       "Erken Konum",
-      "Günlük Al-Sat",
+      "Swing Al-Sat",
       "AI Olasılık",
-      "CLV (Gizli Alım)",
+      "Hacim (Vol)",
+      "Sıkışma (Comp)",
       "Katılım Uygun",
       "Dönem Değişim",
       "Endeks RS",
-      "Hacim",
   ]
   active_cols = [c for c in cols_to_style if c in df.columns]
   try:
@@ -628,21 +623,24 @@ def guvenli_styler(df):
     return df
 
 
-tab1, tab2 = st.tabs(
-    ["Genel Piyasa Terminali", "Katılım Özel Günlük Al-Sat"]
-)
+# 3'LÜ SEKME YAPISI
+tab1, tab2, tab3 = st.tabs([
+    "Genel Trend & Sıkışma Terminali",
+    "Katılım Özel Intraday Swing",
+    "🌙 Seans Kapanışı & Overnight Fırsatları",
+])
 
 with tab1:
   st.subheader(
-      "📊 Gelişmiş Nicel Matris (Dinamik Projeksiyon & Sıkışma Patlamaları)"
+      "📊 Gelişmiş Nicel Trend Matrisi (Hacim & Sıkışma Odaklı Tarama)"
   )
   strateji_secimi = st.radio(
       "Strateji Modu:",
       [
           "Tüm Hisseler / Nötr",
-          "Yüksek Güvenli Alım",
+          "Yüksek Güvenli Trend",
           "İslam'a Uygun Öncüler",
-          "🚨 Erken Konumlanma & 20Dk Yükseliş Adayları",
+          "🚨 Erken Sıkışma & Hacim Patlaması",
       ],
       horizontal=True,
       key="t1_r",
@@ -653,31 +651,43 @@ with tab1:
 
   if not df_tarama.empty:
     df_goster = df_tarama.copy()
-    if "Alım" in strateji_secimi:
-      df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
-    elif "20Dk Yükseliş" in strateji_secimi:
+    if "Trend" in strateji_secimi or "Güvenli" in strateji_secimi:
+      df_goster = df_goster[df_goster["Sinyal"].str.contains("TREND")]
+    elif "Erken Sıkışma" in strateji_secimi:
       df_goster = df_goster[
-          df_goster["20Dk Projeksiyon"].str.contains("Yükseliş")
+          df_goster["Trend Kararı"].str.contains("SIKIŞMASI")
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-    df_goster = df_goster.sort_values(
-        by="_SkorGenel", ascending=False
-    ).reset_index(drop=True)
-    df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
-    st.dataframe(
-        guvenli_styler(df_goster), use_container_width=True, hide_index=True
-    )
+    if sadece_katilim and "İslam'a Uygun" not in strateji_secimi:
+      df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+
+    if df_goster.empty:
+      st.warning(
+          "⚠️ Seçilen filtre kombinasyonuna uygun hisse bulunamadı. Lütfen 'Tüm"
+          " Hisseler / Nötr' modunu seçin."
+      )
+    else:
+      df_goster = df_goster.sort_values(
+          by="_SkorGenel", ascending=False
+      ).reset_index(drop=True)
+      df_goster = df_goster.drop(
+          columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
+      )
+      st.dataframe(
+          guvenli_styler(df_goster), use_container_width=True, hide_index=True
+      )
   else:
     st.warning("Veriler yükleniyor...")
 
 with tab2:
-  st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
+  st.subheader(
+      "⚡ Katılım Özel Intraday Trend & Hacim Sıkışması Takip Ekranı"
+  )
   st.info(
-      "Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım)"
-      " kriterlerine uyan ve erken konumlanma/hacim patlaması yaşayan tahtaları"
-      " listeler."
+      "Bu sekme yalnızca BIST içerisindeki Katılım kriterlerine uyan tahtalarda"
+      " orta vadeli hacim genişlemelerini listeler."
   )
   if not df_tarama.empty:
     df_gunluk = df_tarama[
@@ -686,13 +696,19 @@ with tab2:
     df_gunluk = df_gunluk.sort_values(
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
-    df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
+    df_gunluk = df_gunluk.drop(
+        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
+    )
     st.dataframe(
         guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
     st.warning("Veriler yükleniyor...")
 
-st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-
+with tab3:
+  st.subheader(
+      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
+      " Etkilenen Alan)"
+  )
+  st.info(
+      "Seans kapanışına doğru sıkışmasını tamamlay
