@@ -488,13 +488,13 @@ def fetch_final_universe_data(b100_benchmark):
         )
         skor_gunluk = (
             (vol_ratio * 30.0)
-            + (compression_ratio <= 0.8) * 20.0
+            + (float(compression_ratio <= 0.8) * 20.0)
             + (max(0, clv) * 25.0)
         )
         skor_overnight = (
             (vol_ratio * 35.0)
             + (max(0, clv) * 35.0)
-            + (compression_ratio <= 0.75) * 30.0
+            + (float(compression_ratio <= 0.75) * 30.0)
         )
 
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
@@ -623,7 +623,7 @@ def guvenli_styler(df):
     return df
 
 
-# 3'LÜ SEKME YAPISI (YENİ SEANS KAPANIŞI SEKMESİ EKLENDİ)
+# 3'LÜ SEKME YAPISI
 tab1, tab2, tab3 = st.tabs([
     "Genel Trend & Sıkışma Terminali",
     "Katılım Özel Intraday Swing",
@@ -711,4 +711,4 @@ with tab3:
       " Etkilenen Alan)"
   )
   st.info(
-      "Seans kapanışına d
+      "Seans kapanışına doğru sıkışmasını tamamla
