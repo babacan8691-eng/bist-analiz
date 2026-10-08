@@ -707,7 +707,8 @@ with tab2:
 
 with tab3:
   st.subheader(
-      """🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az Etkilenen Alan)"""
+      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
+      " Etkilenen Alan)"
   )
   st.info(
-      """Seans kapanışına doğru sıkışmasını tamamlayan 
+      "Seans kapanışına doğru sıkışmasını tamamlay
