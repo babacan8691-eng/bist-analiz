@@ -214,7 +214,7 @@ def kisa_vade_geometrik_karar(
     )
 
     if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
-      karar = "🚀 5-20Dk: GÜÇLÜ YÜKSELİŞ PATLAMASI"
+      karar = "🎯 5-20Dk: GÜÇLÜ YÜKSELİŞ PATLAMASI"
       beklenti = (
           "Hacim Sıkışması Tamamlandı -> Pozitif KAP / İhale Bekleniyor"
       )
@@ -230,7 +230,7 @@ def kisa_vade_geometrik_karar(
 
     return karar, beklenti
   except:
-    return "🚀 5-20Dk: YÜKSELİŞ BEKLENTİSİ", "Standart Hacim Akış Beklentisi"
+    return "🎯 5-20Dk: YÜKSELİŞ BEKLENTİSİ", "Standart Hacim Akış Beklentisi"
 
 
 # Piyasa Göstergeleri
@@ -707,5 +707,4 @@ with tab1:
 
 with tab2:
   st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
-  st.info(
-      "Bu sekme yalnızca BIST içer
+  st.info("Bu sekme yalnızca BIST içerisindek
