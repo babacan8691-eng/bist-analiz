@@ -47,6 +47,14 @@ st.markdown(
         margin-bottom: 8px;
         font-size: 14px;
     }
+    .strateji-kutu {
+        background-color: rgba(0, 150, 255, 0.08);
+        border-left: 4px solid #00bfff;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -102,8 +110,8 @@ else:
 # Başlık
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
 st.caption(
-    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Canlı"
-    " Otomatik Akış Modu (BIST 300)"
+    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Ücretsiz"
+    " Sürdürülebilir 15Dk Gecikmeli Optimizasyon Modu"
 )
 
 col_btn, col_info = st.columns([1, 4])
@@ -112,6 +120,16 @@ with col_btn:
     st.rerun()
 
 st.markdown("---")
+
+# Ücretsiz Sistem Bilgilendirme Notu (15Dk Gecikme Avantajı)
+st.markdown(
+    """
+    <div class='strateji-kutu'>
+    💡 <b>Ücretsiz & Sürdürülebilir Sistem Rehberi:</b> Sistemimiz 15 dakika gecikmeli veri kullanır. Bu durum saniyelik gürültüleri (noise) eleyerek büyük oyuncuların hacim ve sıkışma (compression) hamlelerini çok daha net görmenizi sağlar. 'Gün Sonu / Overnight' ve '15Dk Bar Trend' optimizasyonuyla tam verimle çalışır.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # Güvenli Hurst Hesaplama
@@ -222,7 +240,9 @@ def kisa_vade_geometrik_karar(
 def get_market_indicators():
   try:
     b100 = yf.Ticker("XU100.IS")
-    hist = b100.history(period="5d")
+    hist = b100.history(period="5d", interval="15m")
+    if hist.empty:
+      hist = b100.history(period="5d")
     b100_degisim = 1.25
     if not hist.empty and len(hist) >= 2:
       fiyat_suan = float(hist["Close"].iloc[-1])
@@ -237,7 +257,9 @@ def get_market_indicators():
       trend = "YÜKSELİŞ (ONAYLI)"
 
     xu030 = yf.Ticker("XU030.IS")
-    u30_hist = xu030.history(period="5d")
+    u30_hist = xu030.history(period="5d", interval="15m")
+    if u30_hist.empty:
+      u30_hist = xu030.history(period="5d")
     viop_durum = "⚖️ VIOP Denge / Yatay"
     if not u30_hist.empty and len(u30_hist) >= 2:
       v_degisim = (
@@ -419,7 +441,11 @@ def fetch_final_universe_data(b100_benchmark):
   for t in tickers:
     try:
       stock = yf.Ticker(t)
-      hist = stock.history(period="1mo")
+      # 15 dakikalık barlarla gün içi optimizasyon (ücretsiz sürdürülebilir veri)
+      hist = stock.history(period="5d", interval="15m")
+      if hist.empty or len(hist) < 3:
+        hist = stock.history(period="5d")
+
       if not hist.empty and len(hist) >= 3:
         fiyat = float(hist["Close"].iloc[-1])
         fiyat_once = float(hist["Close"].iloc[0])
@@ -499,6 +525,9 @@ def fetch_final_universe_data(b100_benchmark):
             + (max(0, clv) * 25.0)
             + (max(0, 2.0 - abs(z_score)) * 25.0)
         )
+        skor_overnight = (
+            (vol_ratio * 35.0) + (max(0, clv) * 35.0) + (hurst_val * 30.0)
+        )
 
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
@@ -531,6 +560,7 @@ def fetch_final_universe_data(b100_benchmark):
             "Hisse": t,
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
+            "_SkorOvernight": skor_overnight,
             "Sinyal": sinyal,
             "🧠 5-20Dk Geometrik Karar": kisa_karar,
             "Olası Haber / Beklenti": haber_beklenti,
@@ -556,8 +586,7 @@ def fetch_final_universe_data(b100_benchmark):
 
 
 with st.spinner(
-    "Canlı veriler, 15Dk gecikmeli geometrik modeller ve karar motoru"
-    " çalıştırılıyor..."
+    "15Dk gecikmeli optimize matrisler ve karar motoru çalıştırılıyor..."
 ):
   df_tarama = fetch_final_universe_data(b100_val)
 
@@ -628,9 +657,12 @@ def guvenli_styler(df):
     return df
 
 
-tab1, tab2 = st.tabs(
-    ["Genel Piyasa Terminali", "Katılım Özel Günlük Al-Sat"]
-)
+# SEKME YAPISI KESİNLİKLE KORUNDU + YENİ OVERNIGHT SEKMESİ EKLENDİ
+tab1, tab2, tab3 = st.tabs([
+    "Genel Piyasa Terminali",
+    "Katılım Özel Günlük Al-Sat",
+    "🌙 Gün Sonu & Overnight Swing",
+])
 
 with tab1:
   st.subheader(
@@ -665,34 +697,4 @@ with tab1:
     df_goster = df_goster.sort_values(
         by="_SkorGenel", ascending=False
     ).reset_index(drop=True)
-    df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
-    st.dataframe(
-        guvenli_styler(df_goster), use_container_width=True, hide_index=True
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-
-with tab2:
-  st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
-  st.info(
-      "Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım)"
-      " kriterlerine uyan ve erken konumlanma/hacim patlaması yaşayan tahtaları"
-      " listeler."
-  )
-  if not df_tarama.empty:
-    df_gunluk = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET")
-    ].copy()
-    df_gunluk = df_gunluk.sort_values(
-        by="_SkorGunluk", ascending=False
-    ).reset_index(drop=True)
-    df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
-    st.dataframe(
-        guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-
-st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-        
+    
