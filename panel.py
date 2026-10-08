@@ -110,8 +110,7 @@ else:
 # Başlık
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
 st.caption(
-    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Ücretsiz"
-    " Sürdürülebilir 15Dk Gecikmeli Optimizasyon Modu"
+    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Ücretsiz Sürdürülebilir 15Dk Gecikmeli Optimizasyon Modu"
 )
 
 col_btn, col_info = st.columns([1, 4])
@@ -689,8 +688,7 @@ with tab1:
 
     if df_goster.empty:
       st.warning(
-          "⚠️ Seçilen filtre kombinasyonuna uygun hisse bulunamadı. Lütfen"
-          " 'Tüm Hisseler / Nötr' modunu seçin."
+          "⚠️ Seçilen filtre kombinasyonuna uygun hisse bulunamadı. Lütfen 'Tüm Hisseler / Nötr' modunu seçin."
       )
     else:
       df_goster = df_goster.sort_values(
@@ -707,4 +705,4 @@ with tab1:
 
 with tab2:
   st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
-  st.info("Bu sekme yalnızca BIST içerisindek
+  st.info("Bu sekme yalnızca BIST içerisindeki Katılım kriterleri
