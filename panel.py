@@ -132,6 +132,46 @@ def calculate_hurst(ts):
     return 0.50
 
 
+# Saf Matematiksel 20 Dakikalık Projeksiyon Motoru (AR(1) & Ornstein-Uhlenbeck)
+def nicel_20dk_projeksiyon(close_series):
+  try:
+    close = np.array(close_series)
+    if len(close) < 25:
+      return "⚖️ Denge / Yatay", 0.0
+
+    y = close[1:]
+    x = close[:-1]
+    phi, _ = np.polyfit(x, y, 1)
+
+    mu = np.mean(close)
+    current_price = close[-1]
+
+    # 4 bar sonrasının (20 dakika) beklenen değeri
+    expected_price = mu + (phi**4) * (current_price - mu)
+    projected_return = ((expected_price - current_price) / current_price) * 100
+
+    # Mikro-Trend İvmesi (İkinci Türev / Hızlanma)
+    son_8 = close[-8:]
+    slope_1 = np.polyfit(np.arange(4), son_8[:4], 1)[0]
+    slope_2 = np.polyfit(np.arange(4), son_8[4:], 1)[0]
+    acceleration = slope_2 - slope_1
+
+    if projected_return > 0.30 and acceleration >= 0:
+      durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
+    elif projected_return < -0.30 and acceleration <= 0:
+      durum = "📉 20Dk Sonra Düşüş Bekleniyor"
+    elif abs(projected_return) <= 0.20:
+      durum = "⚖️ 20Dk Sonra Yatay Seyir"
+    elif projected_return > 0 and acceleration < 0:
+      durum = "⚠️ Yükseliş İvmesi Tükeniyor"
+    else:
+      durum = "🔄 Tepki (Rebound) Beklentisi"
+
+    return durum, float(projected_return)
+  except:
+    return "⚖️ Denge / Yatay", 0.0
+
+
 # BIST 100 ve Kesin Çalışan VIOP / Endeks Öncü Gösterge Verisi
 def get_market_indicators():
   try:
@@ -187,7 +227,7 @@ def get_live_kap_news():
 
   haberler = [
       f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 Hisselerinde Yüksek Hacim Sıkışması ve Erken Konumlanma Taraması Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score ve Dinamik Momentum Motoru aktif: Katılım Endeksi tahtalarında hacim patlamaları taranıyor.",
+      f"⚡ **[Canlı Akış]** Z-Score, AR(1) Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
       f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
   ]
   return haberler
@@ -347,6 +387,11 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
+        # 20 Dakikalık Gelecek Projeksiyonunu Çalıştırıyoruz
+        projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
+            close.values
+        )
+
         hurst_val = calculate_hurst(close.values)
         rel_strength = degisim - b100_benchmark
 
@@ -393,7 +438,12 @@ def fetch_final_universe_data(b100_benchmark):
 
         half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
-        skor_genel = (hurst_val * 30) + (rel_strength * 2.0) + (clv * 10.0)
+        skor_genel = (
+            (hurst_val * 30)
+            + (rel_strength * 2.0)
+            + (clv * 10.0)
+            + (projeksiyon_getiri * 5.0)
+        )
         skor_gunluk = (
             (vol_ratio * 25.0)
             + (max(0, clv) * 25.0)
@@ -432,12 +482,13 @@ def fetch_final_universe_data(b100_benchmark):
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
             "Sinyal": sinyal,
+            "20Dk Projeksiyon": projeksiyon_durum,
+            "Beklenen Getiri": f"%{projeksiyon_getiri:+.2f}",
             "Erken Konum": erken_durum,
             "Günlük Al-Sat": gunluk_sinyal,
             "AI Olasılık": f"%{ai_prob:.1f}",
             "CLV (Gizli Alım)": f"{clv:+.2f}",
             "Sıkışma (Comp)": f"{compression_ratio:.2f}x",
-            "Half-Life": f"{half_life_days} Gün",
             "Katılım Uygun": katilim_durum,
             "Fiyat": f"{fiyat:.2f} TL",
             "Dönem Değişim": f"%{degisim:.2f}",
@@ -445,7 +496,6 @@ def fetch_final_universe_data(b100_benchmark):
             "Hurst": f"{hurst_val:.2f}",
             "Hacim": f"{vol_ratio:.1f}x",
             "VWAP Sapma": f"%{vwap_sapma:+.2f}",
-            "ATR": f"%{atr_yuzde:.2f}",
         })
     except:
       continue
@@ -453,14 +503,14 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner("Canlı borsa verileri ve akışlar taranıyor..."):
+with st.spinner("Canlı borsa verileri ve AR(1) projeksiyonlar taranıyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
-# Stil Fonksiyonu (Işıklı Yanıp Sönen Flaş Efektiyle Geliştirildi)
+# Stil Fonksiyonu
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
-  if "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str:
+  if "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str or "🚀 20Dk Sonra Yükseliş" in val_str:
     return (
         "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
         " animation: yanip-son 1.5s infinite;"
@@ -500,16 +550,16 @@ def kapsamli_radar_stilleri(val):
 def guvenli_styler(df):
   cols_to_style = [
       "Sinyal",
+      "20Dk Projeksiyon",
+      "Beklenen Getiri",
       "Erken Konum",
       "Günlük Al-Sat",
       "AI Olasılık",
       "CLV (Gizli Alım)",
-      "Sıkışma (Comp)",
       "Katılım Uygun",
       "Dönem Değişim",
       "Endeks RS",
       "Hacim",
-      "VWAP Sapma",
   ]
   active_cols = [c for c in cols_to_style if c in df.columns]
   try:
@@ -525,7 +575,7 @@ tab1, tab2 = st.tabs(
 
 with tab1:
   st.subheader(
-      "📊 Gelişmiş Nicel Matris (Erken Konumlanma, CLV & Sıkışma Patlamaları)"
+      "📊 Gelişmiş Nicel Matris (AR(1) 20Dk Projeksiyon & Sıkışma Patlamaları)"
   )
   strateji_secimi = st.radio(
       "Strateji Modu:",
@@ -533,7 +583,7 @@ with tab1:
           "Tüm Hisseler / Nötr",
           "Yüksek Güvenli Alım",
           "İslam'a Uygun Öncüler",
-          "🚨 Erken Konumlanma (Hacim/Sıkışma)",
+          "🚨 Erken Konumlanma & 20Dk Yükseliş Adayları",
       ],
       horizontal=True,
       key="t1_r",
@@ -546,9 +596,9 @@ with tab1:
     df_goster = df_tarama.copy()
     if "Alım" in strateji_secimi:
       df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
-    elif "Erken Konumlanma" in strateji_secimi:
+    elif "20Dk Yükseliş" in strateji_secimi:
       df_goster = df_goster[
-          df_goster["Erken Konum"].str.contains("HACİM/SIKIŞMA")
+          df_goster["20Dk Projeksiyon"].str.contains("Yükseliş")
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
