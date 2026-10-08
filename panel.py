@@ -441,7 +441,6 @@ def fetch_final_universe_data(b100_benchmark):
   for t in tickers:
     try:
       stock = yf.Ticker(t)
-      # 15 dakikalık barlarla gün içi optimizasyon (ücretsiz sürdürülebilir veri)
       hist = stock.history(period="5d", interval="15m")
       if hist.empty or len(hist) < 3:
         hist = stock.history(period="5d")
@@ -657,7 +656,7 @@ def guvenli_styler(df):
     return df
 
 
-# SEKME YAPISI KESİNLİKLE KORUNDU + YENİ OVERNIGHT SEKMESİ EKLENDİ
+# SEKME YAPISI KESİNLİKLE KORUNDU
 tab1, tab2, tab3 = st.tabs([
     "Genel Piyasa Terminali",
     "Katılım Özel Günlük Al-Sat",
@@ -694,7 +693,9 @@ with tab1:
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
-    df_goster = df_goster.sort_values(
-        by="_SkorGenel", ascending=False
-    ).reset_index(drop=True)
-    
+    if sadece_katilim and "İslam'a Uygun" not in strateji_secimi:
+      df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
+
+    if df_goster.empty:
+      st.warning(
+          "⚠️ Seçilen filtre kombinasyonun
