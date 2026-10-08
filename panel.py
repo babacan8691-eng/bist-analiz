@@ -623,7 +623,7 @@ with tab1:
       df_goster = df_goster[df_goster["Sinyal"].str.contains("TREND")]
     elif "Erken Sıkışma" in strateji_secimi:
       df_goster = df_goster[
-          df_goster["Trend Kararı"].str.contains("SIKIŞMASI")
+          df_goster["🎯 Trend Kararı"].str.contains("SIKIŞMASI")
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
@@ -684,4 +684,4 @@ with tab3:
       " alındığı için gecikmeden etkilenmez."
   )
   if not df_tarama.empty:
-    df_overnight = df_tarama
+    df_overnight = df_tar
