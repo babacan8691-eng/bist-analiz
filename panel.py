@@ -11,22 +11,32 @@ st.set_page_config(
     page_title="BIST Profesyonel Nihai Nicel & Katılım Terminali", layout="wide"
 )
 
-# --- RADAR CSS ANİMASYONLARI (KOD YAPISINI BOZMADAN EKLENDİ) ---
+# --- GELİŞMİŞ RADAR & DİNAMİK ANİMASYON STİLLERİ ---
 st.markdown(
     """
     <style>
     @keyframes radar-yesil {
         0% { background-color: rgba(0, 255, 0, 0.15); color: #00ff00; }
-        50% { background-color: rgba(0, 255, 0, 0.8); color: #ffffff; font-weight: bold; }
+        50% { background-color: rgba(0, 255, 0, 0.85); color: #ffffff; font-weight: bold; }
         100% { background-color: rgba(0, 255, 0, 0.15); color: #00ff00; }
     }
     @keyframes radar-kirmizi {
         0% { background-color: rgba(255, 0, 0, 0.15); color: #ff4444; }
-        50% { background-color: rgba(255, 0, 0, 0.8); color: #ffffff; font-weight: bold; }
+        50% { background-color: rgba(255, 0, 0, 0.85); color: #ffffff; font-weight: bold; }
         100% { background-color: rgba(255, 0, 0, 0.15); color: #ff4444; }
     }
-    .blink-cell {
+    @keyframes radar-mavi {
+        0% { background-color: rgba(0, 150, 255, 0.15); color: #00bfff; }
+        50% { background-color: rgba(0, 150, 255, 0.85); color: #ffffff; font-weight: bold; }
+        100% { background-color: rgba(0, 150, 255, 0.15); color: #00bfff; }
+    }
+    .blink-yesil {
         animation: radar-yesil 1.2s infinite;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .blink-mavi {
+        animation: radar-mavi 1.5s infinite;
         padding: 2px 6px;
         border-radius: 4px;
     }
@@ -451,25 +461,71 @@ with st.spinner("BIST havuzu taranıyor ve veriler yükleniyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
-# --- KOŞULLU RADAR STİL FONKSİYONU ---
-def radar_stilleri(val):
-  if isinstance(val, str) and (
-      "GÜNLÜK AL-SAT UYGUN" in val
-      or "GÜÇLÜ ALIM" in val
-      or "EVET (Katılım)" in val
+# --- TÜM KRİTİK VERİLER İÇİN KAPSAMLI RADAR STİL FONKSİYONU ---
+def kapsamli_radar_stilleri(val):
+  val_str = str(val)
+
+  # Alım / Uygun / Yüksek Olasılık / Güçlü Hacim / Pozitif CLV Sinyalleri
+  if any(
+      k in val_str
+      for k in [
+          "GÜNLÜK AL-SAT UYGUN",
+          "GÜÇLÜ ALIM",
+          "EVET (Katılım)",
+          "TOPARLANMA",
+      ]
   ):
     return (
-        "background-color: rgba(0, 255, 0, 0.3); color: #00ff00; font-weight:"
+        "background-color: rgba(0, 255, 0, 0.25); color: #00ff00; font-weight:"
         " bold;"
     )
+
+  # Sayısal Değerler İçin Akıllı Koşullu Parıltılar
+  try:
+    if "%" in val_str:
+      num = float(val_str.replace("%", "").strip())
+      if num > 0:
+        return "background-color: rgba(0, 255, 0, 0.15); color: #00ff00;"
+      elif num < 0:
+        return "background-color: rgba(255, 0, 0, 0.15); color: #ff4444;"
+    elif "x" in val_str:
+      num = float(val_str.replace("x", "").strip())
+      if num >= 1.2:  # Hacim veya Sıkışma patlaması
+        return (
+            "background-color: rgba(0, 150, 255, 0.25); color: #00bfff;"
+            " font-weight: bold;"
+        )
+    elif "+" in val_str or "-" in val_str:
+      num = float(val_str.strip())
+      if num > 0:
+        return "background-color: rgba(0, 255, 0, 0.15); color: #00ff00;"
+      elif num < 0:
+        return "background-color: rgba(255, 0, 0, 0.15); color: #ff4444;"
+  except:
+    pass
+
   return ""
 
 
-def guvenli_styler(df, sub_cols):
+def guvenli_styler(df):
+  # Tablodaki tüm sütunlara kapsamlı radar ve renklendirme uyguluyoruz
+  cols_to_style = [
+      "Sinyal",
+      "Günlük Al-Sat",
+      "AI Olasılık",
+      "CLV (Gizli Alım)",
+      "Sıkışma (Comp)",
+      "Katılım Uygun",
+      "Dönem Değişim",
+      "Endeks RS",
+      "Hacim",
+      "VWAP Sapma",
+  ]
+  active_cols = [c for c in cols_to_style if c in df.columns]
   try:
-    return df.style.map(radar_stilleri, subset=sub_cols)
+    return df.style.map(kapsamli_radar_stilleri, subset=active_cols)
   except:
-    return df.style.applymap(radar_stilleri, subset=sub_cols)
+    return df.style.applymap(kapsamli_radar_stilleri, subset=active_cols)
 
 
 # Sekme Yapısı (Orijinal Tasarım Korundu)
@@ -504,13 +560,9 @@ with tab1:
     ).reset_index(drop=True)
     df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
 
-    # Yanıp sönen radar destekli tablo gösterimi
+    # Kapsamlı yanıp sönen radar destekli tablo gösterimi
     st.dataframe(
-        guvenli_styler(
-            df_goster, ["Sinyal", "Günlük Al-Sat", "Katılım Uygun"]
-        ),
-        use_container_width=True,
-        hide_index=True,
+        guvenli_styler(df_goster), use_container_width=True, hide_index=True
     )
   else:
     st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
@@ -533,17 +585,13 @@ with tab2:
 
     df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
 
-    # Yanıp sönen radar destekli tablo gösterimi
+    # Kapsamlı yanıp sönen radar destekli tablo gösterimi
     st.dataframe(
-        guvenli_styler(
-            df_gunluk, ["Sinyal", "Günlük Al-Sat", "Katılım Uygun"]
-        ),
-        use_container_width=True,
-        hide_index=True,
+        guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
     st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | BIST Havuzu ve Dinamik Tarama Aktif")
-
+        
