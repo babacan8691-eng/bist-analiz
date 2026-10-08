@@ -178,7 +178,7 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     return "🚀 20Dk Sonra Yükseliş Bekleniyor", 1.25
 
 
-# --- YENİ 15DK GECİKMELİ MATEMATİKSEL & GEOMETRİK 5-20DK KARAR MOTORU ---
+# 15DK GECİKMELİ MATEMATİKSEL & GEOMETRİK 5-20DK KARAR MOTORU
 def kisa_vade_geometrik_karar(
     close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio
 ):
@@ -186,17 +186,15 @@ def kisa_vade_geometrik_karar(
     c = np.array(close_s)
     if len(c) < 5:
       return (
-          "🎯 5-20Dk: NÖTR / BEkle",
+          "🎯 5-20Dk: NÖTR / BEKLE",
           "Standart Denge Akışı (15Dk Gecikmeli Matris)",
       )
 
-    # Son 4 bar (15dk gecikmeli dilimler üzerinden 5-10-15-20 dk projeksiyonu)
     egim_kisa = (c[-1] - c[-3]) / c[-3] if c[-3] > 0 else 0
     hacim_faktor = (
         float(vol_s[-1] / np.mean(vol_s[-5:])) if len(vol_s) >= 5 else 1.0
     )
 
-    # Geometrik ve matematiksel karar matrisi
     if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
       karar = "🚀 5-20Dk: GÜÇLÜ YÜKSELİŞ PATLAMASI"
       beklenti = (
@@ -258,7 +256,6 @@ def get_market_indicators():
 
 b100_durum, b100_oran, b100_val, viop_sinyal = get_market_indicators()
 
-# Üst Bilgi Banner ve Öncü VIOP Göstergesi
 col_b1, col_b2 = st.columns([3, 2])
 with col_b1:
   st.info(
@@ -268,7 +265,6 @@ with col_b2:
   st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
 
 
-# Canlı KAP & Haber Akış Simülasyonu
 def get_live_kap_news():
   simdiet = datetime.now(tr_tz)
   saat_Str = simdiet.strftime("%H:%M:%S")
@@ -288,7 +284,6 @@ with st.expander(
     st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
 
 
-# BIST 300 Güvenli Tarama Motoru
 @st.cache_data(ttl=300)
 def fetch_final_universe_data(b100_benchmark):
   tickers = [
@@ -483,7 +478,6 @@ def fetch_final_universe_data(b100_benchmark):
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
 
-        # YENİ METRİK ÇAĞRISI (5-20Dk Geometrik Karar ve Haber Beklentisi)
         kisa_karar, haber_beklenti = kisa_vade_geometrik_karar(
             close.values,
             high.values,
@@ -568,7 +562,6 @@ with st.spinner(
   df_tarama = fetch_final_universe_data(b100_val)
 
 
-# Stil Fonksiyonu
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
   if (
@@ -632,10 +625,9 @@ def guvenli_styler(df):
   try:
     return df.style.map(kapsamli_radar_stilleri, subset=active_cols)
   except:
-    return df.style.applymap(kapsamli_radar_stilleri, subset=active_cols)
+    return df
 
 
-# Sekmeler
 tab1, tab2 = st.tabs(
     ["Genel Piyasa Terminali", "Katılım Özel Günlük Al-Sat"]
 )
@@ -699,4 +691,8 @@ with tab2:
         guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
-  
+    st.warning("Veriler yükleniyor...")
+
+st.markdown("---")
+st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
+        
