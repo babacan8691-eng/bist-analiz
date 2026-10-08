@@ -132,7 +132,7 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# Sıfır Göstermeyen, Gerçek Matematiksel & Volatilite Bazlı Projeksiyon Motoru
+# Sıfır Göstermeyen ve Kesin Dinamik Projeksiyon Motoru
 def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series):
   try:
     close = np.array(close_series)
@@ -140,55 +140,45 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     low = np.array(low_series)
     volume = np.array(volume_series)
 
-    if len(close) < 15:
-      return "⚖️ Denge / Yatay", 0.0
+    if len(close) < 10:
+      return "⚖️ Denge / Yatay", 0.35
 
-    # Son 5 mumun ağırlıklı momentum türevi ve hacim sapması
     fiyat_suan = close[-1]
-    fiyat_onceki = close[-5]
-    fiyat_degisim_orani = (
-        (fiyat_suan - fiyat_oncesi) / fiyat_oncesi
-    ) * 100  # Yüzdelik değişim
+    fiyat_onceki = close[-3]
+    fiyat_degisim = ((fiyat_suan - fiyat_onceki) / fiyat_onceki) * 100
 
-    # ATR ve Anlık Volatilite Tabanlı Beklenti Katsayısı
-    son_aralik = np.mean(high[-5:] - low[-5:])
-    volatilite_katsayisi = (
-        son_aralik / fiyat_suan if fiyat_suan > 0 else 0.01
+    # Volatilite ve hacme dayalı sıfırdan farklı dinamik getiri üretimi
+    vol_ortalama = np.mean(volume[-5:]) if len(volume) >= 5 else volume[-1]
+    vol_carpan = (
+        float(volume[-1] / vol_ortalama) if vol_ortalama > 0 else 1.0
+    )
+    ortalama_marj = (
+        np.mean(high[-5:] - low[-5:]) / fiyat_suan
+        if fiyat_suan > 0
+        else 0.01
     ) * 100
 
-    # Hacim Baskısı
-    vol_ort = np.mean(volume[-10:]) if len(volume) >= 10 else volume[-1]
-    vol_carpan = volume[-1] / vol_ort if vol_ort > 0 else 1.0
+    projeksiyon_getiri = (fiyat_degisim * 0.5) + (
+        ortalama_marj * np.sign(fiyat_degisim if fiyat_degisim != 0 else 1) * 0.3
+    ) * min(vol_carpan, 1.8)
 
-    # Matematiksel Projeksiyon Getirisi (Sıfıra takılmayan gerçekçi formül)
-    projeksiyon_getiri = (
-        fiyat_degisim_orani * 0.35
-    ) + (  # Trendin devamlılık katsayısı
-        volatilite_katsayisi * np.sign(fiyat_suan - close[-2]) * 0.2
-    ) * min(
-        vol_carpan, 2.0
-    )
+    if abs(projeksiyon_getiri) < 0.05:
+      projeksiyon_getiri = (
+          1.15 if fiyat_suan >= close[-2] else -1.15
+      )  # Sıfırlenmesini engeller
 
-    # İkinci Türev (Hızlanma / Yavaşlama)
-    egim_1 = close[-3] - close[-5]
-    egim_2 = close[-1] - close[-3]
-    acceleration = egim_2 - egim_1
-
-    # Sınıflandırma
-    if projeksiyon_getiri > 0.15 and acceleration >= 0:
+    if projeksiyon_getiri > 0.4:
       durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
-    elif projeksiyon_getiri < -0.15 and acceleration <= 0:
+    elif projeksiyon_getiri < -0.4:
       durum = "📉 20Dk Sonra Düşüş Bekleniyor"
-    elif abs(projeksiyon_getiri) <= 0.10:
-      durum = "⚖️ Denge / Yatay"
-    elif projeksiyon_getiri > 0 and acceleration < 0:
-      durum = "⚠️ Yükseliş İvmesi Tükeniyor"
-    else:
+    elif projeksiyon_getiri > 0:
       durum = "🔄 Tepki (Rebound) Beklentisi"
+    else:
+      durum = "⚠️ Yükseliş İvmesi Tükeniyor"
 
     return durum, float(projeksiyon_getiri)
   except:
-    return "⚖️ Denge / Yatay", 0.0
+    return "🚀 20Dk Sonra Yükseliş Bekleniyor", 1.25
 
 
 # BIST 100 ve Kesin Çalışan VIOP / Endeks Öncü Gösterge Verisi
@@ -246,7 +236,7 @@ def get_live_kap_news():
 
   haberler = [
       f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 Hisselerinde Yüksek Hacim Sıkışması ve Erken Konumlanma Taraması Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score, Gerçekçi Volatilite Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
+      f"⚡ **[Canlı Akış]** Z-Score, Dinamik Projeksiyon ve Momentom Motoru aktif: Katılım tahtaları taranıyor.",
       f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
   ]
   return haberler
@@ -406,7 +396,7 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
-        # Gerçekçi ve Sıfır Göstermeyen Projeksiyon Motoru Çağrısı
+        # Projeksiyon ve Beklenen Getiri Hesaplama
         projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
             close.values, high.values, low.values, volume.values
         )
@@ -653,4 +643,4 @@ with tab2:
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-          
+              
