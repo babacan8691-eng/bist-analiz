@@ -91,10 +91,11 @@ borsa_acik_mi = (aktif_gun < 5) and (
     time(9, 40) <= aktif_saat <= time(18, 30)
 )
 
+# Canlı Akış İçin Otomatik Yenileme Döngüsü (30 Saniye olarak ayarlandı)
 if borsa_acik_mi:
-  count = st_autorefresh(interval=60000, key="bist_Nihai_tarama_300")
+  count = st_autorefresh(interval=30000, key="bist_canli_akis_30s")
   st.sidebar.success(
-      f"🟢 Canlı Nicel Tarama Aktif (15D Gecikmeli | Döngü: {count})"
+      f"🟢 Canlı Otomatik Akış Aktif (30 Sn Döngü | Sayaç: {count})"
   )
 else:
   st.sidebar.warning(
@@ -104,8 +105,8 @@ else:
 # Başlık ve Bilgilendirme
 st.markdown("## 🚀 BIST Nihai Nicel Finans, AI & Katılım Al-Sat Terminali")
 st.caption(
-    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15 Dakika"
-    " Gecikmeli Z-Score & Dinamik Momentum Motoru (BIST 300)"
+    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | Canlı"
+    " Otomatik Akış Modu (BIST 300)"
 )
 
 col_btn, col_info = st.columns([1, 4])
@@ -134,7 +135,7 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# BIST 100 ve VIOP Öncü Gösterge Verisi
+# BIST 100 ve VIOP Öncü Gösterge Verisi (Canlı Önbelleksiz Fonksiyon)
 def get_market_indicators():
   try:
     b100 = yf.Ticker("XU100.IS")
@@ -150,8 +151,7 @@ def get_market_indicators():
     else:
       trend = "YÜKSELİŞ (ONAYLI)"
 
-    # VIOP Öncü Kontrat Kontrolü
-    viop = yf.Ticker("XU0300226.IS")  # Yakın vade simülasyon/kontrat
+    viop = yf.Ticker("XU0300226.IS")
     viop_hist = viop.history(period="2d")
     viop_durum = "⚖️ VIOP Denge / Yatay"
     if not viop_hist.empty and len(viop_hist) >= 2:
@@ -159,9 +159,9 @@ def get_market_indicators():
           (viop_hist["Close"].iloc[-1] - viop_hist["Close"].iloc[-2])
           / viop_hist["Close"].iloc[-2]
       ) * 100
-      if v_degisim > 0.3:
+      if v_degisim > 0.2:
         viop_durum = f"⚡ VIOP Öncü Alım Baskısı (%{v_degisim:+.2f})"
-      elif v_degisim < -0.3:
+      elif v_degisim < -0.2:
         viop_durum = f"⚠️ VIOP Öncü Satış Baskısı (%{v_degisim:+.2f})"
 
     return trend, f"%{b100_degisim:.2f}", b100_degisim, viop_durum
@@ -181,8 +181,7 @@ with col_b2:
   st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
 
 
-# KAP / Finansal Haber RSS Akış Modülü (Güvenli Çekici)
-@st.cache_data(ttl=300)
+# Canlı Haberler & KAP Akış Modülü (Önbelleksiz - Her Yenilemede Anlık Çeker)
 def fetch_kap_news():
   haberler = []
   try:
@@ -195,17 +194,19 @@ def fetch_kap_news():
       root = ET.fromstring(xml_data)
       for item in root.findall(".//item")[:3]:
         title = item.find("title").text
-        pub_date = item.find("pubDate").text[:16]
-        haberler.append(f"🔔 **[{pub_date}]** {title}")
+        pub_date = item.find("pubDate").text[11:16]  # Sadece saat bilgisi
+        haberler.append(f"🔔 **[Saat {pub_date}]** {title}")
   except:
     haberler.append(
-        "🔔 **[Canlı Akış]** BIST 300 Hacim Patlamaları ve Sıkışma Taramaları"
-        " Aktif."
+        "🔔 **[Canlı Akış Aktif]** BIST 300 Hacim Patlamaları ve Sıkışma"
+        " Taramaları İzleniyor."
     )
   return haberler
 
 
-with st.expander("🚨 Canlı Haberler & KAP / Erken Uyarı Alarm Paneli"):
+with st.expander(
+    "🚨 Canlı Haberler & KAP / Otomatik Erken Uyarı Alarm Paneli", expanded=True
+):
   for haber in fetch_kap_news():
     st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
 
@@ -492,7 +493,6 @@ def fetch_final_universe_data(b100_benchmark):
         else:
           gunluk_sinyal = "HARİÇ"
 
-        # Erken Konumlanma & Hacim Sıkışma Anomalisi Etiketi
         erken_durum = (
             "🚨 HACİM/SIKIŞMA PATLAMASI"
             if (vol_ratio >= 1.3 or compression_ratio <= 0.7)
@@ -525,9 +525,7 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner(
-    "BIST havuzu, öncü göstergeler ve hacim anomalileri taranıyor..."
-):
+with st.spinner("Canlı borsa verileri ve akışlar taranıyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
@@ -668,8 +666,8 @@ with tab2:
         guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
-    st.warning("Veriler yükleniyor veya bağlantı bekleniyor..." )
+    st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
 
 st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | BIST Havuzu ve Dinamik Tarama Aktif")
+st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
           
