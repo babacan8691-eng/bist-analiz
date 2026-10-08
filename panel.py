@@ -543,7 +543,7 @@ def fetch_final_universe_data(b100_benchmark):
             "Dönem Değişim": f"%{degisim:.2f}",
             "Endeks RS": f"%{rel_strength:+.2f}",
             "Hurst": f"{hurst_val:.2f}",
-            "VWAP Sapma": f"%{vwap_sapma:+.2f}",
+            "VWAP Sapma": f"%{vwap_sapma:.2f}",
         })
     except:
       continue
@@ -707,8 +707,7 @@ with tab2:
 
 with tab3:
   st.subheader(
-      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
-      " Etkilenen Alan)"
+      """🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az Etkilenen Alan)"""
   )
   st.info(
-      "Seans kapanışına doğru sıkışmasını tamamla
+      """Seans kapanışına doğru sıkışmasını tamamlayan 
