@@ -684,4 +684,4 @@ with tab3:
       " alındığı için gecikmeden etkilenmez."
   )
   if not df_tarama.empty:
-    # HATA DÜZELTME: df_t
+    df_overnight = df_tar
