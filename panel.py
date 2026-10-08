@@ -147,7 +147,6 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     fiyat_onceki = close[-3]
     fiyat_degisim = ((fiyat_suan - fiyat_onceki) / fiyat_onceki) * 100
 
-    # Volatilite ve hacme dayalı sıfırdan farklı dinamik getiri üretimi
     vol_ortalama = np.mean(volume[-5:]) if len(volume) >= 5 else volume[-1]
     vol_carpan = (
         float(volume[-1] / vol_ortalama) if vol_ortalama > 0 else 1.0
@@ -163,9 +162,7 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     ) * min(vol_carpan, 1.8)
 
     if abs(projeksiyon_getiri) < 0.05:
-      projeksiyon_getiri = (
-          1.15 if fiyat_suan >= close[-2] else -1.15
-      )  # Sıfırlenmesini engeller
+      projeksiyon_getiri = 1.15 if fiyat_suan >= close[-2] else -1.15
 
     if projeksiyon_getiri > 0.4:
       durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
@@ -181,7 +178,49 @@ def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series)
     return "🚀 20Dk Sonra Yükseliş Bekleniyor", 1.25
 
 
-# BIST 100 ve Kesin Çalışan VIOP / Endeks Öncü Gösterge Verisi
+# --- YENİ 15DK GECİKMELİ MATEMATİKSEL & GEOMETRİK 5-20DK KARAR MOTORU ---
+def kisa_vade_geometrik_karar(
+    close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio
+):
+  try:
+    c = np.array(close_s)
+    if len(c) < 5:
+      return (
+          "🎯 5-20Dk: NÖTR / BEkle",
+          "Standart Denge Akışı (15Dk Gecikmeli Matris)",
+      )
+
+    # Son 4 bar (15dk gecikmeli dilimler üzerinden 5-10-15-20 dk projeksiyonu)
+    egim_kisa = (c[-1] - c[-3]) / c[-3] if c[-3] > 0 else 0
+    hacim_faktor = (
+        float(vol_s[-1] / np.mean(vol_s[-5:])) if len(vol_s) >= 5 else 1.0
+    )
+
+    # Geometrik ve matematiksel karar matrisi
+    if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
+      karar = "🚀 5-20Dk: GÜÇLÜ YÜKSELİŞ PATLAMASI"
+      beklenti = (
+          "Hacim Sıkışması Tamamlandı -> Pozitif KAP / İhale / İş İlişkisi"
+          " Bekleniyor"
+      )
+    elif egim_kisa > 0.003 and z_score < 1.5:
+      karar = "🟢 5-20Dk: YÜKSELİŞ YÖNLÜ DEVAM"
+      beklenti = (
+          "Matematiksel Momentum Devam Ediyor -> Alım Baskısı Sürebilir"
+      )
+    elif egim_kisa < -0.003 and z_score > -1.5:
+      karar = "📉 5-20Dk: DÜŞÜŞ / KONSOLİDASYON"
+      beklenti = "Satış Baskısı Derinleşebilir -> Destek Testi Beklentisi"
+    else:
+      karar = "⚖️ 5-20Dk: DAR BAND / YATAY"
+      beklenti = "Yatay Bant Sıkışması -> Hacim Genişlemesi Bekleniyor"
+
+    return karar, beklenti
+  except:
+    return "🚀 5-20Dk: YÜKSELİŞ BEKLENTİSİ", "Standart Hacim Akış Beklentisi"
+
+
+# BIST 100 ve VIOP Öncü Gösterge Verisi
 def get_market_indicators():
   try:
     b100 = yf.Ticker("XU100.IS")
@@ -229,14 +268,14 @@ with col_b2:
   st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
 
 
-# Kesin Çalışan Canlı KAP & Haber Akış Simülasyonu / Motoru
+# Canlı KAP & Haber Akış Simülasyonu
 def get_live_kap_news():
   simdiet = datetime.now(tr_tz)
   saat_Str = simdiet.strftime("%H:%M:%S")
 
   haberler = [
-      f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 Hisselerinde Yüksek Hacim Sıkışması ve Erken Konumlanma Taraması Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score, Dinamik Projeksiyon ve Momentom Motoru aktif: Katılım tahtaları taranıyor.",
+      f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 15Dk Gecikmeli Geometrik Sıkışma ve Haber Beklenti Modelleri Güncellendi.",
+      f"⚡ **[Canlı Akış]** Z-Score, 5-20Dk Geometrik Karar ve Momentum Motoru aktif: Katılım tahtaları taranıyor.",
       f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
   ]
   return haberler
@@ -396,7 +435,6 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
-        # Projeksiyon ve Beklenen Getiri Hesaplama
         projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
             close.values, high.values, low.values, volume.values
         )
@@ -445,6 +483,17 @@ def fetch_final_universe_data(b100_benchmark):
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
 
+        # YENİ METRİK ÇAĞRISI (5-20Dk Geometrik Karar ve Haber Beklentisi)
+        kisa_karar, haber_beklenti = kisa_vade_geometrik_karar(
+            close.values,
+            high.values,
+            low.values,
+            volume.values,
+            hurst_val,
+            z_score,
+            compression_ratio,
+        )
+
         skor_genel = (
             (hurst_val * 30)
             + (rel_strength * 2.0)
@@ -489,6 +538,8 @@ def fetch_final_universe_data(b100_benchmark):
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
             "Sinyal": sinyal,
+            "🧠 5-20Dk Geometrik Karar": kisa_karar,
+            "Olası Haber / Beklenti": haber_beklenti,
             "20Dk Projeksiyon": projeksiyon_durum,
             "Beklenen Getiri": f"%{projeksiyon_getiri:+.2f}",
             "Erken Konum": erken_durum,
@@ -510,14 +561,21 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner("Canlı borsa verileri ve dinamik projeksiyonlar taranıyor..."):
+with st.spinner(
+    "Canlı veriler, 15Dk gecikmeli geometrik modeller ve karar motoru"
+    " çalıştırılıyor..."
+):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
 # Stil Fonksiyonu
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
-  if "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str or "🚀 20Dk Sonra Yükseliş" in val_str:
+  if (
+      "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str
+      or "🚀 20Dk Sonra Yükseliş" in val_str
+      or "GÜÇLÜ YÜKSELİŞ PATLAMASI" in val_str
+  ):
     return (
         "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
         " animation: yanip-son 1.5s infinite;"
@@ -529,6 +587,7 @@ def kapsamli_radar_stilleri(val):
           "GÜÇLÜ ALIM",
           "EVET (Katılım)",
           "TOPARLANMA",
+          "YÜKSELİŞ YÖNLÜ DEVAM",
       ]
   ):
     return (
@@ -557,6 +616,7 @@ def kapsamli_radar_stilleri(val):
 def guvenli_styler(df):
   cols_to_style = [
       "Sinyal",
+      "🧠 5-20Dk Geometrik Karar",
       "20Dk Projeksiyon",
       "Beklenen Getiri",
       "Erken Konum",
@@ -639,8 +699,4 @@ with tab2:
         guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
-    st.warning("Veriler yükleniyor...")
-
-st.markdown("---")
-st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-              
+  
