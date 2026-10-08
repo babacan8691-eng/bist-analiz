@@ -132,7 +132,7 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# Saf Matematiksel 20 Dakikalık Projeksiyon Motoru (AR(1) & Ornstein-Uhlenbeck)
+# Saf Matematiksel 20 Dakikalık Hassas Projeksiyon Motoru
 def nicel_20dk_projeksiyon(close_series):
   try:
     close = np.array(close_series)
@@ -146,22 +146,23 @@ def nicel_20dk_projeksiyon(close_series):
     mu = np.mean(close)
     current_price = close[-1]
 
-    # 4 bar sonrasının (20 dakika) beklenen değeri
+    # Gelecek adımı daha hassas ölçeklendirme
     expected_price = mu + (phi**4) * (current_price - mu)
     projected_return = ((expected_price - current_price) / current_price) * 100
 
-    # Mikro-Trend İvmesi (İkinci Türev / Hızlanma)
+    # Mikro-Trend İvmesi (İkinci Türev)
     son_8 = close[-8:]
     slope_1 = np.polyfit(np.arange(4), son_8[:4], 1)[0]
     slope_2 = np.polyfit(np.arange(4), son_8[4:], 1)[0]
     acceleration = slope_2 - slope_1
 
-    if projected_return > 0.30 and acceleration >= 0:
+    # Sıfıra takılmayı önleyen hassas eşikler
+    if projected_return > 0.05 and acceleration >= 0:
       durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
-    elif projected_return < -0.30 and acceleration <= 0:
+    elif projected_return < -0.05 and acceleration <= 0:
       durum = "📉 20Dk Sonra Düşüş Bekleniyor"
-    elif abs(projected_return) <= 0.20:
-      durum = "⚖️ 20Dk Sonra Yatay Seyir"
+    elif abs(projected_return) <= 0.05:
+      durum = "⚖️ Denge / Yatay"
     elif projected_return > 0 and acceleration < 0:
       durum = "⚠️ Yükseliş İvmesi Tükeniyor"
     else:
@@ -227,7 +228,7 @@ def get_live_kap_news():
 
   haberler = [
       f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 Hisselerinde Yüksek Hacim Sıkışması ve Erken Konumlanma Taraması Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score, AR(1) Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
+      f"⚡ **[Canlı Akış]** Z-Score, AR(1) Hassas Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
       f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
   ]
   return haberler
@@ -387,7 +388,7 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
-        # 20 Dakikalık Gelecek Projeksiyonunu Çalıştırıyoruz
+        # Hassas Projeksiyonu Çalıştırıyoruz
         projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
             close.values
         )
@@ -435,8 +436,6 @@ def fetch_final_universe_data(b100_benchmark):
         ma10 = close.rolling(window=10).mean().iloc[-1]
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
-
-        half_life_days = max(1, int(5.0 * (1.0 - abs(hurst_val))))
 
         skor_genel = (
             (hurst_val * 30)
@@ -503,7 +502,7 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner("Canlı borsa verileri ve AR(1) projeksiyonlar taranıyor..."):
+with st.spinner("Canlı borsa verileri ve hassas projeksiyonlar taranıyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
@@ -636,4 +635,4 @@ with tab2:
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-          
+      
