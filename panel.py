@@ -11,10 +11,24 @@ st.set_page_config(
     page_title="BIST Profesyonel Nihai Nicel & Katılım Terminali", layout="wide"
 )
 
-# --- GELİŞMİŞ RADAR & DİNAMİK ANİMASYON STİLLERİ ---
+# --- GELİŞMİŞ RADAR, DİNAMİK ANİMASYON VE IŞIKLI YANIP SÖNEN STİLLERİ ---
 st.markdown(
     """
     <style>
+    @keyframes yanip-son {
+        0% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); }
+        50% { opacity: 0.4; transform: scale(0.98); box-shadow: 0 0 15px rgba(255, 75, 75, 0.9); }
+        100% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); }
+    }
+    .flash-badge {
+        background-color: #ff4b4b;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+        animation: yanip-son 1.5s infinite ease-in-out;
+    }
     @keyframes radar-yesil {
         0% { background-color: rgba(0, 255, 0, 0.15); color: #00ff00; }
         50% { background-color: rgba(0, 255, 0, 0.85); color: #ffffff; font-weight: bold; }
@@ -121,7 +135,6 @@ def calculate_hurst(ts):
 # BIST 100 ve Kesin Çalışan VIOP / Endeks Öncü Gösterge Verisi
 def get_market_indicators():
   try:
-    # XU100 ve XU030 Üzerinden Kesin Veri Çekme
     b100 = yf.Ticker("XU100.IS")
     hist = b100.history(period="5d")
     b100_degisim = 1.25
@@ -137,7 +150,6 @@ def get_market_indicators():
     else:
       trend = "YÜKSELİŞ (ONAYLI)"
 
-    # VIOP / 30 Endeksi Öncü Sinyali
     xu030 = yf.Ticker("XU030.IS")
     u30_hist = xu030.history(period="5d")
     viop_durum = "⚖️ VIOP Denge / Yatay"
@@ -170,7 +182,6 @@ with col_b2:
 
 # Kesin Çalışan Canlı KAP & Haber Akış Simülasyonu / Motoru
 def get_live_kap_news():
-  # Bulut sunucularında dış port/engellere takılmadan anlık akış üreten dinamik modül
   simdiet = datetime.now(tr_tz)
   saat_Str = simdiet.strftime("%H:%M:%S")
 
@@ -446,17 +457,21 @@ with st.spinner("Canlı borsa verileri ve akışlar taranıyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
-# Stil Fonksiyonu
+# Stil Fonksiyonu (Işıklı Yanıp Sönen Flaş Efektiyle Geliştirildi)
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
-  if any(
+  if "🚨 HACİM/SIKIŞMA PATLAMASI" in val_str:
+    return (
+        "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
+        " animation: yanip-son 1.5s infinite;"
+    )
+  elif any(
       k in val_str
       for k in [
           "GÜNLÜK AL-SAT UYGUN",
           "GÜÇLÜ ALIM",
           "EVET (Katılım)",
           "TOPARLANMA",
-          "🚨 HACİM/SIKIŞMA PATLAMASI",
       ]
   ):
     return (
@@ -571,4 +586,4 @@ with tab2:
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-                                 
+          
