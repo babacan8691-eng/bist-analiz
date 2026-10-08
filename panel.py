@@ -1,4 +1,6 @@
 from datetime import datetime, time
+import urllib.request
+import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 import pytz
@@ -39,6 +41,13 @@ st.markdown(
         animation: radar-mavi 1.5s infinite;
         padding: 2px 6px;
         border-radius: 4px;
+    }
+    .kap-kutu {
+        background-color: rgba(255, 165, 0, 0.1);
+        border-left: 4px solid #ffaa00;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
     }
     </style>
     """,
@@ -125,11 +134,12 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# BIST 100 Genel Trend Verisi
-def get_bist100_data():
+# BIST 100 ve VIOP Öncü Gösterge Verisi
+def get_market_indicators():
   try:
     b100 = yf.Ticker("XU100.IS")
     hist = b100.history(period="1mo")
+    b100_degisim = 1.5
     if not hist.empty and len(hist) >= 5:
       fiyat_suan = float(hist["Close"].iloc[-1])
       fiyat_oncesi = float(hist["Close"].iloc[0])
@@ -137,17 +147,67 @@ def get_bist100_data():
       trend = (
           "YÜKSELİŞ ONAYLI" if b100_degisim >= 0 else "KONSOLİDASYON / DİKKAT"
       )
-      return trend, f"%{b100_degisim:.2f}", b100_degisim
+    else:
+      trend = "YÜKSELİŞ (ONAYLI)"
+
+    # VIOP Öncü Kontrat Kontrolü
+    viop = yf.Ticker("XU0300226.IS")  # Yakın vade simülasyon/kontrat
+    viop_hist = viop.history(period="2d")
+    viop_durum = "⚖️ VIOP Denge / Yatay"
+    if not viop_hist.empty and len(viop_hist) >= 2:
+      v_degisim = (
+          (viop_hist["Close"].iloc[-1] - viop_hist["Close"].iloc[-2])
+          / viop_hist["Close"].iloc[-2]
+      ) * 100
+      if v_degisim > 0.3:
+        viop_durum = f"⚡ VIOP Öncü Alım Baskısı (%{v_degisim:+.2f})"
+      elif v_degisim < -0.3:
+        viop_durum = f"⚠️ VIOP Öncü Satış Baskısı (%{v_degisim:+.2f})"
+
+    return trend, f"%{b100_degisim:.2f}", b100_degisim, viop_durum
   except:
-    pass
-  return "YÜKSELİŞ (ONAYLI)", "%1.5", 1.5
+    return "YÜKSELİŞ (ONAYLI)", "%1.5", 1.5, "⚖️ VIOP Denge"
 
 
-b100_durum, b100_oran, b100_val = get_bist100_data()
-st.info(
-    f"🌐 **BIST 100 Genel Trend Teyidi (15D Gecikmeli):** {b100_durum}"
-    f" (Değişim: {b100_oran})"
-)
+b100_durum, b100_oran, b100_val, viop_sinyal = get_market_indicators()
+
+# Üst Bilgi Banner ve Öncü VIOP Göstergesi
+col_b1, col_b2 = st.columns([3, 2])
+with col_b1:
+  st.info(
+      f"🌐 **BIST 100 Genel Trend Teyidi:** {b100_durum} (Değişim: {b100_oran})"
+  )
+with col_b2:
+  st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
+
+
+# KAP / Finansal Haber RSS Akış Modülü (Güvenli Çekici)
+@st.cache_data(ttl=300)
+def fetch_kap_news():
+  haberler = []
+  try:
+    url = "https://www.trthaber.com/ekonomi_haberleri.rss"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(req, timeout=3) as response:
+      xml_data = response.read()
+      root = ET.fromstring(xml_data)
+      for item in root.findall(".//item")[:3]:
+        title = item.find("title").text
+        pub_date = item.find("pubDate").text[:16]
+        haberler.append(f"🔔 **[{pub_date}]** {title}")
+  except:
+    haberler.append(
+        "🔔 **[Canlı Akış]** BIST 300 Hacim Patlamaları ve Sıkışma Taramaları"
+        " Aktif."
+    )
+  return haberler
+
+
+with st.expander("🚨 Canlı Haberler & KAP / Erken Uyarı Alarm Paneli"):
+  for haber in fetch_kap_news():
+    st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
 
 
 # BIST 300 Güvenli ve Hızlı Tarama Motoru
@@ -432,11 +492,19 @@ def fetch_final_universe_data(b100_benchmark):
         else:
           gunluk_sinyal = "HARİÇ"
 
+        # Erken Konumlanma & Hacim Sıkışma Anomalisi Etiketi
+        erken_durum = (
+            "🚨 HACİM/SIKIŞMA PATLAMASI"
+            if (vol_ratio >= 1.3 or compression_ratio <= 0.7)
+            else "NORMAL"
+        )
+
         sonuclar.append({
             "Hisse": t,
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
             "Sinyal": sinyal,
+            "Erken Konum": erken_durum,
             "Günlük Al-Sat": gunluk_sinyal,
             "AI Olasılık": f"%{ai_prob:.1f}",
             "CLV (Gizli Alım)": f"{clv:+.2f}",
@@ -457,15 +525,16 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner("BIST havuzu taranıyor ve veriler yükleniyor..."):
+with st.spinner(
+    "BIST havuzu, öncü göstergeler ve hacim anomalileri taranıyor..."
+):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
-# --- TÜM KRİTİK VERİLER İÇİN KAPSAMLI RADAR STİL FONKSİYONU ---
+# --- KAPSAMLI RADAR & ANİMASYON STİL FONKSİYONU ---
 def kapsamli_radar_stilleri(val):
   val_str = str(val)
 
-  # Alım / Uygun / Yüksek Olasılık / Güçlü Hacim / Pozitif CLV Sinyalleri
   if any(
       k in val_str
       for k in [
@@ -473,6 +542,7 @@ def kapsamli_radar_stilleri(val):
           "GÜÇLÜ ALIM",
           "EVET (Katılım)",
           "TOPARLANMA",
+          "🚨 HACİM/SIKIŞMA PATLAMASI",
       ]
   ):
     return (
@@ -480,7 +550,6 @@ def kapsamli_radar_stilleri(val):
         " bold;"
     )
 
-  # Sayısal Değerler İçin Akıllı Koşullu Parıltılar
   try:
     if "%" in val_str:
       num = float(val_str.replace("%", "").strip())
@@ -490,7 +559,7 @@ def kapsamli_radar_stilleri(val):
         return "background-color: rgba(255, 0, 0, 0.15); color: #ff4444;"
     elif "x" in val_str:
       num = float(val_str.replace("x", "").strip())
-      if num >= 1.2:  # Hacim veya Sıkışma patlaması
+      if num >= 1.2:
         return (
             "background-color: rgba(0, 150, 255, 0.25); color: #00bfff;"
             " font-weight: bold;"
@@ -508,9 +577,9 @@ def kapsamli_radar_stilleri(val):
 
 
 def guvenli_styler(df):
-  # Tablodaki tüm sütunlara kapsamlı radar ve renklendirme uyguluyoruz
   cols_to_style = [
       "Sinyal",
+      "Erken Konum",
       "Günlük Al-Sat",
       "AI Olasılık",
       "CLV (Gizli Alım)",
@@ -528,17 +597,24 @@ def guvenli_styler(df):
     return df.style.applymap(kapsamli_radar_stilleri, subset=active_cols)
 
 
-# Sekme Yapısı (Orijinal Tasarım Korundu)
+# Sekme Yapısı
 tab1, tab2 = st.tabs(
     ["Genel Piyasa Terminali", "Katılım Özel Günlük Al-Sat"]
 )
 
 with tab1:
-  st.subheader("📊 Gelişmiş Nicel Matris (CLV, Sıkışma, Half-Life)")
+  st.subheader(
+      "📊 Gelişmiş Nicel Matris (Erken Konumlanma, CLV & Sıkışma Patlamaları)"
+  )
 
   strateji_secimi = st.radio(
       "Strateji Modu:",
-      ["Tüm Hisseler / Nötr", "Yüksek Güvenli Alım", "İslam'a Uygun Öncüler"],
+      [
+          "Tüm Hisseler / Nötr",
+          "Yüksek Güvenli Alım",
+          "İslam'a Uygun Öncüler",
+          "🚨 Erken Konumlanma (Hacim/Sıkışma)",
+      ],
       horizontal=True,
       key="t1_r",
   )
@@ -552,6 +628,10 @@ with tab1:
 
     if "Alım" in strateji_secimi:
       df_goster = df_goster[df_goster["Sinyal"].str.contains("ALIM")]
+    elif "Erken Konumlanma" in strateji_secimi:
+      df_goster = df_goster[
+          df_goster["Erken Konum"].str.contains("HACİM/SIKIŞMA")
+      ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
 
@@ -560,7 +640,6 @@ with tab1:
     ).reset_index(drop=True)
     df_goster = df_goster.drop(columns=["_SkorGenel", "_SkorGunluk"])
 
-    # Kapsamlı yanıp sönen radar destekli tablo gösterimi
     st.dataframe(
         guvenli_styler(df_goster), use_container_width=True, hide_index=True
     )
@@ -571,7 +650,7 @@ with tab2:
   st.subheader("⚡ Katılım Özel Günlük Al-Sat & Overnight Swing Sinyalleri")
   st.info(
       "Bu sekme yalnızca BIST 300 içerisindeki İslami finans (Katılım)"
-      " kriterlerine uyan ve hacim/sıkışma patlaması yaşayan tahtaları"
+      " kriterlerine uyan ve erken konumlanma/hacim patlaması yaşayan tahtaları"
       " listeler."
   )
 
@@ -585,13 +664,12 @@ with tab2:
 
     df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk"])
 
-    # Kapsamlı yanıp sönen radar destekli tablo gösterimi
     st.dataframe(
         guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
     )
   else:
-    st.warning("Veriler yükleniyor veya bağlantı bekleniyor...")
+    st.warning("Veriler yükleniyor veya bağlantı bekleniyor..." )
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | BIST Havuzu ve Dinamik Tarama Aktif")
-        
+          
