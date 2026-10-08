@@ -698,4 +698,4 @@ with tab1:
 
     if df_goster.empty:
       st.warning(
-          "⚠️ Seçilen filtre kombinasyonun
+          
