@@ -132,43 +132,61 @@ def calculate_hurst(ts):
     return 0.50
 
 
-# Saf Matematiksel 20 Dakikalık Hassas Projeksiyon Motoru
-def nicel_20dk_projeksiyon(close_series):
+# Sıfır Göstermeyen, Gerçek Matematiksel & Volatilite Bazlı Projeksiyon Motoru
+def nicel_20dk_projeksiyon(close_series, high_series, low_series, volume_series):
   try:
     close = np.array(close_series)
-    if len(close) < 25:
+    high = np.array(high_series)
+    low = np.array(low_series)
+    volume = np.array(volume_series)
+
+    if len(close) < 15:
       return "⚖️ Denge / Yatay", 0.0
 
-    y = close[1:]
-    x = close[:-1]
-    phi, _ = np.polyfit(x, y, 1)
+    # Son 5 mumun ağırlıklı momentum türevi ve hacim sapması
+    fiyat_suan = close[-1]
+    fiyat_onceki = close[-5]
+    fiyat_degisim_orani = (
+        (fiyat_suan - fiyat_oncesi) / fiyat_oncesi
+    ) * 100  # Yüzdelik değişim
 
-    mu = np.mean(close)
-    current_price = close[-1]
+    # ATR ve Anlık Volatilite Tabanlı Beklenti Katsayısı
+    son_aralik = np.mean(high[-5:] - low[-5:])
+    volatilite_katsayisi = (
+        son_aralik / fiyat_suan if fiyat_suan > 0 else 0.01
+    ) * 100
 
-    # Gelecek adımı daha hassas ölçeklendirme
-    expected_price = mu + (phi**4) * (current_price - mu)
-    projected_return = ((expected_price - current_price) / current_price) * 100
+    # Hacim Baskısı
+    vol_ort = np.mean(volume[-10:]) if len(volume) >= 10 else volume[-1]
+    vol_carpan = volume[-1] / vol_ort if vol_ort > 0 else 1.0
 
-    # Mikro-Trend İvmesi (İkinci Türev)
-    son_8 = close[-8:]
-    slope_1 = np.polyfit(np.arange(4), son_8[:4], 1)[0]
-    slope_2 = np.polyfit(np.arange(4), son_8[4:], 1)[0]
-    acceleration = slope_2 - slope_1
+    # Matematiksel Projeksiyon Getirisi (Sıfıra takılmayan gerçekçi formül)
+    projeksiyon_getiri = (
+        fiyat_degisim_orani * 0.35
+    ) + (  # Trendin devamlılık katsayısı
+        volatilite_katsayisi * np.sign(fiyat_suan - close[-2]) * 0.2
+    ) * min(
+        vol_carpan, 2.0
+    )
 
-    # Sıfıra takılmayı önleyen hassas eşikler
-    if projected_return > 0.05 and acceleration >= 0:
+    # İkinci Türev (Hızlanma / Yavaşlama)
+    egim_1 = close[-3] - close[-5]
+    egim_2 = close[-1] - close[-3]
+    acceleration = egim_2 - egim_1
+
+    # Sınıflandırma
+    if projeksiyon_getiri > 0.15 and acceleration >= 0:
       durum = "🚀 20Dk Sonra Yükseliş Bekleniyor"
-    elif projected_return < -0.05 and acceleration <= 0:
+    elif projeksiyon_getiri < -0.15 and acceleration <= 0:
       durum = "📉 20Dk Sonra Düşüş Bekleniyor"
-    elif abs(projected_return) <= 0.05:
+    elif abs(projeksiyon_getiri) <= 0.10:
       durum = "⚖️ Denge / Yatay"
-    elif projected_return > 0 and acceleration < 0:
+    elif projeksiyon_getiri > 0 and acceleration < 0:
       durum = "⚠️ Yükseliş İvmesi Tükeniyor"
     else:
       durum = "🔄 Tepki (Rebound) Beklentisi"
 
-    return durum, float(projected_return)
+    return durum, float(projeksiyon_getiri)
   except:
     return "⚖️ Denge / Yatay", 0.0
 
@@ -228,7 +246,7 @@ def get_live_kap_news():
 
   haberler = [
       f"🔔 **[Saat {saat_Str}] KAP Bildirimi:** BIST 300 Hisselerinde Yüksek Hacim Sıkışması ve Erken Konumlanma Taraması Güncellendi.",
-      f"⚡ **[Canlı Akış]** Z-Score, AR(1) Hassas Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
+      f"⚡ **[Canlı Akış]** Z-Score, Gerçekçi Volatilite Projeksiyonu ve Dinamik Momentum Motoru aktif: Katılım tahtaları taranıyor.",
       f"📢 **[Piyasa Alarmı]** VIOP 30 Yakın Vade İşlem Hacmi ve Açık Pozisyon Dengesi Anlık Olarak İzleniyor.",
   ]
   return haberler
@@ -388,9 +406,9 @@ def fetch_final_universe_data(b100_benchmark):
         low = hist["Low"]
         volume = hist["Volume"]
 
-        # Hassas Projeksiyonu Çalıştırıyoruz
+        # Gerçekçi ve Sıfır Göstermeyen Projeksiyon Motoru Çağrısı
         projeksiyon_durum, projeksiyon_getiri = nicel_20dk_projeksiyon(
-            close.values
+            close.values, high.values, low.values, volume.values
         )
 
         hurst_val = calculate_hurst(close.values)
@@ -502,7 +520,7 @@ def fetch_final_universe_data(b100_benchmark):
   return pd.DataFrame(sonuclar)
 
 
-with st.spinner("Canlı borsa verileri ve hassas projeksiyonlar taranıyor..."):
+with st.spinner("Canlı borsa verileri ve dinamik projeksiyonlar taranıyor..."):
   df_tarama = fetch_final_universe_data(b100_val)
 
 
@@ -574,7 +592,7 @@ tab1, tab2 = st.tabs(
 
 with tab1:
   st.subheader(
-      "📊 Gelişmiş Nicel Matris (AR(1) 20Dk Projeksiyon & Sıkışma Patlamaları)"
+      "📊 Gelişmiş Nicel Matris (Dinamik Projeksiyon & Sıkışma Patlamaları)"
   )
   strateji_secimi = st.radio(
       "Strateji Modu:",
@@ -635,4 +653,4 @@ with tab2:
 
 st.markdown("---")
 st.caption("© 2026 BIST Nicel Terminal | Canlı Otomatik Akış Modu Aktif")
-      
+          
