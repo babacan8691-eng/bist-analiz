@@ -145,10 +145,11 @@ def gelecek_15dk_yon_tahmini(close_s, volume_s, vwap_sapma, compression_ratio):
     if len(c) < 3:
       return "⚖️ Yatay / Bekle"
     son_bar_fark = c[-1] - c[-2]
-    onceki_bar_fark = c[-2] - c[-3]
-    vol_faktor = v[-1] / np.mean(v[-5:]) if len(v) >= 5 and np.mean(v[-5:]) > 0 else 1.0
-    
-    # 15 dakika sonrasına yönelik yön algoritması
+    vol_faktor = (
+        v[-1] / np.mean(v[-5:])
+        if len(v) >= 5 and np.mean(v[-5:]) > 0
+        else 1.0
+    )
     if son_bar_fark > 0 and vol_faktor >= 1.15 and vwap_sapma >= 0:
       return "🚀 +15Dk YUKARI (Güçlü İvme)"
     elif son_bar_fark < 0 and vol_faktor >= 1.15 and vwap_sapma <= 0:
@@ -429,7 +430,7 @@ def fetch_final_universe_data(b100_benchmark):
         ma10 = close.rolling(window=10).mean().iloc[-1]
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
-        
+
         trend_karar, haber_beklenti = trend_karar_motoru(
             close.values,
             high.values,
@@ -439,9 +440,10 @@ def fetch_final_universe_data(b100_benchmark):
             z_score,
             compression_ratio,
         )
-        
-        # Yeni eklenen 15dk sonraki yön tahmini metriği
-        gelecek_yon = gelecek_15dk_yon_tahmini(close.values, volume.values, vwap_sapma, compression_ratio)
+
+        gelecek_yon = gelecek_15dk_yon_tahmini(
+            close.values, volume.values, vwap_sapma, compression_ratio
+        )
 
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
@@ -637,4 +639,7 @@ with tab1:
           "⚠️ Seçilen filtre kombinasyonuna uygun hisse bulunamadı. Lütfen 'Tüm"
           " Hisseler / Nötr' modunu seçin."
       )
-    el
+    else:
+      df_goster = df_goster.sort_values(
+          by="_SkorGenel", ascending=False
+      ).reset_index(d
