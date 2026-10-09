@@ -51,54 +51,43 @@ def hesapla_obv(close, hacim):
     return (yon * hacim).fillna(0).cumsum()
 
 
-def hesapla_overnight_gap(hisse, veri):
-    """Gece taşıma (overnight) gap stratejisi sinyali."""
+def hesapla_overnight(hisse, veri):
     if veri is None or veri.empty or len(veri) < 30:
         return None
-
     gecmis = veri.dropna()
     if len(gecmis) < 30:
         return None
 
-    # Son günün kapanış fiyatı (son 15 dk mumu)
     son_kapanis = float(gecmis['Close'].iloc[-1])
+    son_25 = gecmis.iloc[-min(25, len(gecmis)):]
+    gun_high = float(son_25['High'].max())
+    gun_low = float(son_25['Low'].min())
 
-    # Gün içi yüksek/düşük
-    gun_high = float(gecmis['High'].iloc[-min(25, len(gecmis)):].max())
-    gun_low = float(gecmis['Low'].iloc[-min(25, len(gecmis)):].min())
-
-    # Gün içi kapanış pozisyonu (0 = dip, 1 = zirve)
     if gun_high - gun_low > 0:
         kapanis_pozisyonu = (son_kapanis - gun_low) / (gun_high - gun_low)
     else:
         kapanis_pozisyonu = 0.5
 
-    # Günlük değişim
-    gun_basi = float(gecmis['Close'].iloc[-min(25, len(gecmis))])
+    gun_basi = float(son_25['Close'].iloc[0])
     gunluk_degisim = ((son_kapanis - gun_basi) / gun_basi) * 100 if gun_basi > 0 else 0
 
-    # ATR (volatilite)
     atr_seri = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close'])
     atr_deger = float(atr_seri.iloc[-1]) if not pd.isna(atr_seri.iloc[-1]) else 0
     atr_yuzde = (atr_deger / son_kapanis) * 100 if son_kapanis > 0 else 0
 
-    # Hacim analizi
     son_hacim = float(gecmis['Volume'].iloc[-1])
     ort_hacim = float(gecmis['Volume'].rolling(20).mean().iloc[-1])
     hacim_orani = son_hacim / ort_hacim if ort_hacim > 0 else 1
 
-    # RSI ve MACD
     rsi_seri = hesapla_rsi(gecmis['Close'])
     rsi = float(rsi_seri.iloc[-1]) if not pd.isna(rsi_seri.iloc[-1]) else 50
 
     macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
     macd_hist = float(macd_h.iloc[-1]) if not pd.isna(macd_h.iloc[-1]) else 0
 
-    # Overnight gap skoru (0-100)
     gap_skoru = 50
     yorumlar = []
 
-    # Kapanış pozisyonu: Günü zirvede kapatmak = güçlü (gap up beklentisi)
     if kapanis_pozisyonu > 0.75:
         gap_skoru += 15
         yorumlar.append("Zirvede kapanis")
@@ -106,24 +95,20 @@ def hesapla_overnight_gap(hisse, veri):
         gap_skoru -= 10
         yorumlar.append("Dipte kapanis")
 
-    # Günlük değişim pozitif ve güçlü
     if gunluk_degisim > 2:
         gap_skoru += 10
         yorumlar.append("Guclu gun")
     elif gunluk_degisim < -2:
         gap_skoru -= 10
 
-    # Hacim onayı
     if hacim_orani > 1.5:
         gap_skoru += 8
-        yorumlar.append("Hacim patlamasi")
+        yorumlar.append("Hacim+")
 
-    # MACD pozitif
     if macd_hist > 0:
         gap_skoru += 7
         yorumlar.append("MACD+")
 
-    # RSI aşırı alım/satım
     if rsi > 65:
         gap_skoru -= 5
         yorumlar.append("RSI yuksek")
@@ -133,28 +118,22 @@ def hesapla_overnight_gap(hisse, veri):
 
     gap_skoru = max(0, min(100, gap_skoru))
 
-    # Sinyal
     if gap_skoru >= 70:
         overnight_sinyal = "GECE TASI"
         beklenen_gap = "YUKARI"
+        tahmini_gap = round(atr_yuzde * 0.6, 2)
     elif gap_skoru >= 55:
         overnight_sinyal = "ZAYIF TASI"
         beklenen_gap = "NOTR"
+        tahmini_gap = round(atr_yuzde * 0.3, 2)
     elif gap_skoru < 35:
         overnight_sinyal = "GECE TASIMA"
         beklenen_gap = "ASAGI"
+        tahmini_gap = round(-atr_yuzde * 0.5, 2)
     else:
         overnight_sinyal = "BEKLE"
         beklenen_gap = "NOTR"
-
-    # Tahmini gap büyüklüğü (ATR bazlı)
-    tahmini_gap_yuzde = 0
-    if gap_skoru >= 70:
-        tahmini_gap_yuzde = round(atr_yuzde * 0.6, 2)
-    elif gap_skoru >= 55:
-        tahmini_gap_yuzde = round(atr_yuzde * 0.3, 2)
-    elif gap_skoru < 35:
-        tahmini_gap_yuzde = round(-atr_yuzde * 0.5, 2)
+        tahmini_gap = 0
 
     return {
         "Hisse": hisse,
@@ -167,7 +146,7 @@ def hesapla_overnight_gap(hisse, veri):
         "GapSkoru": round(gap_skoru, 1),
         "OvernightSinyal": overnight_sinyal,
         "BeklenenGap": beklenen_gap,
-        "TahminiGap%": f"%{tahmini_gap_yuzde}",
+        "TahminiGap%": f"%{tahmini_gap}",
         "Yorum": " | ".join(yorumlar) if yorumlar else "Notr"
     }
 
@@ -284,6 +263,57 @@ def analiz_et(hisse, veri, katilim_kumesi):
     }
 
 
+def renk_tahmin(v):
+    if "YUKSELIS" in str(v):
+        return 'background-color:#1b5e20;color:white;font-weight:bold;'
+    if "DUSUS" in str(v) or "ZAYIF" in str(v):
+        return 'background-color:#b71c1c;color:white;font-weight:bold;'
+    if "BEKLE" in str(v):
+        return 'background-color:#e65100;color:white;font-weight:bold;'
+    return ''
+
+
+def renk_sinyal(v):
+    if "GUCLU AL" in str(v):
+        return 'background-color:#1b5e20;color:white;font-weight:bold;'
+    if "AL" in str(v):
+        return 'background-color:#2e7d32;color:white;'
+    if "SAT" in str(v) or "ZAYIF" in str(v):
+        return 'background-color:#b71c1c;color:white;'
+    return 'background-color:#e65100;color:white;'
+
+
+def renk_katilim(v):
+    if v == "EVET":
+        return 'color:#4CAF50;font-weight:bold;'
+    return 'color:#F44336;'
+
+
+def renk_overnight(v):
+    if "GECE TASI" in str(v):
+        return 'background-color:#1b5e20;color:white;font-weight:bold;'
+    if "ZAYIF TASI" in str(v):
+        return 'background-color:#2e7d32;color:white;'
+    if "GECE TASIMA" in str(v):
+        return 'background-color:#b71c1c;color:white;'
+    return 'background-color:#e65100;color:white;'
+
+
+def renk_gap(v):
+    if "YUKARI" in str(v):
+        return 'color:#4CAF50;font-weight:bold;'
+    if "ASAGI" in str(v):
+        return 'color:#F44336;font-weight:bold;'
+    return 'color:#FFC107;'
+
+
+def risk_ok(x):
+    try:
+        return float(x) > 1.5
+    except Exception:
+        return False
+
+
 varsayilanlar = {'giris_yapildi': False, 'sayac': 0, 'son_cekim': '-', 'manuel': False}
 for anahtar, deger in varsayilanlar.items():
     if anahtar not in st.session_state:
@@ -329,7 +359,7 @@ with st.spinner("Veriler yukleniyor..."):
             sonuc = analiz_et(hisse, ham_veriler[kod], katilim_kumesi)
             if sonuc:
                 satirlar.append(sonuc)
-            gece = hesapla_overnight_gap(hisse, ham_veriler[kod])
+            gece = hesapla_overnight(hisse, ham_veriler[kod])
             if gece:
                 overnight_satirlar.append(gece)
 
@@ -382,28 +412,7 @@ with tab1:
         if sadece_katilim:
             tablo = tablo[tablo["Katilim"] == "EVET"]
 
-        def rt(v):
-            if "YUKSELIS" in str(v):
-                return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "DUSUS" in str(v) or "ZAYIF" in str(v):
-                return 'background-color:#b71c1c;color:white;font-weight:bold;'
-            if "BEKLE" in str(v):
-                return 'background-color:#e65100;color:white;font-weight:bold;'
-            return ''
-
-        def rs(v):
-            if "GUCLU AL" in str(v):
-                return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "AL" in str(v):
-                return 'background-color:#2e7d32;color:white;'
-            if "SAT" in str(v) or "ZAYIF" in str(v):
-                return 'background-color:#b71c1c;color:white;'
-            return 'background-color:#e65100;color:white;'
-
-        def rk(v):
-            return 'color:#4CAF50;font-weight:bold;' if v == "EVET" else 'color:#F44336;'
-
-        stilli = tablo.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"])
+        stilli = tablo.style.map(renk_tahmin, subset=["Tahmin"]).map(renk_sinyal, subset=["Sinyal"]).map(renk_katilim, subset=["Katilim"])
         st.dataframe(stilli, use_container_width=True, height=650)
 
         st.markdown("---")
@@ -412,11 +421,6 @@ with tab1:
         o2.metric("Yukselis", len(tablo[tablo["Tahmin"].str.contains("YUKSELIS")]))
         o3.metric("Guclu AL", len(tablo[tablo["Sinyal"] == "GUCLU AL"]))
         o4.metric("Ort. Guc", str(round(tablo["Guc"].mean(), 1)))
-        def risk_ok(x):
-            try:
-                return float(x) > 1.5
-            except:
-                return False
         o5.metric("Risk/Odul>1.5", len(tablo[tablo["RiskOdul"].apply(risk_ok)]))
 
 with tab2:
@@ -461,19 +465,22 @@ with tab2:
 
 with tab3:
     st.subheader("ATR Bazli Risk Analizi")
-    if satirlar:
+    if not satirlar:
+        st.warning("Veri yok.")
+    else:
         tablo_r = pd.DataFrame(satirlar)
         if sadece_katilim:
             tablo_r = tablo_r[tablo_r["Katilim"] == "EVET"]
-        def risk_filter(x):
-            try:
-                return float(x) > 1.5
-            except:
-                return False
-        rdf = tablo_r[tablo_r["RiskOdul"].apply(risk_filter)]
+        rdf = tablo_r[tablo_r["RiskOdul"].apply(risk_ok)]
         st.markdown("**Risk/Odul orani > 1.5 olan " + str(len(rdf)) + " hisse:**")
         if not rdf.empty:
             goster = rdf[["Hisse", "Fiyat", "StopLoss", "Hedef", "RiskOdul", "Sinyal", "Guc", "Yorum"]]
             st.dataframe(goster, use_container_width=True, height=500)
         else:
-           
+            st.info("Uygun risk/odul oraninda hisse yok.")
+        st.markdown("---")
+        st.info("StopLoss = Fiyat - (ATR x 2) | Hedef = Fiyat + (ATR x 3) | Risk/Odul > 1.5 ideal")
+
+with tab4:
+    st.subheader("Overnight Gap Stratejisi (Kapanis -> Acilis)")
+    st.info("Kapanisa yakin pozisyon acip, ertesi gun acilista kapatm
