@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati
+from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati, bist_endeks_verisi
 
 st.set_page_config(page_title="BIST Pro", layout="wide")
 
@@ -69,7 +68,6 @@ def analiz_et(hisse, veri, katilim_kumesi):
     rsi = rsi_seri.iloc[-1] if not pd.isna(rsi_seri.iloc[-1]) else 50
     macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
     macd_hist = macd_h.iloc[-1] if not pd.isna(macd_h.iloc[-1]) else 0
-    bb_ust, bb_orta, bb_alt = hesapla_bollinger(gecmis['Close'])
     stoch_k, stoch_d = hesapla_stochastic(gecmis['High'], gecmis['Low'], gecmis['Close'])
     stoch_deger = stoch_k.iloc[-1] if not pd.isna(stoch_k.iloc[-1]) else 50
     atr = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close']).iloc[-1]
@@ -153,20 +151,20 @@ def analiz_et(hisse, veri, katilim_kumesi):
     }
 
 
-varsayilanlar = {'giris': False, 'sayac': 0, 'son_cekim': '-', 'manuel': False}
+varsayilanlar = {'giris_yapildi': False, 'sayac': 0, 'son_cekim': '-', 'manuel': False}
 for anahtar, deger in varsayilanlar.items():
     if anahtar not in st.session_state:
         st.session_state[anahtar] = deger
 
-if not st.session_state.giris:
+if not st.session_state.giris_yapildi:
     st.title("BIST Pro Terminali Giris")
-    with st.form("giris"):
+    with st.form("giris_formu"):
         s1, s2 = st.columns(2)
         kullanici = s1.text_input("Kullanici Adi")
         sifre = s2.text_input("Sifre", type="password")
         if st.form_submit_button("Giris Yap"):
             if kullanici.strip() == "Cuma Babacan" and sifre.strip() == "784512":
-                st.session_state.giris = True
+                st.session_state.giris_yapildi = True
                 st.rerun()
             else:
                 st.error("Hatali giris!")
@@ -184,7 +182,6 @@ if piyasa_acik:
 else:
     st.warning("PIYASA KAPALI - Seans disi (09:40-18:30)")
 
-# Veri çekme
 with st.spinner("Veriler yukleniyor..."):
     hisse_listesi = HISSELER.split(",")
     katilim_kumesi = set(k + ".IS" for k in KATILIM.split(","))
@@ -203,11 +200,9 @@ with st.spinner("Veriler yukleniyor..."):
         st.session_state.son_cekim = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.manuel = False
 
-# BIST 100
 bist_deger = "-"
 bist_degisim = "0"
 try:
-    from data.fetcher import bist_endeks_verisi
     bv = bist_endeks_verisi()
     if bv is not None and not bv.empty:
         bf = bv['Close'].iloc[-1]
@@ -217,14 +212,12 @@ try:
 except Exception:
     pass
 
-# Üst metrikler
 s1, s2, s3, s4 = st.columns(4)
 s1.metric("BIST 100", bist_deger, bist_degisim)
 s2.metric("VIOP Denge", "Denge", "0")
 s3.metric("Taranan", str(len(hisse_listesi)), "0")
 s4.metric("Cekim", str(st.session_state.sayac), "Son: " + st.session_state.son_cekim)
 
-# Filtre ve butonlar
 c1, c2 = st.columns([3, 1])
 with c1:
     sadece_katilim = st.checkbox("Sadece Islam'a Uygun Hisseler", value=True)
@@ -238,10 +231,8 @@ if manuel_buton:
     st.session_state.son_cekim = turkiye_saati().strftime("%H:%M:%S")
     st.rerun()
 
-# Sekmeler
 tab1, tab2, tab3, tab4 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "KAP & VIOP"])
 
-# TAB 1
 with tab1:
     if not satirlar:
         st.warning("Veri cekilemedi. Manuel butona basin.")
@@ -283,9 +274,13 @@ with tab1:
         o2.metric("Yukselis", len(tablo[tablo["Tahmin"].str.contains("YUKSELIS")]))
         o3.metric("Guclu AL", len(tablo[tablo["Sinyal"] == "GUCLU AL"]))
         o4.metric("Ort. Guc", str(round(tablo["Guc"].mean(), 1)))
-        o5.metric("Risk/Odul>1.5", len(tablo[tablo["RiskOdul"].apply(lambda x: x > 1.5 if isinstance(x, (int, float)) else False)]))
+        def risk_ok(x):
+            try:
+                return float(x) > 1.5
+            except:
+                return False
+        o5.metric("Risk/Odul>1.5", len(tablo[tablo["RiskOdul"].apply(risk_ok)]))
 
-# TAB 2
 with tab2:
     st.subheader("Interaktif Mum Grafigi")
     try:
@@ -326,7 +321,6 @@ with tab2:
     except Exception as e:
         st.error("Grafik yuklenemedi: " + str(e))
 
-# TAB 3
 with tab3:
     st.subheader("ATR Bazli Risk Analizi")
     if satirlar:
@@ -350,7 +344,6 @@ with tab3:
     else:
         st.warning("Veri yok.")
 
-# TAB 4
 with tab4:
     st.subheader("Canli KAP Haberleri")
     st.info("KAP entegrasyonu yakinda eklenecek.")
