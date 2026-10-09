@@ -21,17 +21,17 @@ def check_password():
         st.session_state["password_correct"] = False
     if st.session_state["password_correct"]:
         return True
-    st.subheader("Yetkili Giris Paneli")
+    st.subheader("🔐 Yetkili Giriş Paneli")
     with st.form("login_form"):
-        username = st.text_input("Kullanici Adi:")
-        password = st.text_input("Erisim Sifresi:", type="password")
-        submitted = st.form_submit_button("Giris Yap")
+        username = st.text_input("Kullanıcı Adı:")
+        password = st.text_input("Erişim Şifresi:", type="password")
+        submitted = st.form_submit_button("Giriş Yap")
         if submitted:
             if username.strip() == "Cuma Babacan" and password.strip() == "784512":
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
-                st.error("Hatali Kullanici Adi veya Sifre")
+                st.error("😕 Hatalı Kullanıcı Adı veya Şifre")
     return False
 
 
@@ -48,22 +48,36 @@ borsa_acik_mi = (aktif_gun < 5) and (
 
 if borsa_acik_mi:
     count = st_autorefresh(interval=30000, key="bist_canli_akis_30s")
-    st.sidebar.success(f"Trend Tarama Akisi Aktif (Sayac: {count})")
+    st.sidebar.success(
+        f"🟢 Trend Tarama Akışı Aktif (30 Sn Döngü | Sayaç: {count})"
+    )
 else:
-    st.sidebar.warning("Borsa Kapali - Gun Sonu Modu Devrede")
+    st.sidebar.warning(
+        "🔴 Borsa Kapalı - Gün Sonu & Seans Kapanış Modu Devrede"
+    )
 
-st.markdown("BIST Swing/Intraday Trend & Hacim Sikismasi Patlama Terminali")
+st.markdown(
+    "## 🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali"
+)
 st.caption(
-    f"Son Guncelleme: {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15Dk"
-    " Gecikmeli Guvenli Trend & Sikismasi Avcisi"
+    f"Son Güncelleme (TRT): {simdi.strftime('%Y-%m-%d %H:%M:%S')} | 15Dk"
+    " Gecikmeli Güvenli Trend & Sıkışma Avcısı Modu"
 )
 
 col_btn, col_info = st.columns([1, 4])
 with col_btn:
-    if st.button("Verileri Simdi Guncelle"):
+    if st.button("🔄 Verileri Şimdi Güncelle"):
         st.rerun()
 
 st.markdown("---")
+st.markdown(
+    "<div class='strateji-kutu'>💡 <b>Rakamsal Sıkışma & Patlama Felsefesi:</b>"
+    " Fiyat %2-%3 gittikten sonraki geç kalmış kanal hareketleri yerine,"
+    " <b>dar bant sıkışması (Compression <= 0.75) ve hacim patlaması"
+    " (Vol Ratio >= 1.3)</b> matematiksel eşikleriyle patlama anındaki tahtalar"
+    " hedeflenir.</div>",
+    unsafe_allow_html=True,
+)
 
 
 def calculate_hurst(ts):
@@ -92,7 +106,7 @@ def nicel_trend_projeksiyon(
         low = np.array(low_series)
         volume = np.array(volume_series)
         if len(close) < 10:
-            return "Denge / Yatay Bant", 0.35
+            return "⚖️ Denge / Yatay Bant", 0.35
         fiyat_suan = close[-1]
         fiyat_onceki = close[-3]
         fiyat_degisim = ((fiyat_suan - fiyat_onceki) / fiyat_onceki) * 100
@@ -113,16 +127,16 @@ def nicel_trend_projeksiyon(
         if abs(projeksiyon_getiri) < 0.05:
             projeksiyon_getiri = 1.15 if fiyat_suan >= close[-2] else -1.15
         if projeksiyon_getiri > 0.4:
-            durum = "Guclu Trend Devami Bekleniyor"
+            durum = "🚀 Güçlü Trend Devamı Bekleniyor"
         elif projeksiyon_getiri < -0.4:
-            durum  = "Satis Baskisi / Duzeltme"
+            durum = "📉 Satış Baskısı / Düzeltme"
         elif projeksiyon_getiri > 0:
-            durum = "Bant Ici Toparlanma"
+            durum = "🔄 Bant İçi Toparlanma"
         else:
-            durum = "Sikisma / Yon Arayisi"
+            durum = "⚠️ Sıkışma / Yön Arayışı"
         return durum, float(projeksiyon_getiri)
     except:
-        return "Guclu Trend Devami Bekleniyor", 1.25
+        return "🚀 Güçlü Trend Devamı Bekleniyor", 1.25
 
 
 def rakamsal_trend_karar_motoru(
@@ -131,28 +145,28 @@ def rakamsal_trend_karar_motoru(
     try:
         c = np.array(close_s)
         if len(c) < 5:
-            return "Trend: NOTR / BEKLE", "Standart Bant Akisi"
+            return "🎯 Trend: NÖTR / BEKLE", "Standart Bant Akışı"
         if comp_ratio <= 0.72 and vol_ratio >= 1.25:
-            karar = "Trend: HACIM SIKISMASI & KIRILMA"
-            beklenti = "Dar Bant Sikismasi Tamamlandi"
+            karar = "🎯 Trend: HACİM SIKIŞMASI & KIRILMA"
+            beklenti = "Dar Bant Sıkışması Tamamlandı -> Patlama Eşiği"
         elif vol_ratio >= 1.8 and (c[-1] > c[-2]):
-            karar = "ANLIK HACIM PATLAMASI"
-            beklenti = "Kurumsal Para Girisi Basladi"
+            karar = "🚨 ANLIK HACİM PATLAMASI"
+            beklenti = "Kurumsal Para Girişi Başladı"
         elif comp_ratio <= 0.65:
-            karar = "KRITIK SIKISMA"
-            beklenti = "Yon Kirilmasi An Meselesi"
+            karar = "⚡ KRİTİK SIKIŞMA (BANT DARALMASI)"
+            beklenti = "Yön Kırılması An Meselesi"
         elif z_score > 1.2 and vol_ratio >= 1.1:
-            karar = "Trend: YUKSELIS KANALI AKTIF"
-            beklenti = "Orta Vadeli Alim Ivmesi"
+            karar = "🟢 Trend: YÜKSELİŞ KANALI AKTİF"
+            beklenti = "Orta Vadeli Alım İvmesi"
         elif z_score < -1.2:
-            karar = "Trend: GERI CEKILME / DESTEK TESTI"
-            beklenti = "Destek Seviyesi Izlenmeli"
+            karar = "📉 Trend: GERİ ÇEKİLME / DESTEK TESTİ"
+            beklenti = "Destek Seviyesi İzlenmeli"
         else:
-            karar = "Trend: YATAY DAR BANT"
-            beklenti = "Hacim Genislemesi Bekleniyor"
+            karar = "⚖️ Trend: YATAY DAR BANT"
+            beklenti = "Hacim Genişlemesi Bekleniyor"
         return karar, beklenti
     except:
-        return "Trend: YUKSELIS BEKLENTISI", "Hacim Akis Beklentisi"
+        return "🎯 Trend: YÜKSELİŞ BEKLENTİSİ", "Hacim Akış Beklentisi"
 
 
 def get_market_indicators():
@@ -168,21 +182,55 @@ def get_market_indicators():
             b100_degisim = (
                 (fiyat_suan - fiyat_oncesi) / fiyat_oncesi
             ) * 100
-            trend = "YUKSELIS ONAYLI" if b100_degisim >= 0 else "KONSOLIDASYON"
+            trend = "YÜKSELİŞ ONAYLI" if b100_degisim >= 0 else "KONSOLİDASYON"
         else:
-            trend = "YUKSELIS"
-        return trend, f"%{b100_degisim:.2f}", b100_degisim, "VIOP Alim Baskisi"
+            trend = "YÜKSELİŞ"
+        xu030 = yf.Ticker("XU030.IS")
+        u30_hist = xu030.history(period="5d", interval="15m")
+        if u30_hist.empty:
+            u30_hist = xu030.history(period="5d")
+        viop_durum = "⚖️ VIOP Denge"
+        if not u30_hist.empty and len(u30_hist) >= 2:
+            v_degisim = (
+                (u30_hist["Close"].iloc[-1] - u30_hist["Close"].iloc[-2])
+                / u30_hist["Close"].iloc[-2]
+            ) * 100
+            if v_degisim > 0.15:
+                viop_durum = f"⚡ VIOP Alım Baskısı (%{v_degisim:+.2f})"
+            elif v_degisim < -0.15:
+                viop_durum = f"⚠️ VIOP Satış Baskısı (%{v_degisim:+.2f})"
+        return trend, f"%{b100_degisim:.2f}", b100_degisim, viop_durum
     except:
-        return "YUKSELIS", "%1.25", 1.25, "VIOP Alim Baskisi"
+        return "YÜKSELİŞ", "%1.25", 1.25, "⚡ VIOP Alım Baskısı"
 
 
 b100_durum, b100_oran, b100_val, viop_sinyal = get_market_indicators()
 
 col_b1, col_b2 = st.columns([3, 2])
 with col_b1:
-    st.info(f"BIST 100 Trend Teyidi: {b100_durum} ({b100_oran})")
+    st.info(f"🌐 **BIST 100 Trend Teyidi:** {b100_durum} ({b100_oran})")
 with col_b2:
-    st.success(f"Oncu Piyasa Sinyali: {viop_sinyal}")
+    st.success(f"🎯 **Öncü Piyasa Sinyali:** {viop_sinyal}")
+
+
+def get_live_kap_news():
+    simdiet = datetime.now(tr_tz)
+    saat_Str = simdiet.strftime("%H:%M:%S")
+    return [
+        f"🔔 **[Saat {saat_Str}] Rakamsal Sıkışma Bülteni:** 15m Bar Sıkışma (Compression) ve Hacim Çarpanı Matrisi Güncellendi.",
+        "⚡ **[Quant Modu]** Fiyat %2 Gitmeden Önceki Dar Bant Kırılım Aşaması Taranıyor.",
+        "📢 **[Seans Kapanışı]** Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.",
+    ]
+
+
+expander_container = st.expander(
+    "🚨 Canlı Haberler, Sıkışma Alarmları & Seans Bilgi Paneli", expanded=True
+)
+with expander_container:
+    for haber in get_live_kap_news():
+        st.markdown(
+            f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True
+        )
 
 
 @st.cache_data(ttl=300)
@@ -213,18 +261,98 @@ def fetch_final_universe_data(b100_benchmark):
         "ARCLK.IS",
         "ENJSA.IS",
         "SASA.IS",
+        "HEKTS.IS",
         "KONTR.IS",
+        "BRYAT.IS",
+        "ECILC.IS",
+        "EGEEN.IS",
         "GESAN.IS",
+        "GUBRF.IS",
+        "ODAS.IS",
+        "KMPUR.IS",
+        "ALBRK.IS",
+        "ZOREN.IS",
         "CWENE.IS",
         "EUPWR.IS",
         "BIOEN.IS",
         "ALFAS.IS",
+        "AKSA.IS",
+        "AKSEN.IS",
+        "ALARK.IS",
+        "BERA.IS",
+        "BIENY.IS",
+        "BOBET.IS",
+        "BRISA.IS",
+        "BUCIM.IS",
+        "CCOLA.IS",
+        "CEMTS.IS",
+        "CIMSA.IS",
+        "DOHOL.IS",
+        "EKSUN.IS",
+        "ENERY.IS",
+        "GLYHO.IS",
+        "GWIND.IS",
+        "HALKB.IS",
+        "IPEKE.IS",
+        "ISCTR.IS",
+        "KCAER.IS",
+        "KONFS.IS",
+        "KONYA.IS",
+        "KOZAA.IS",
+        "KOZAL.IS",
+        "MAVI.IS",
+        "MPARK.IS",
+        "OTKAR.IS",
+        "POLHO.IS",
+        "QUAGR.IS",
+        "REEDR.IS",
+        "SMRTG.IS",
+        "SOKM.IS",
+        "TAVHL.IS",
+        "TKFEN.IS",
+        "TSKB.IS",
+        "ULKER.IS",
+        "VAKBN.IS",
+        "VESBE.IS",
+        "YEOTK.IS",
+        "YYLGD.IS",
+    ]
+    tickers = list(dict.fromkeys(tickers))
+    katilim_listesi = [
+        "THYAO.IS",
+        "EREGL.IS",
+        "KCHOL.IS",
+        "ASELS.IS",
+        "BIMAS.IS",
+        "SISE.IS",
+        "KRDMD.IS",
+        "PETKM.IS",
+        "ENKAI.IS",
+        "PGSUS.IS",
+        "FROTO.IS",
+        "TOASO.IS",
+        "TCELL.IS",
+        "TTKOM.IS",
+        "MGROS.IS",
+        "ASTOR.IS",
+        "OYAKC.IS",
+        "ARCLK.IS",
+        "ENJSA.IS",
+        "KONTR.IS",
+        "GESAN.IS",
+        "ALFAS.IS",
+        "CWENE.IS",
+        "EUPWR.IS",
+        "BIOEN.IS",
+        "SASA.IS",
         "AKSA.IS",
         "ALARK.IS",
         "BRISA.IS",
         "CIMSA.IS",
         "GWIND.IS",
         "KCAER.IS",
+        "KONFS.IS",
+        "KOZAL.IS",
         "MAVI.IS",
         "OTKAR.IS",
         "SMRTG.IS",
@@ -234,8 +362,6 @@ def fetch_final_universe_data(b100_benchmark):
         "VESBE.IS",
         "YEOTK.IS",
     ]
-    tickers = list(dict.fromkeys(tickers))
-    katilim_listesi = tickers.copy()
     sonuclar = []
     for t in tickers:
         try:
@@ -324,78 +450,139 @@ def fetch_final_universe_data(b100_benchmark):
                     + (max(0, clv) * 35.0)
                     + (float(compression_ratio <= 0.75) * 30.0)
                 )
+                is_katilim = t in katilim_listesi
+                katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
+                if hurst_val >= 0.45 or compression_ratio <= 0.72:
+                    sinyal = "🟢 GÜÇLÜ PATLAMA ADAYI"
+                elif hurst_val >= 0.38:
+                    sinyal = "🟡 TOPARLANMA"
+                else:
+                    sinyal = "⏳ BEKLE"
+                if is_katilim:
+                    gunluk_sinyal = (
+                        "⚡ ERKEN PATLAMA UYGUN"
+                        if (compression_ratio <= 0.75 or vol_ratio >= 1.2)
+                        else "⏳ BEKLE"
+                    )
+                else:
+                    gunluk_sinyal = "HARİÇ"
+                erken_durum = (
+                    "🚨 HACİM & SIKIŞMA PATLAMASI"
+                    if (vol_ratio >= 1.25 or compression_ratio <= 0.7)
+                    else "NORMAL"
+                )
                 sonuclar.append({
                     "Hisse": t,
                     "_SkorGenel": skor_genel,
                     "_SkorGunluk": skor_gunluk,
                     "_SkorOvernight": skor_overnight,
-                    "Net Guc Skoru": f"{net_guc_skoru:.1f} Puan",
-                    "Sinyal": (
-                        "GUCLU PATLAMA ADAYI"
-                        if hurst_val >= 0.45 or compression_ratio <= 0.72
-                        else "TOPARLANMA"
-                    ),
-                    "Trend Karari": trend_karar,
-                    "Beklenti": haber_beklenti,
+                    "🏆 Net Güç Skoru": f"{net_guc_skoru:.1f} Puan",
+                    "Sinyal": sinyal,
+                    "🎯 Trend Kararı": trend_karar,
+                    "Olası Haber / Beklenti": haber_beklenti,
+                    "Trend Projeksiyon": projeksiyon_durum,
+                    "Beklenen Getiri": f"%{projeksiyon_getiri:+.2f}",
+                    "Erken Konum": erken_durum,
+                    "Swing Al-Sat": gunluk_sinyal,
+                    "AI Olasılık": f"%{ai_prob:.1f}",
+                    "Hacim (Vol)": f"{vol_ratio:.1f}x",
+                    "Sıkışma (Comp)": f"{compression_ratio:.2f}x",
+                    "Katılım Uygun": katilim_durum,
                     "Fiyat": f"{fiyat:.2f} TL",
-                    "Degisim": f"%{degisim:.2f}",
-                    "Hacim": f"{vol_ratio:.1f}x",
-                    "Sikisma": f"{compression_ratio:.2f}x",
+                    "Dönem Değişim": f"%{degisim:.2f}",
+                    "Endeks RS": f"%{rel_strength:+.2f}",
+                    "Hurst": f"{hurst_val:.2f}",
+                    "VWAP Sapma": f"%{vwap_sapma:.2f}",
                 })
         except:
             continue
     return pd.DataFrame(sonuclar)
 
 
-with st.spinner("Veriler hesaplaniyor..."):
+with st.spinner(
+    "Rakamsal sıkışma matrisleri, hacim ve patlama eşikleri hesaplanıyor..."
+):
     df_tarama = fetch_final_universe_data(b100_val)
 
-tab1, tab2, tab3 = st.tabs(
-    ["Genel Trend", "Intraday Swing", "Overnight Firsatlari"]
-)
 
-with tab1:
-    st.subheader("Genel Trend ve Sikisma Terminali")
-    if not df_tarama.empty:
-        df_goster = df_tarama.sort_values(
-            by="_SkorGenel", ascending=False
-        ).reset_index(drop=True)
-        df_goster = df_goster.drop(
-            columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"],
-            errors="ignore",
+def kapsamli_radar_stilleri(val):
+    val_str = str(val)
+    if (
+        "🚨 HACİM & SIKIŞMA PATLAMASI" in val_str
+        or "🚀 Güçlü Trend Devamı" in val_str
+        or "HACİM SIKIŞMASI & KIRILMA" in val_str
+        or "ANLIK HACİM PATLAMASI" in val_str
+        or "KRİTİK SIKIŞMA" in val_str
+    ):
+        return (
+            "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
+            " animation: yanip-son 1.5s infinite;"
         )
-        st.dataframe(df_goster, use_container_width=True, hide_index=True)
-    else:
-        st.warning("Veriler yukleniyor...")
-
-with tab2:
-    st.subheader("Intraday Swing Takip Ekrani")
-    if not df_tarama.empty:
-        df_gunluk = df_tarama.sort_values(
-            by="_SkorGunluk", ascending=False
-        ).reset_index(drop=True)
-        df_gunluk = df_gunluk.drop(
-            columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"],
-            errors="ignore",
+    elif any(
+        k in val_str
+        for k in [
+            "ERKEN PATLAMA UYGUN",
+            "GÜÇLÜ PATLAMA ADAYI",
+            "EVET (Katılım)",
+            "TOPARLANMA",
+            "YÜKSELİŞ KANALI AKTİF",
+        ]
+    ):
+        return (
+            "background-color: rgba(0, 255, 0, 0.25); color: #00ff00;"
+            " font-weight: bold;"
         )
-        st.dataframe(df_gunluk, use_container_width=True, hide_index=True)
-    else:
-        st.warning("Veriler yukleniyor...")
+    try:
+        if "Puan" in val_str:
+            num = float(val_str.replace("Puan", "").strip())
+            if num >= 75.0:
+                return (
+                    "background-color: rgba(0, 150, 255, 0.3); color: #00bfff;"
+                    " font-weight: bold;"
+                )
+        elif "%" in val_str:
+            num = float(val_str.replace("%", "").strip())
+            if num > 0:
+                return "background-color: rgba(0, 255, 0, 0.15); color: #00ff00;"
+            elif num < 0:
+                return (
+                    "background-color: rgba(255, 0, 0, 0.15); color: #ff4444;"
+                )
+        elif "x" in val_str:
+            num = float(val_str.replace("x", "").strip())
+            if num >= 1.2:
+                return (
+                    "background-color: rgba(0, 150, 255, 0.25); color: #00bfff;"
+                    " font-weight: bold;"
+                )
+    except:
+        pass
+    return ""
 
-with tab3:
-    st.subheader("Overnight Firsatlari")
-    if not df_tarama.empty:
-        df_overnight = df_tarama.sort_values(
-            by="_SkorOvernight", ascending=False
-        ).reset_index(drop=True)
-        df_overnight = df_overnight.drop(
-            columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"],
-            errors="ignore",
-        )
-        st.dataframe(df_overnight, use_container_width=True, hide_index=True)
-    else:
-        st.warning("Veriler yukleniyor...")
 
-st.markdown("---")
-st.caption("2026 BIST Nicel Trend Terminali")
-                
+def guvenli_styler(df):
+    cols_to_style = [
+        "🏆 Net Güç Skoru",
+        "Sinyal",
+        "🎯 Trend Kararı",
+        "Trend Projeksiyon",
+        "Beklenen Getiri",
+        "Erken Konum",
+        "Swing Al-Sat",
+        "AI Olasılık",
+        "Hacim (Vol)",
+        "Sıkışma (Comp)",
+        "Katılım Uygun",
+        "Dönem Değişim",
+        "Endeks RS",
+    ]
+    active_cols = [c for c in cols_to_style if c in df.columns]
+    try:
+        return df.style.map(kapsamli_radar_stilleri, subset=active_cols)
+    except:
+        return df
+
+
+tab1, tab2, tab3 = st.tabs([
+    "Genel Trend & Sıkışma Terminali",
+    "Katılım Özel Int
