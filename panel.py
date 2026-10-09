@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
-from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati, bist_endeks_verisi
+from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati
 
 st.set_page_config(page_title="BIST Pro", layout="wide")
 
@@ -13,474 +11,225 @@ HISSELER = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUP
 KATILIM = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
 
 
-def hesapla_rsi(seri, periyot=14):
-    fark = seri.diff()
-    kazanc = fark.where(fark > 0, 0).rolling(periyot).mean()
-    kayip = -fark.where(fark < 0, 0).rolling(periyot).mean()
-    return 100 - (100 / (1 + kazanc / kayip))
+def rsi(s, p=14):
+    d = s.diff()
+    k = d.where(d > 0, 0).rolling(p).mean()
+    y = -d.where(d < 0, 0).rolling(p).mean()
+    return 100 - (100 / (1 + k / y))
 
 
-def hesapla_macd(seri):
-    ema12 = seri.ewm(span=12, adjust=False).mean()
-    ema26 = seri.ewm(span=26, adjust=False).mean()
-    macd = ema12 - ema26
-    sinyal = macd.ewm(span=9, adjust=False).mean()
-    return macd, sinyal, macd - sinyal
-
-
-def hesapla_bollinger(seri, periyot=20):
-    sma = seri.rolling(periyot).mean()
-    std = seri.rolling(periyot).std()
-    return sma + 2 * std, sma, sma - 2 * std
-
-
-def hesapla_atr(high, low, close, periyot=14):
-    tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
-    return tr.rolling(periyot).mean()
-
-
-def hesapla_stochastic(high, low, close, periyot=14):
-    en_yuksek = high.rolling(periyot).max()
-    en_dusuk = low.rolling(periyot).min()
-    k = 100 * (close - en_dusuk) / (en_yuksek - en_dusuk)
-    return k, k.rolling(3).mean()
-
-
-def hesapla_obv(close, hacim):
-    yon = np.sign(close.diff())
-    return (yon * hacim).fillna(0).cumsum()
-
-
-def hesapla_overnight(hisse, veri):
-    if veri is None or veri.empty or len(veri) < 30:
+def hesapla(hisse, veri, katilim_set):
+    if veri is None or len(veri) < 30:
         return None
-    gecmis = veri.dropna()
-    if len(gecmis) < 30:
+    g = veri.dropna()
+    if len(g) < 30:
         return None
-
-    son_kapanis = float(gecmis['Close'].iloc[-1])
-    son_25 = gecmis.iloc[-min(25, len(gecmis)):]
-    gun_high = float(son_25['High'].max())
-    gun_low = float(son_25['Low'].min())
-
-    if gun_high - gun_low > 0:
-        kapanis_pozisyonu = (son_kapanis - gun_low) / (gun_high - gun_low)
-    else:
-        kapanis_pozisyonu = 0.5
-
-    gun_basi = float(son_25['Close'].iloc[0])
-    gunluk_degisim = ((son_kapanis - gun_basi) / gun_basi) * 100 if gun_basi > 0 else 0
-
-    atr_seri = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close'])
-    atr_deger = float(atr_seri.iloc[-1]) if not pd.isna(atr_seri.iloc[-1]) else 0
-    atr_yuzde = (atr_deger / son_kapanis) * 100 if son_kapanis > 0 else 0
-
-    son_hacim = float(gecmis['Volume'].iloc[-1])
-    ort_hacim = float(gecmis['Volume'].rolling(20).mean().iloc[-1])
-    hacim_orani = son_hacim / ort_hacim if ort_hacim > 0 else 1
-
-    rsi_seri = hesapla_rsi(gecmis['Close'])
-    rsi = float(rsi_seri.iloc[-1]) if not pd.isna(rsi_seri.iloc[-1]) else 50
-
-    macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
-    macd_hist = float(macd_h.iloc[-1]) if not pd.isna(macd_h.iloc[-1]) else 0
-
-    gap_skoru = 50
-    yorumlar = []
-
-    if kapanis_pozisyonu > 0.75:
-        gap_skoru += 15
-        yorumlar.append("Zirvede kapanis")
-    elif kapanis_pozisyonu < 0.25:
-        gap_skoru -= 10
-        yorumlar.append("Dipte kapanis")
-
-    if gunluk_degisim > 2:
-        gap_skoru += 10
-        yorumlar.append("Guclu gun")
-    elif gunluk_degisim < -2:
-        gap_skoru -= 10
-
-    if hacim_orani > 1.5:
-        gap_skoru += 8
-        yorumlar.append("Hacim+")
-
-    if macd_hist > 0:
-        gap_skoru += 7
-        yorumlar.append("MACD+")
-
-    if rsi > 65:
-        gap_skoru -= 5
-        yorumlar.append("RSI yuksek")
-    elif rsi < 35:
-        gap_skoru += 8
-        yorumlar.append("RSI dusuk")
-
-    gap_skoru = max(0, min(100, gap_skoru))
-
-    if gap_skoru >= 70:
-        overnight_sinyal = "GECE TASI"
-        beklenen_gap = "YUKARI"
-        tahmini_gap = round(atr_yuzde * 0.6, 2)
-    elif gap_skoru >= 55:
-        overnight_sinyal = "ZAYIF TASI"
-        beklenen_gap = "NOTR"
-        tahmini_gap = round(atr_yuzde * 0.3, 2)
-    elif gap_skoru < 35:
-        overnight_sinyal = "GECE TASIMA"
-        beklenen_gap = "ASAGI"
-        tahmini_gap = round(-atr_yuzde * 0.5, 2)
-    else:
-        overnight_sinyal = "BEKLE"
-        beklenen_gap = "NOTR"
-        tahmini_gap = 0
-
-    return {
-        "Hisse": hisse,
-        "Kapanis": f"{son_kapanis:.2f} TL",
-        "GunlukGetiri": f"%{gunluk_degisim:.2f}",
-        "KapanisPoz": f"{kapanis_pozisyonu:.2f}",
-        "ATR%": f"{atr_yuzde:.2f}",
-        "HacimOrani": f"{hacim_orani:.2f}x",
-        "RSI": f"{rsi:.1f}",
-        "GapSkoru": round(gap_skoru, 1),
-        "OvernightSinyal": overnight_sinyal,
-        "BeklenenGap": beklenen_gap,
-        "TahminiGap%": f"%{tahmini_gap}",
-        "Yorum": " | ".join(yorumlar) if yorumlar else "Notr"
-    }
-
-
-def analiz_et(hisse, veri, katilim_kumesi):
-    if veri is None or veri.empty or len(veri) < 30:
-        return None
-    gecmis = veri.dropna()
-    if len(gecmis) < 30:
-        return None
-
-    son_fiyat = float(gecmis['Close'].iloc[-1])
-    gun_basi = float(gecmis['Close'].iloc[-min(25, len(gecmis))])
-    gunluk_degisim = ((son_fiyat - gun_basi) / gun_basi) * 100 if gun_basi > 0 else 0
-
-    sma20 = float(gecmis['Close'].rolling(20).mean().iloc[-1])
-    sma50_deger = gecmis['Close'].rolling(50).mean().iloc[-1]
-    sma50 = float(sma50_deger) if not pd.isna(sma50_deger) else sma20
-
-    rsi_seri = hesapla_rsi(gecmis['Close'])
-    rsi_deger = rsi_seri.iloc[-1]
-    rsi = float(rsi_deger) if not pd.isna(rsi_deger) else 50.0
-
-    macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
-    macd_hist_deger = macd_h.iloc[-1]
-    macd_hist = float(macd_hist_deger) if not pd.isna(macd_hist_deger) else 0.0
-
-    stoch_k, stoch_d = hesapla_stochastic(gecmis['High'], gecmis['Low'], gecmis['Close'])
-    stoch_deger_raw = stoch_k.iloc[-1]
-    stoch_deger = float(stoch_deger_raw) if not pd.isna(stoch_deger_raw) else 50.0
-
-    atr_deger = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close']).iloc[-1]
-    atr = float(atr_deger) if not pd.isna(atr_deger) else 0.0
-
-    hacim_ort_deger = gecmis['Volume'].rolling(20).mean().iloc[-1]
-    hacim_ort = float(hacim_ort_deger) if not pd.isna(hacim_ort_deger) else 0.0
-    hacim_orani = float(gecmis['Volume'].iloc[-1]) / hacim_ort if hacim_ort > 0 else 1.0
-
-    obv = hesapla_obv(gecmis['Close'], gecmis['Volume'])
-    obv_trend = obv.iloc[-1] > obv.iloc[-5] if len(obv) >= 5 else False
+    sf = float(g['Close'].iloc[-1])
+    gb = float(g['Close'].iloc[-25])
+    gd = ((sf - gb) / gb) * 100 if gb > 0 else 0
+    sma = float(g['Close'].rolling(20).mean().iloc[-1])
+    rv = rsi(g['Close']).iloc[-1]
+    r = float(rv) if not pd.isna(rv) else 50
+    hm = float(g['Volume'].rolling(20).mean().iloc[-1])
+    ho = float(g['Volume'].iloc[-1]) / hm if hm > 0 else 1
 
     skor = 50
-    yorumlar = []
-    if son_fiyat > sma20:
-        skor += 10
-        yorumlar.append("SMA20 ustu")
-    if son_fiyat > sma50:
-        skor += 5
-    if gunluk_degisim > 0:
-        skor += 8
-    if rsi < 40:
-        skor += 10
-        yorumlar.append("RSI dusuk")
-    elif rsi > 70:
-        skor -= 12
-        yorumlar.append("RSI yuksek")
-    if macd_hist > 0:
-        skor += 8
-        yorumlar.append("MACD+")
-    if hacim_orani > 1.3:
-        skor += 8
-        yorumlar.append("Hacim+")
-    if obv_trend:
-        skor += 5
-    if stoch_deger < 25:
-        skor += 5
-        yorumlar.append("Stoch dip")
-    elif stoch_deger > 80:
-        skor -= 5
+    if sf > sma: skor += 15
+    if gd > 0: skor += 10
+    if r < 40: skor += 10
+    elif r > 70: skor -= 15
+    if ho > 1.3: skor += 10
     skor = max(20, min(95, skor))
 
-    if skor >= 70 and gunluk_degisim > 0 and hacim_orani > 1.2:
-        sinyal = "GUCLU AL"
-        tahmin = "YUKSELIS BEKLENIYOR"
-    elif skor >= 55 and gunluk_degisim > -1:
-        sinyal = "AL"
-        tahmin = "YUKSELIS EGILIMI"
-    elif skor < 35 and gunluk_degisim < -1:
-        sinyal = "SAT"
-        tahmin = "DUSUS BEKLENIYOR"
+    if skor >= 70 and gd > 0 and ho > 1.2:
+        sn, tp = "GUCLU AL", "YUKSELIS BEKLENIYOR"
+    elif skor >= 55 and gd > -1:
+        sn, tp = "AL", "YUKSELIS EGILIMI"
+    elif skor < 35 and gd < -1:
+        sn, tp = "SAT", "DUSUS BEKLENIYOR"
     elif skor < 45:
-        sinyal = "ZAYIF"
-        tahmin = "ZAYIF SEYIR"
+        sn, tp = "ZAYIF", "ZAYIF SEYIR"
     else:
-        sinyal = "BEKLE"
-        tahmin = "BEKLE"
+        sn, tp = "BEKLE", "BEKLE"
 
-    if atr > 0:
-        stop_loss = round(son_fiyat - atr * 2, 2)
-        hedef = round(son_fiyat + atr * 3, 2)
-        risk_odul = round((hedef - son_fiyat) / (son_fiyat - stop_loss), 2) if (son_fiyat - stop_loss) > 0 else 0
+    s25 = g.iloc[-25:]
+    gh = float(s25['High'].max())
+    gl = float(s25['Low'].min())
+    kp = (sf - gl) / (gh - gl) if gh > gl else 0.5
+    gap = 50
+    if kp > 0.75: gap += 20
+    elif kp < 0.25: gap -= 15
+    if gd > 1: gap += 10
+    if ho > 1.5: gap += 10
+    if r < 35: gap += 10
+    elif r > 65: gap -= 5
+    gap = max(0, min(100, gap))
+
+    if gap >= 70:
+        osig, bg = "GECE TASI", "YUKARI"
+    elif gap >= 55:
+        osig, bg = "ZAYIF TASI", "NOTR"
+    elif gap < 35:
+        osig, bg = "GECE TASIMA", "ASAGI"
     else:
-        stop_loss = 0
-        hedef = 0
-        risk_odul = 0
+        osig, bg = "BEKLE", "NOTR"
+
+    av = (g['High'] - g['Low']).rolling(14).mean().iloc[-1]
+    a = float(av) if not pd.isna(av) else 0
+    if a > 0:
+        sl = round(sf - a * 2, 2)
+        hd = round(sf + a * 3, 2)
+        ro = round((hd - sf) / (sf - sl), 2) if (sf - sl) > 0 else 0
+    else:
+        sl, hd, ro = 0, 0, 0
 
     return {
         "Hisse": hisse,
-        "Katilim": "EVET" if (hisse + ".IS") in katilim_kumesi else "HAYIR",
-        "Guc": round(float(skor), 1),
-        "Sinyal": sinyal,
-        "Yorum": " | ".join(yorumlar) if yorumlar else "Notr",
-        "RSI": f"{rsi:.1f}",
-        "MACD": f"{macd_hist:.3f}",
-        "Stokastik": f"{stoch_deger:.1f}",
-        "Trend": "Yukselis" if gunluk_degisim > 0 else "Dusus",
-        "Getiri": "%" + str(round(gunluk_degisim, 2)),
-        "Hacim": str(round(hacim_orani, 2)) + "x",
-        "Fiyat": str(round(son_fiyat, 2)) + " TL",
-        "StopLoss": str(stop_loss) + " TL",
-        "Hedef": str(hedef) + " TL",
-        "RiskOdul": f"{risk_odul:.2f}",
-        "Tahmin": tahmin
+        "Katilim": "EVET" if (hisse + ".IS") in katilim_set else "HAYIR",
+        "Guc": round(skor, 1),
+        "Sinyal": sn,
+        "RSI": round(r, 1),
+        "Trend": "Yuk" if gd > 0 else "Dus",
+        "Getiri": "%" + str(round(gd, 2)),
+        "Hacim": str(round(ho, 2)) + "x",
+        "Fiyat": str(round(sf, 2)) + " TL",
+        "SL": str(sl) + " TL",
+        "Hedef": str(hd) + " TL",
+        "R/O": ro,
+        "Tahmin": tp,
+        "GapSkor": round(gap, 1),
+        "Overnight": osig,
+        "GapYon": bg
     }
 
 
-def renk_tahmin(v):
-    if "YUKSELIS" in str(v):
-        return 'background-color:#1b5e20;color:white;font-weight:bold;'
-    if "DUSUS" in str(v) or "ZAYIF" in str(v):
-        return 'background-color:#b71c1c;color:white;font-weight:bold;'
-    if "BEKLE" in str(v):
-        return 'background-color:#e65100;color:white;font-weight:bold;'
-    return ''
+varsayilanlar = {'giris': False, 'sayac': 0, 'son': '-', 'man': False}
+for k, v in varsayilanlar.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-
-def renk_sinyal(v):
-    if "GUCLU AL" in str(v):
-        return 'background-color:#1b5e20;color:white;font-weight:bold;'
-    if "AL" in str(v):
-        return 'background-color:#2e7d32;color:white;'
-    if "SAT" in str(v) or "ZAYIF" in str(v):
-        return 'background-color:#b71c1c;color:white;'
-    return 'background-color:#e65100;color:white;'
-
-
-def renk_katilim(v):
-    if v == "EVET":
-        return 'color:#4CAF50;font-weight:bold;'
-    return 'color:#F44336;'
-
-
-def renk_overnight(v):
-    if "GECE TASI" in str(v):
-        return 'background-color:#1b5e20;color:white;font-weight:bold;'
-    if "ZAYIF TASI" in str(v):
-        return 'background-color:#2e7d32;color:white;'
-    if "GECE TASIMA" in str(v):
-        return 'background-color:#b71c1c;color:white;'
-    return 'background-color:#e65100;color:white;'
-
-
-def renk_gap(v):
-    if "YUKARI" in str(v):
-        return 'color:#4CAF50;font-weight:bold;'
-    if "ASAGI" in str(v):
-        return 'color:#F44336;font-weight:bold;'
-    return 'color:#FFC107;'
-
-
-def risk_ok(x):
-    try:
-        return float(x) > 1.5
-    except Exception:
-        return False
-
-
-varsayilanlar = {'giris_yapildi': False, 'sayac': 0, 'son_cekim': '-', 'manuel': False}
-for anahtar, deger in varsayilanlar.items():
-    if anahtar not in st.session_state:
-        st.session_state[anahtar] = deger
-
-if not st.session_state.giris_yapildi:
-    st.title("BIST Pro Terminali Giris")
+if not st.session_state.giris:
+    st.title("BIST Pro Giris")
     with st.form("giris_formu"):
-        s1, s2 = st.columns(2)
-        kullanici = s1.text_input("Kullanici Adi")
-        sifre = s2.text_input("Sifre", type="password")
+        c1, c2 = st.columns(2)
+        u = c1.text_input("Kullanici Adi")
+        p = c2.text_input("Sifre", type="password")
         if st.form_submit_button("Giris Yap"):
-            if kullanici.strip() == "Cuma Babacan" and sifre.strip() == "784512":
-                st.session_state.giris_yapildi = True
+            if u.strip() == "Cuma Babacan" and p.strip() == "784512":
+                st.session_state.giris = True
                 st.rerun()
             else:
                 st.error("Hatali giris!")
     st.stop()
 
-piyasa_acik = piyasa_acik_mi()
-if piyasa_acik:
+pk = piyasa_acik_mi()
+if pk:
     st_autorefresh(interval=60000, key="yenile")
 
 st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli | 20+ Gosterge | Overnight Gap Modulu Aktif")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli")
 
-if piyasa_acik:
-    st.success("PIYASA ACIK - Otomatik yenileme 60 saniyede")
+if pk:
+    st.success("PIYASA ACIK")
 else:
-    st.warning("PIYASA KAPALI - Seans disi (09:40-18:30)")
+    st.warning("PIYASA KAPALI")
 
 with st.spinner("Veriler yukleniyor..."):
-    hisse_listesi = HISSELER.split(",")
-    katilim_kumesi = set(k + ".IS" for k in KATILIM.split(","))
-    ham_veriler = toplu_veri_cek(hisse_listesi)
-
-    satirlar = []
-    overnight_satirlar = []
-
-    for hisse in hisse_listesi:
-        kod = hisse + ".IS"
-        if kod in ham_veriler:
-            sonuc = analiz_et(hisse, ham_veriler[kod], katilim_kumesi)
-            if sonuc:
-                satirlar.append(sonuc)
-            gece = hesapla_overnight(hisse, ham_veriler[kod])
-            if gece:
-                overnight_satirlar.append(gece)
-
-    if not st.session_state.manuel:
+    hl = HISSELER.split(",")
+    ks = set(k + ".IS" for k in KATILIM.split(","))
+    hv = toplu_veri_cek(hl)
+    rows = []
+    for h in hl:
+        kod = h + ".IS"
+        if kod in hv:
+            r = hesapla(h, hv[kod], ks)
+            if r:
+                rows.append(r)
+    if not st.session_state.man:
         st.session_state.sayac += 1
-        st.session_state.son_cekim = turkiye_saati().strftime("%H:%M:%S")
-    st.session_state.manuel = False
+        st.session_state.son = turkiye_saati().strftime("%H:%M:%S")
+    st.session_state.man = False
 
-bist_deger = "-"
-bist_degisim = "0"
-try:
-    bv = bist_endeks_verisi()
-    if bv is not None and not bv.empty:
-        bf = float(bv['Close'].iloc[-1])
-        bd = ((bf - float(bv['Open'].iloc[-1])) / float(bv['Open'].iloc[-1])) * 100
-        bist_deger = str(round(bf, 2))
-        bist_degisim = "%" + str(round(bd, 2))
-except Exception:
-    pass
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Taranan", "300")
+c2.metric("Bulunan", len(rows))
+c3.metric("Cekim", st.session_state.sayac)
+c4.metric("Son", st.session_state.son)
 
-s1, s2, s3, s4 = st.columns(4)
-s1.metric("BIST 100", bist_deger, bist_degisim)
-s2.metric("VIOP Denge", "Denge", "0")
-s3.metric("Taranan", str(len(hisse_listesi)), "0")
-s4.metric("Cekim", str(st.session_state.sayac), "Son: " + st.session_state.son_cekim)
-
-c1, c2 = st.columns([3, 1])
-with c1:
-    sadece_katilim = st.checkbox("Sadece Islam'a Uygun Hisseler", value=True)
-with c2:
-    manuel_buton = st.button("Manuel Cek", use_container_width=True, type="primary")
-
-if manuel_buton:
+sk = st.checkbox("Sadece Islam'a Uygun", value=True)
+mb = st.button("Manuel Cek", type="primary")
+if mb:
     st.cache_data.clear()
-    st.session_state.manuel = True
+    st.session_state.man = True
     st.session_state.sayac += 1
-    st.session_state.son_cekim = turkiye_saati().strftime("%H:%M:%S")
+    st.session_state.son = turkiye_saati().strftime("%H:%M:%S")
     st.rerun()
 
-tab1, tab2, tab3, tab4 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "KAP & VIOP & Overnight"])
+t1, t2 = st.tabs(["Trend Matrisi", "Overnight Gap"])
 
-with tab1:
-    if not satirlar:
-        st.warning("Veri cekilemedi. Manuel butona basin.")
+with t1:
+    if not rows:
+        st.warning("Veri yok")
     else:
-        tablo = pd.DataFrame(satirlar)
-        tablo['Oncelik'] = tablo['Tahmin'].apply(lambda x: 1 if 'YUKSELIS' in x else (2 if 'BEKLE' in x or 'EGILIM' in x else 3))
-        tablo = tablo.sort_values(by=['Oncelik', 'Guc'], ascending=[True, False]).drop(columns=['Oncelik'])
+        df = pd.DataFrame(rows)
+        df['O'] = df['Tahmin'].apply(lambda x: 1 if 'YUKSELIS' in x else (2 if 'BEKLE' in x or 'EGILIM' in x else 3))
+        df = df.sort_values(by=['O', 'Guc'], ascending=[True, False]).drop(columns=['O'])
+        if sk:
+            df = df[df["Katilim"] == "EVET"]
 
-        if sadece_katilim:
-            tablo = tablo[tablo["Katilim"] == "EVET"]
+        def rt(v):
+            if "YUKSELIS" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "DUSUS" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "BEKLE" in str(v): return 'background-color:#e65100;color:white;font-weight:bold;'
+            return ''
 
-        stilli = tablo.style.map(renk_tahmin, subset=["Tahmin"]).map(renk_sinyal, subset=["Sinyal"]).map(renk_katilim, subset=["Katilim"])
-        st.dataframe(stilli, use_container_width=True, height=650)
+        def rs(v):
+            if "GUCLU" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "AL" in str(v): return 'background-color:#2e7d32;color:white;'
+            if "SAT" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;'
+            return 'background-color:#e65100;color:white;'
 
-        st.markdown("---")
-        o1, o2, o3, o4, o5 = st.columns(5)
-        o1.metric("Gosterilen", len(tablo))
-        o2.metric("Yukselis", len(tablo[tablo["Tahmin"].str.contains("YUKSELIS")]))
-        o3.metric("Guclu AL", len(tablo[tablo["Sinyal"] == "GUCLU AL"]))
-        o4.metric("Ort. Guc", str(round(tablo["Guc"].mean(), 1)))
-        o5.metric("Risk/Odul>1.5", len(tablo[tablo["RiskOdul"].apply(risk_ok)]))
+        def rk(v):
+            return 'color:#4CAF50;font-weight:bold;' if v == "EVET" else 'color:#F44336;'
 
-with tab2:
-    st.subheader("Interaktif Mum Grafigi")
-    try:
-        hisse_sec = st.selectbox("Hisse Sec", hisse_listesi[:100])
-        kod = hisse_sec + ".IS"
-        if kod in ham_veriler:
-            h = ham_veriler[kod].dropna()
-            h['RSI'] = hesapla_rsi(h['Close'])
-            h['MACD'], h['MACD_S'], h['MACD_H'] = hesapla_macd(h['Close'])
-            h['BB_UST'], h['BB_ORTA'], h['BB_ALT'] = hesapla_bollinger(h['Close'])
-            h['SMA20'] = h['Close'].rolling(20).mean()
+        sty = df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"])
+        st.dataframe(sty, use_container_width=True, height=650)
 
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(x=h.index, open=h['Open'], high=h['High'], low=h['Low'], close=h['Close'], name="Fiyat", increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
-            fig.add_trace(go.Scatter(x=h.index, y=h['BB_UST'], name="BB Ust", line=dict(color='#9c27b0', width=1, dash='dot')))
-            fig.add_trace(go.Scatter(x=h.index, y=h['BB_ALT'], name="BB Alt", line=dict(color='#9c27b0', width=1, dash='dot')))
-            fig.add_trace(go.Scatter(x=h.index, y=h['SMA20'], name="SMA20", line=dict(color='#FFC107', width=1)))
-            fig.update_layout(title=hisse_sec + " - 15 Dakikalik", xaxis_rangeslider_visible=False, template='plotly_dark', height=500, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E')
-            st.plotly_chart(fig, use_container_width=True)
+        o1, o2, o3, o4 = st.columns(4)
+        o1.metric("Gosterilen", len(df))
+        o2.metric("Yukselis", len(df[df["Tahmin"].str.contains("YUKSELIS")]))
+        o3.metric("Guclu AL", len(df[df["Sinyal"] == "GUCLU AL"]))
+        o4.metric("Ort Guc", f"{df['Guc'].mean():.1f}")
 
-            cr, cm = st.columns(2)
-            with cr:
-                fr = go.Figure()
-                fr.add_trace(go.Scatter(x=h.index, y=h['RSI'], name="RSI", line=dict(color='#4CAF50')))
-                fr.add_hline(y=70, line_dash="dash", line_color="red")
-                fr.add_hline(y=30, line_dash="dash", line_color="green")
-                fr.update_layout(title="RSI (14)", template='plotly_dark', height=250, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E', showlegend=False)
-                st.plotly_chart(fr, use_container_width=True)
-            with cm:
-                fm = go.Figure()
-                fm.add_trace(go.Bar(x=h.index, y=h['MACD_H'], name="Hist", marker_color='#FFC107'))
-                fm.add_trace(go.Scatter(x=h.index, y=h['MACD'], name="MACD", line=dict(color='#4CAF50')))
-                fm.add_trace(go.Scatter(x=h.index, y=h['MACD_S'], name="Signal", line=dict(color='#F44336')))
-                fm.update_layout(title="MACD", template='plotly_dark', height=250, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E')
-                st.plotly_chart(fm, use_container_width=True)
-        else:
-            st.warning("Veri bulunamadi.")
-    except Exception as e:
-        st.error("Grafik yuklenemedi: " + str(e))
-
-with tab3:
-    st.subheader("ATR Bazli Risk Analizi")
-    if not satirlar:
-        st.warning("Veri yok.")
+with t2:
+    st.subheader("Overnight Gap Stratejisi")
+    if not rows:
+        st.warning("Veri yok")
     else:
-        tablo_r = pd.DataFrame(satirlar)
-        if sadece_katilim:
-            tablo_r = tablo_r[tablo_r["Katilim"] == "EVET"]
-        rdf = tablo_r[tablo_r["RiskOdul"].apply(risk_ok)]
-        st.markdown("**Risk/Odul orani > 1.5 olan " + str(len(rdf)) + " hisse:**")
-        if not rdf.empty:
-            goster = rdf[["Hisse", "Fiyat", "StopLoss", "Hedef", "RiskOdul", "Sinyal", "Guc", "Yorum"]]
-            st.dataframe(goster, use_container_width=True, height=500)
-        else:
-            st.info("Uygun risk/odul oraninda hisse yok.")
-        st.markdown("---")
-        st.info("StopLoss = Fiyat - (ATR x 2) | Hedef = Fiyat + (ATR x 3) | Risk/Odul > 1.5 ideal")
+        df = pd.DataFrame(rows)
+        if sk:
+            df = df[df["Katilim"] == "EVET"]
+        df = df.sort_values(by="GapSkor", ascending=False).reset_index(drop=True)
 
-with tab4:
-    st.subheader("Overnight Gap Stratejisi (Kapanis -> Acilis)")
-    st.info("Kapanisa yakin pozisyon acip, ertesi gun acilista kapatm
+        def ro(v):
+            if "GECE TASI" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "ZAYIF" in str(v): return 'background-color:#2e7d32;color:white;'
+            if "GECE TASIMA" in str(v): return 'background-color:#b71c1c;color:white;'
+            return 'background-color:#e65100;color:white;'
+
+        def rg(v):
+            if "YUKARI" in str(v): return 'color:#4CAF50;font-weight:bold;'
+            if "ASAGI" in str(v): return 'color:#F44336;font-weight:bold;'
+            return 'color:#FFC107;'
+
+        sty = df.style.map(ro, subset=["Overnight"]).map(rg, subset=["GapYon"])
+        st.dataframe(sty[["Hisse", "Fiyat", "GapSkor", "Overnight", "GapYon", "Hacim", "RSI"]], use_container_width=True, height=600)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("GECE TASI", len(df[df["Overnight"] == "GECE TASI"]))
+        c2.metric("ZAYIF TASI", len(df[df["Overnight"] == "ZAYIF TASI"]))
+        c3.metric("Ort Gap", f"{df['GapSkor'].mean():.1f}")
+
+        st.caption("Strateji: 17:50-18:30 arasi GECE TASI sinyali veren hisseler alinir, ertesi gun 09:40-10:00 arasi satilir.")
+
+st.caption("Veriler 15 dakika gecikmelidir. Yatirim tavsiyesi degildir.")
