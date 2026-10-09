@@ -114,10 +114,7 @@ def kointegrasyon(s1, s2):
 
 
 def haber_cek():
-    kaynaklar = [
-        "https://www.paratic.com/rss/",
-        "https://www.paratic.com/feed/",
-    ]
+    kaynaklar = ["https://www.paratic.com/rss/", "https://www.paratic.com/feed/"]
     for url in kaynaklar:
         try:
             r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
@@ -163,6 +160,20 @@ def telegram_gonder(mesaj):
         return False
 
 
+def telegram_toplu_gonder(kdf, baslik):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
+        return False
+    try:
+        mesaj = "<b>" + baslik + "</b>\n\n"
+        for _, r in kdf.head(5).iterrows():
+            mesaj += "- " + str(r['Hisse']) + " | Skor: " + str(r['KararSkor']) + " | " + str(r['KararSinyal']) + "\n"
+            mesaj += "  SL: " + str(r['SL']) + " | Hedef: " + str(r['Hedef']) + "\n"
+        r = requests.post("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage", json={"chat_id": TELEGRAM_CHAT, "text": mesaj, "parse_mode": "HTML"}, timeout=10)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 def pairs_tara(hv, top_list):
     sonuc = []
     for i in range(len(top_list)):
@@ -181,6 +192,21 @@ def pairs_tara(hv, top_list):
                     sin = "BEKLE"
                 sonuc.append({"Hisse1": top_list[i], "Hisse2": top_list[j], "p-value": r["pvalue"], "Z-Skor": r["z"], "Beta": r["beta"], "Aksiyon": sin})
     return sonuc
+
+
+def sinyal_degisim_tespit(kdf, gecmis_dict):
+    yeni = []
+    for _, r in kdf.iterrows():
+        h = r['Hisse']
+        yeni_sin = r['KararSinyal']
+        eski_sin = gecmis_dict.get(h, None)
+        if eski_sin is not None and eski_sin != yeni_sin:
+            yeni.append({"Hisse": h, "Eski": eski_sin, "Yeni": yeni_sin, "Skor": r['KararSkor'], "Fiyat": r['Fiyat']})
+    return yeni
+
+
+def sinyal_dict_olustur(kdf):
+    return {r['Hisse']: r['KararSinyal'] for _, r in kdf.iterrows()}
 
 
 def rsi(s, p=14):
@@ -301,7 +327,7 @@ def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, tre
         sinyal = "BEKLE"
         renk = "#e65100"
         neden = "Kararsiz"
-    return round(sk, 1), sinyal, renk, neden  
+    return round(sk, 1), sinyal, renk, neden 
 
 def hesapla(hs, v, kset):
     if v is None or v.empty or len(v) < 30:
@@ -457,9 +483,10 @@ def hesapla(hs, v, kset):
         "Gap%": f"%{tg}",
         "Yorum": yorum_on
     }
-    return ana, onc 
+    return ana, onc
 
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', [])]:
+
+for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -536,7 +563,7 @@ if mb:
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.haber = []
-    st.rerun()
+    st.rerun() 
 
 t1, t2, t3, t4, t5, t6 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs"])
 
@@ -550,6 +577,100 @@ with t1:
         if sd:
             kdf = kdf[kdf["Katilim"] == "EVET"]
         kdf = kdf.sort_values("KararSkor", ascending=False).reset_index(drop=True)
+
+        st.markdown("### A) Secili Hisse Karari")
+        col_sec1, col_sec2 = st.columns([1, 2])
+        with col_sec1:
+            secili_hisse = st.selectbox("Hisse Sec", kdf["Hisse"].tolist(), key="karar_sec")
+        with col_sec2:
+            secili = kdf[kdf["Hisse"] == secili_hisse].iloc[0]
+            sr = secili["KararRenk"]
+            st.markdown(
+                '<div style="background-color:' + sr + '; padding:20px; border-radius:10px; text-align:center;">'
+                '<h2 style="color:white; margin:0;">' + str(secili_hisse) + ' -> ' + str(secili["KararSinyal"]) + '</h2>'
+                '<p style="color:white; margin:5px 0; font-size:18px;">Skor: ' + str(secili["KararSkor"]) + '/100 | Fiyat: ' + str(secili["Fiyat"]) + '</p>'
+                '<p style="color:white; margin:5px 0;">SL: ' + str(secili["SL"]) + ' | Hedef: ' + str(secili["Hedef"]) + ' | R/O: ' + str(secili["RO"]) + '</p>'
+                '<p style="color:white; margin:5px 0; font-style:italic;">' + str(secili["KararNeden"]) + '</p>'
+                '</div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        st.subheader("B) Bugunun En Iyi 5 Firsati")
+        def ro_ok(x):
+            try:
+                return float(x) > 1.5
+            except Exception:
+                return False
+        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RO"].apply(ro_ok))].head(5)
+        if not firsatlar.empty:
+            kart_cols = st.columns(min(5, len(firsatlar)))
+            for i in range(len(firsatlar)):
+                r = firsatlar.iloc[i]
+                with kart_cols[i]:
+                    rk = r['KararRenk']
+                    st.markdown(
+                        '<div style="background-color:' + rk + '; padding:12px; border-radius:8px; color:white;">'
+                        '<h4 style="margin:0;">' + str(r["Hisse"]) + '</h4>'
+                        '<p style="margin:3px 0; font-size:20px; font-weight:bold;">' + str(r["KararSinyal"]) + '</p>'
+                        '<p style="margin:3px 0;">Skor: ' + str(r["KararSkor"]) + '</p>'
+                        '<p style="margin:3px 0;">' + str(r["Fiyat"]) + '</p>'
+                        '<p style="margin:3px 0; font-size:12px;">Hedef: ' + str(r["Hedef"]) + '</p>'
+                        '<p style="margin:3px 0; font-size:12px;">R/O: ' + str(r["RO"]) + '</p>'
+                        '</div>', unsafe_allow_html=True)
+        else:
+            st.info("Bugun icin kriterlere uyan firsat yok.")
+
+        st.markdown("---")
+
+        st.subheader("C) Telegram Bildirim")
+        tgl1, tgl2 = st.columns(2)
+        with tgl1:
+            if st.button("Bugunun En Iyi 5 Firsatini Gonder"):
+                if telegram_toplu_gonder(firsatlar, "BIST Bugunun Firsatlari"):
+                    st.success("Gonderildi!")
+                else:
+                    st.warning("Telegram token ayarlanmamis.")
+        with tgl2:
+            if st.button("Tum GUCLU AL Sinyallerini Gonder"):
+                guclu_al = kdf[kdf["KararSinyal"] == "GUCLU AL"]
+                if telegram_toplu_gonder(guclu_al, "BIST Guclu AL Sinyalleri"):
+                    st.success("Gonderildi!")
+                else:
+                    st.warning("Telegram token ayarlanmamis.")
+
+        st.markdown("---")
+
+        st.subheader("D) Yeni Sinyal Degisimleri")
+        gecmis_dict = st.session_state.get('gecmis', {})
+        degisimler = sinyal_degisim_tespit(kdf, gecmis_dict)
+        if degisimler:
+            for d in degisimler[:10]:
+                if "AL" in d['Yeni']:
+                    ok_renk = "#1b5e20"
+                elif "SAT" in d['Yeni']:
+                    ok_renk = "#b71c1c"
+                else:
+                    ok_renk = "#e65100"
+                st.markdown(
+                    '<div style="background-color:' + ok_renk + '; padding:8px; border-radius:6px; margin:4px 0; color:white;">'
+                    '<b>' + str(d["Hisse"]) + '</b>: ' + str(d["Eski"]) + ' -> <b>' + str(d["Yeni"]) + '</b> | Skor: ' + str(d["Skor"]) + ' | ' + str(d["Fiyat"]) +
+                    '</div>', unsafe_allow_html=True)
+        else:
+            st.info("Onceki taramaya gore degisim yok. Ilk tarama ise bu normal.")
+
+        st.session_state['gecmis'] = sinyal_dict_olustur(kdf)
+
+        st.markdown("---")
+        st.subheader("Karar Dagilimi")
+        k1, k2, k3, k4, k5 = st.columns(5)
+        k1.metric("GUCLU AL", len(kdf[kdf["KararSinyal"] == "GUCLU AL"]))
+        k2.metric("AL", len(kdf[kdf["KararSinyal"] == "AL"]))
+        k3.metric("BEKLE", len(kdf[kdf["KararSinyal"] == "BEKLE"]))
+        k4.metric("SAT", len(kdf[kdf["KararSinyal"] == "SAT"]))
+        k5.metric("GUCLU SAT", len(kdf[kdf["KararSinyal"] == "GUCLU SAT"]))
+
+        st.markdown("---")
+        st.subheader("E) Tum Karar Skorlari")
         def rk_sinyal(v):
             if "GUCLU AL" in str(v):
                 return 'background-color:#1b5e20;color:white;font-weight:bold;'
@@ -560,24 +681,17 @@ with t1:
             if "SAT" in str(v):
                 return 'background-color:#c62828;color:white;'
             return 'background-color:#e65100;color:white;'
-        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "Guc", "RSI", "MACD", "Hacim", "VolRejim", "OFI", "GARCH", "Tahmin15"]]
-        st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]), use_container_width=True, height=500)
-        st.markdown("---")
-        st.subheader("Karar Dagilimi")
-        k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("GUCLU AL", len(kdf[kdf["KararSinyal"] == "GUCLU AL"]))
-        k2.metric("AL", len(kdf[kdf["KararSinyal"] == "AL"]))
-        k3.metric("BEKLE", len(kdf[kdf["KararSinyal"] == "BEKLE"]))
-        k4.metric("SAT", len(kdf[kdf["KararSinyal"] == "SAT"]))
-        k5.metric("GUCLU SAT", len(kdf[kdf["KararSinyal"] == "GUCLU SAT"]))
+        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "SL", "Hedef", "RO", "Guc", "RSI", "MACD", "Hacim", "OFI", "Tahmin15"]]
+        st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]), use_container_width=True, height=450)
+
         st.markdown("---")
         st.subheader("En Yuksek Karar Skoru 10")
-        top10 = kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "KararNeden"]]
-        st.dataframe(top10, use_container_width=True)
+        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "KararNeden"]], use_container_width=True)
+
         st.markdown("---")
         st.subheader("En Dusuk Karar Skoru 10 (Riskli)")
-        bot10 = kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "RSI", "MACD", "OFI"]]
-        st.dataframe(bot10, use_container_width=True)
+        st.dataframe(kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "RSI", "MACD", "OFI"]], use_container_width=True)
+
         st.markdown("---")
         colA, colB = st.columns(2)
         with colA:
@@ -588,6 +702,7 @@ with t1:
             st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal"]].head(5), use_container_width=True)
 
 with t2:
+    st.subheader("Trend Matrisi")
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -637,17 +752,11 @@ with t2:
         m3.metric("YATAY", len(df[df["Tahmin15"] == "YATAY"]))
         gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
         m4.metric("Ort Guven", "%" + str(round(gvv, 1) if not pd.isna(gvv) else 0))
-        st.markdown("---")
-        st.subheader("Pro Analiz - Volatilite, OFI, GARCH")
-        pdf = df.copy()
-        pdf['GV'] = pd.to_numeric(pdf['Guven15'].str.replace('%', ''), errors='coerce')
-        pdf = pdf.sort_values('GV', ascending=False)
-        st.dataframe(pdf[["Hisse", "Fiyat", "VolRejim", "OFI", "GARCH", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
 
 with t3:
     st.subheader("Mum Grafigi")
     try:
-        hs = st.selectbox("Hisse", hl[:80])
+        hs = st.selectbox("Hisse", hl[:80], key="mum_sec")
         kod = hs + ".IS"
         if kod in hv:
             h = hv[kod].dropna()
