@@ -220,9 +220,10 @@ def get_live_kap_news():
   ]
 
 
-with st.expander(
+expander_container = st.expander(
     "🚨 Canlı Haberler, Sıkışma Alarmları & Seans Bilgi Paneli", expanded=True
-):
+)
+with expander_container:
   for haber in get_live_kap_news():
     st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
 
@@ -642,7 +643,4 @@ with tab2:
         hide_index=True,
     )
   else:
-    st.warning("Veriler yükleniyor...")
-
-with tab3:
- 
+    st.warnin
