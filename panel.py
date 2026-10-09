@@ -640,5 +640,5 @@ with tab2:
     df_gunluk = df_gunluk.sort_values(
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
-    df_gunluk = df_gunluk.drop(
-        column
+        df_gunluk = df_gunluk.drop(columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore")
+      
