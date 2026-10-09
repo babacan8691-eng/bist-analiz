@@ -451,7 +451,6 @@ def fetch_final_universe_data(b100_benchmark):
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
 
-        # YENİ: Net Güç Skoru (Kombine Başarı Ölçütü)
         net_guc_skoru = (
             (ai_prob * 0.30)
             + (min(vol_ratio, 3.0) * 25.0)
@@ -679,4 +678,7 @@ with tab2:
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
     df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_Skor
+        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
+    )
+    st.dataframe(
+   
