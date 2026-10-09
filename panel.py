@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, time
 
 st.set_page_config(page_title="BIST Pro Terminali", layout="wide", initial_sidebar_state="collapsed")
 
@@ -13,9 +13,25 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 20px; }
     .stMetric { background-color: #1E1E1E; padding: 10px; border-radius: 5px; }
     .counter-box { background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; }
+    .market-closed { background-color: #4a148c; padding: 15px; border-radius: 8px; border-left: 4px solid #9c27b0; color: white; }
+    .market-open { background-color: #1b5e20; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; color: white; }
 </style>
 """, unsafe_allow_html=True)
 
+# --- PIYASA SAATİ KONTROLÜ ---
+def is_market_hours():
+    """Pazartesi-Cuma 09:40-18:30 arası kontrol eder"""
+    simdi = datetime.now()
+    # Hafta sonu kontrolü (5=Cumartesi, 6=Pazar)
+    if simdi.weekday() >= 5:
+        return False
+    # Saat kontrolü
+    su_an = simdi.time()
+    baslangic = time(9, 40)
+    bitis = time(18, 30)
+    return baslangic <= su_an <= bitis
+
+# --- OTURUM DEĞİŞKENLERİ ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'fetch_count' not in st.session_state:
@@ -141,17 +157,26 @@ def process_data(raw_data, tickers):
             if onceki_fiyat == 0:
                 continue
             degisim = ((son_fiyat - onceki_fiyat) / onceki_fiyat) * 100
+
+            # Günlük değişim (5 günlük verinin ilk kapanışına göre)
+            gun_basi_fiyat = hist['Close'].iloc[-min(25, len(hist))]
+            gunluk_degisim = ((son_fiyat - gun_basi_fiyat) / gun_basi_fiyat) * 100 if gun_basi_fiyat > 0 else 0
+
             ortalama_hacim = hist['Volume'].rolling(20).mean().iloc[-1]
             son_hacim = hist['Volume'].iloc[-1]
-            vol_ratio = son_hacim / ortalama_hacim if ortalama_hacim > 0 else 1
+            vol_ratio = son_hacim / ortalama_hacim if ortalama_hacim > 0 and not pd.isna(ortalama_hacim) else 1
+
             son_20_yuksek = hist['High'].rolling(20).max().iloc[-1]
             son_20_dusuk = hist['Low'].rolling(20).min().iloc[-1]
             if pd.isna(son_20_yuksek) or pd.isna(son_20_dusuk):
                 son_20_yuksek = hist['High'].max()
                 son_20_dusuk = hist['Low'].min()
             comp_ratio = (son_20_yuksek - son_20_dusuk) / son_fiyat if son_fiyat > 0 else 1
+
             vwap = (hist['Volume'] * hist['Close']).cumsum() / hist['Volume'].cumsum()
             vwap_sapma = ((son_fiyat - vwap.iloc[-1]) / vwap.iloc[-1]) * 100 if vwap.iloc[-1] > 0 else 0
+
+            # Hurst
             returns = hist['Close'].pct_change().dropna()
             if len(returns) > 10:
                 n = len(returns)
@@ -166,54 +191,106 @@ def process_data(raw_data, tickers):
                     hurst = 0.5
             else:
                 hurst = 0.5
-            para_girisi = (hist['Close'].iloc[-1] - hist['Open'].iloc[-1]) * hist['Volume'].iloc[-1]
-            endeks_rs = degisim
-            ai_olasilik = min(95, max(30, (vol_ratio * 15) + (comp_ratio * 20) + (10 if vwap_sapma > 0 else -10) + (hurst * 30)))
-            if comp_ratio > 1.3 and vol_ratio > 2.0 and vwap_sapma > 0:
-                tahmin = "🚀 YÜKSELİŞ BEKLENİYOR (%78)"
+
+            # Net Para Girişi - DÜZELTİLDİ (High-Low farkı * Volume * yön)
+            yon = 1 if son_fiyat >= hist['Open'].iloc[-1] else -1
+            para_girisi = abs(hist['High'].iloc[-1] - hist['Low'].iloc[-1]) * hist['Volume'].iloc[-1] * yon
+
+            # Endeks RS (basit)
+            endeks_rs = gunluk_degisim
+
+            # AI Olasılık - DÜZELTİLDİ (Daha dengeli)
+            ai_skor = 50  # Başlangıç
+            ai_skor += (vol_ratio - 1) * 20  # Hacim artışı
+            ai_skor += (vwap_sapma) * 2  # VWAP üstünde olma
+            ai_skor += (hurst - 0.5) * 40  # Trend kalıcılığı
+            ai_skor += (gunluk_degisim) * 1.5  # Günlük momentum
+            if comp_ratio < 1.1:  # Sıkışma varsa pozitif
+                ai_skor += 10
+            ai_olasilik = max(20, min(95, ai_skor))
+
+            # SİNYAL VE TAHMİN MANTIĞI - DENGELİ EŞİKLER
+            if ai_olasilik >= 70 and gunluk_degisim > 0 and vol_ratio > 1.3:
+                tahmin = "🚀 YÜKSELİŞ BEKLENİYOR"
                 sinyal = "GÜÇLÜ TREND"
-            elif comp_ratio < 0.9 and vol_ratio < 1.0:
-                tahmin = "📉 DÜŞÜŞ BEKLENİYOR (%65)"
+            elif ai_olasilik >= 55 and gunluk_degisim > -1:
+                tahmin = "📈 YÜKSELİŞ EĞİLİMİ"
+                sinyal = "AL"
+            elif ai_olasilik < 35 and gunluk_degisim < -1:
+                tahmin = "📉 DÜŞÜŞ BEKLENİYOR"
+                sinyal = "SAT"
+            elif ai_olasilik < 45:
+                tahmin = "⚠️ ZAYIF SEYİR"
                 sinyal = "ZAYIF"
             else:
-                tahmin = "⏳ BEKLE (%50)"
+                tahmin = "⏳ BEKLE"
                 sinyal = "BEKLE"
+
             katilim_uygun = "EVET" if ticker in katilim_listesi else "HAYIR"
+
             all_data.append({
                 "Hisse": ticker.replace(".IS", ""),
                 "Katılım Uygun": katilim_uygun,
                 "Net Güç Skoru": round(ai_olasilik, 2),
                 "Sinyal": sinyal,
-                "Trend Kararı": "Yükseliş Kanalı" if degisim > 0 else "Düşüş Kanalı",
+                "Trend Kararı": "Yükseliş Kanalı" if gunluk_degisim > 0 else "Düşüş Kanalı",
                 "Olası Haber/Beklenti": "Hacim Genişlemesi" if vol_ratio > 1.5 else "Normal",
-                "Trend Projeksiyon": "Güçlü Trend Devamı" if ai_olasilik > 75 else "Bant İçi Toparlanma",
-                "Beklenen Getiri": f"%{round(degisim, 2)}",
-                "Erken Konum": "HACIM & SIKIŞMA" if comp_ratio > 1.2 else "NORMAL",
+                "Trend Projeksiyon": "Güçlü Trend Devamı" if ai_olasilik > 70 else "Bant İçi Toparlanma",
+                "Beklenen Getiri": f"%{round(gunluk_degisim, 2)}",
+                "Erken Konum": "HACIM & SIKIŞMA" if comp_ratio < 1.1 and vol_ratio > 1.5 else "NORMAL",
                 "Swing Al-Sat": "SWING / İNTEL UYGUN" if ai_olasilik > 60 else "HARİÇ",
                 "Al Olasılığı (AI)": f"%{round(ai_olasilik, 1)}",
                 "Hacim (Vol)": f"{round(vol_ratio, 2)}x",
                 "Sıkışma (Comp)": f"{round(comp_ratio, 2)}x",
                 "Fiyat": f"{round(son_fiyat, 2)} TL",
-                "Dönem Değişimi": f"%{round(degisim, 2)}",
+                "Dönem Değişimi": f"%{round(gunluk_degisim, 2)}",
                 "Endeks RS": f"%{round(endeks_rs, 2)}",
                 "Hurst": round(hurst, 2),
                 "VWAP Sapma": f"%{round(vwap_sapma, 2)}",
                 "Net Para Girişi": round(para_girisi, 2),
-                "Güçlü Yükseliş": "EVET" if ai_olasilik > 80 else "HAYIR",
+                "Güçlü Yükseliş": "EVET" if ai_olasilik > 75 else "HAYIR",
                 "15 Dk Sonra Tahmin": tahmin
             })
         except Exception:
             continue
     if all_data:
         df = pd.DataFrame(all_data)
-        df['Tahmin_Agirlik'] = df['15 Dk Sonra Tahmin'].apply(lambda x: 1 if 'YÜKSELİŞ' in x else (2 if 'BEKLE' in x else 3))
+        df['Tahmin_Agirlik'] = df['15 Dk Sonra Tahmin'].apply(
+            lambda x: 1 if 'YÜKSELİŞ' in x else (2 if 'BEKLE' in x or 'EĞİLİM' in x else 3)
+        )
         df = df.sort_values(by=['Tahmin_Agirlik', 'Net Güç Skoru'], ascending=[True, False])
         df = df.drop(columns=['Tahmin_Agirlik'])
         return df
     return pd.DataFrame()
 
+# --- ANA PANEL ---
 st.title("🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali")
 st.caption(f"Son Güncelleme (TRT): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 15Dk Gecikmeli Mod")
+
+# Piyasa durumu bilgisi
+piyasa_acik = is_market_hours()
+if piyasa_acik:
+    st.markdown("""
+    <div class="market-open">
+        <b>🟢 PİYASA AÇIK</b> - Otomatik veri akışı her 60 saniyede bir çalışıyor (09:40 - 18:30)
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    simdi = datetime.now()
+    if simdi.weekday() >= 5:
+        st.markdown("""
+        <div class="market-closed">
+            <b>🔴 PİYASA KAPALI</b> - Hafta sonu. Otomatik veri çekme durduruldu.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="market-closed">
+            <b>🔴 PİYASA KAPALI</b> - Seans saatleri dışında (09:40 - 18:30). Otomatik veri çekme durduruldu.
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("---")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -248,12 +325,14 @@ with tab1:
         st.checkbox("⚡ Yüksek Güvenli", value=False)
     with col_f4:
         manuel_buton = st.button("🔄 Manuel Veri Çek", use_container_width=True, type="primary")
+
     if manuel_buton:
         st.cache_data.clear()
         st.session_state.manual_trigger = True
         st.session_state.fetch_count += 1
         st.session_state.last_fetch_time = datetime.now().strftime("%H:%M:%S")
         st.rerun()
+
     with st.spinner("Gerçek BIST verileri yükleniyor... (300 hisse)"):
         tickers = get_bist_300_tickers()
         raw_data = fetch_all_data(tuple(tickers))
@@ -265,30 +344,39 @@ with tab1:
             st.session_state.manual_trigger = False
         else:
             df = pd.DataFrame()
+
     if sadece_katilim and not df.empty:
         df = df[df["Katılım Uygun"] == "EVET"]
+
     if not df.empty:
         def color_prediction(val):
             if "YÜKSELİŞ" in str(val):
                 return 'background-color: #1b5e20; color: white; font-weight: bold;'
             elif "DÜŞÜŞ" in str(val):
                 return 'background-color: #b71c1c; color: white; font-weight: bold;'
+            elif "ZAYIF" in str(val):
+                return 'background-color: #b71c1c; color: white; font-weight: bold;'
             elif "BEKLE" in str(val):
                 return 'background-color: #e65100; color: white; font-weight: bold;'
+            elif "EĞİLİM" in str(val):
+                return 'background-color: #2e7d32; color: white; font-weight: bold;'
             return ''
+
         def color_katilim(val):
             if val == "EVET":
                 return 'color: #4CAF50; font-weight: bold;'
             return 'color: #F44336;'
+
         styled_df = df.style.map(color_prediction, subset=["15 Dk Sonra Tahmin"]).map(color_katilim, subset=["Katılım Uygun"])
         st.dataframe(styled_df, use_container_width=True, height=750)
+
         st.markdown("---")
         st.subheader("📊 Özet İstatistikler")
         col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
         with col_s1:
             st.metric("📊 Gösterilen", len(df))
         with col_s2:
-            yukselis = len(df[df["15 Dk Sonra Tahmin"].str.contains("YÜKSELİŞ")])
+            yukselis = len(df[df["15 Dk Sonra Tahmin"].str.contains("YÜKSELİŞ|EĞİLİM")])
             st.metric("🚀 Yükseliş", yukselis)
         with col_s3:
             katilim = len(df[df["Katılım Uygun"] == "EVET"])
@@ -297,8 +385,8 @@ with tab1:
             ortalama_guc = df["Net Güç Skoru"].mean()
             st.metric("💪 Ort. Güç", f"{ortalama_guc:.1f}")
         with col_s5:
-            guclu_trend = len(df[df["Sinyal"] == "GÜÇLÜ TREND"])
-            st.metric("🔥 Güçlü Trend", guclu_trend)
+            guclu_trend = len(df[df["Sinyal"].isin(["GÜÇLÜ TREND", "AL"])])
+            st.metric("🔥 Al Sinyali", guclu_trend)
     else:
         st.warning("Veri çekilemedi.")
 
@@ -325,40 +413,4 @@ with tab4:
 
 with tab5:
     st.subheader("Seans Kapanışı & Overnight Fırsatları")
-    st.success("Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.")
-    st.write("- ASELS: Hacim patlaması ve sıkışma sonrası kırılım bekleniyor.")
-    st.write("- TUPRS: Endeks RS pozitif, VWAP üzerinde tutunma var.")
-
-st.markdown("---")
-col_b1, col_b2 = st.columns(2)
-with col_b1:
-    st.markdown(f"""
-    <div class="counter-box">
-        <h4>📈 Veri Çekme İstatistikleri</h4>
-        <p><b>Toplam Çekim Sayısı:</b> {st.session_state.fetch_count}</p>
-        <p><b>Son Çekim:</b> {st.session_state.last_fetch_time}</p>
-        <p><b>Taranan Hisse:</b> 300</p>
-    </div>
-    """, unsafe_allow_html=True)
-with col_b2:
-    st.markdown(f"""
-    <div class="counter-box">
-        <h4>⏱️ Sistem Durumu</h4>
-        <p><b>Otomatik Yenileme:</b> Her 60 saniyede bir</p>
-        <p><b>Veri Gecikmesi:</b> 15 dakika</p>
-        <p><b>Şu Anki Saat:</b> {datetime.now().strftime('%H:%M:%S')}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.caption("⚠️ Bu paneldeki veriler 15 dakika gecikmelidir. Gerçek yatırım tavsiyesi değildir.")
-
-if not st.session_state.manual_trigger:
-    st.markdown("""
-        <script>
-            setTimeout(function(){
-               window.location.reload(1);
-            }, 60000);
-        </script>
-    """, unsafe_allow_html=True)
-
-# ============ KODUN SONU ============
+    st.success("Overnight Taşınabilecek Katılım Hissele
