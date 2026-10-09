@@ -4,13 +4,14 @@ import numpy as np
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati, bist_endeks_verisi
+from data.pro import garch_vol, kap_haberleri, telegram_gonder, pairs_tara
 
 st.set_page_config(page_title="BIST Pro", layout="wide")
 
 H = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
 K = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
 
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False)]:
+for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('kap', [])]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -135,16 +136,13 @@ def hesapla(hs, v, kset):
         sl, hd, ro = 0, 0, 0
     hz = hs + ".IS"
     y15, g15, b15 = tahmin_15(g)
-    pct20 = g['Close'].pct_change().iloc[-20:].fillna(0).abs()
-    dn20 = (g['Volume'].iloc[-20:] * g['Close'].iloc[-20:]).replace(0, np.nan).fillna(1)
-    amh = float((pct20 / dn20).sum() / 20)
-    lik = max(0, min(100, 100 - amh * 1e8))
     v5 = float((g['High'] - g['Low']).iloc[-5:].mean())
     v20 = float((g['High'] - g['Low']).iloc[-20:].mean())
     vrej = "YUKSEK" if v5 > v20 * 1.3 else ("DUSUK" if v5 < v20 * 0.7 else "NORMAL")
     obv_s = (np.sign(g['Close'].diff()) * g['Volume']).fillna(0).cumsum()
     ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
-    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "Likidite": round(lik, 1), "VolRejim": vrej, "OFI": round(ofi, 2)}
+    gv_ = garch_vol(g['Close'])
+    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "VolRejim": vrej, "OFI": round(ofi, 2), "GARCH": gv_}
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
@@ -208,6 +206,8 @@ with st.spinner("Veri yukleniyor..."):
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.m = False
+    if not st.session_state.kap:
+        st.session_state.kap = kap_haberleri()
 
 bd, bdeg = "-", "0"
 try:
@@ -235,9 +235,10 @@ if mb:
     st.session_state.m = True
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
+    st.session_state.kap = []
     st.rerun()
 
-t1, t2, t3, t4 = st.tabs(["Trend", "Mum", "Risk", "Overnight"])
+t1, t2, t3, t4, t5 = st.tabs(["Trend", "Mum", "Risk", "Overnight", "KAP & Pairs"])
 
 with t1:
     if not sat:
@@ -277,20 +278,12 @@ with t1:
         gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
         m4.metric("Ort Guven", f"%{round(gvv, 1) if not pd.isna(gvv) else 0}")
         st.markdown("---")
-        st.subheader("Pro Analiz - Likidite, Volatilite, OFI")
+        st.subheader("Pro Analiz - Volatilite, OFI, GARCH")
         pdf = df.copy()
         pdf['GV'] = pd.to_numeric(pdf['Guven15'].str.replace('%', ''), errors='coerce')
         pdf = pdf.sort_values('GV', ascending=False)
-        st.dataframe(pdf[["Hisse", "Fiyat", "Likidite", "VolRejim", "OFI", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
-        st.markdown("---")
-        colA, colB = st.columns(2)
-        with colA:
-            st.subheader("Likidite En Yuksek 5")
-            st.dataframe(pdf.sort_values("Likidite", ascending=False)[["Hisse", "Likidite", "VolRejim", "OFI"]].head(5), use_container_width=True)
-        with colB:
-            st.subheader("OFI En Yuksek 5")
-            st.dataframe(pdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "Likidite", "Guven15"]].head(5), use_container_width=True)
-        st.caption("Likidite: Amihud (yuksek=iyi) | VolRejim: ATR oranina gore (DUSUK/NORMAL/YUKSEK) | OFI: OBV proxy emir akis (pozitif=alim baskisi)")
+        st.dataframe(pdf[["Hisse", "Fiyat", "VolRejim", "OFI", "GARCH", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
+        st.caption("GARCH: Kosullu volatilite (dusuk=stabIl) | VolRejim: ATR orani | OFI: OBV proxy emir akis")
 
 with t2:
     st.subheader("Mum Grafigi")
@@ -356,14 +349,42 @@ with t4:
         st.markdown("---")
         st.subheader("En Guclu 10")
         st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%"]], use_container_width=True)
+        st.markdown("---")
+        st.subheader("Telegram Alarm")
+        if st.button("GECE TASI Sinyallerini Telegram'a Gonder"):
+            mesaj = "<b>BIST Gece Tasi Sinyalleri</b>\n\n"
+            for i in range(min(5, len(odf))):
+                r = odf.iloc[i]
+                mesaj += f"• {r['Hisse']} - Gap Skor: {r['GapSkor']} - {r['Gap%']}\n"
+            if telegram_gonder(mesaj):
+                st.success("Telegram'a gonderildi!")
+            else:
+                st.warning("Telegram token ayarlanmamis. data/pro.py icinde TELEGRAM_TOKEN ve TELEGRAM_CHAT doldurun.")
     else:
         st.warning("Veri yok.")
+
+with t5:
+    st.subheader("Canli KAP Haberleri")
+    if st.session_state.kap:
+        for h in st.session_state.kap[:15]:
+            st.write(f"**[{h['saat']}] {h['hisse']}** - {h['baslik']} ({h['tip']})")
+    else:
+        st.info("KAP verisi yukleniyor veya API erisilemiyor.")
     st.markdown("---")
-    st.subheader("VIOP Denge")
-    v1, v2, v3 = st.columns(3)
-    v1.metric("VIOP 30", "11.450", "%0.45")
-    v2.metric("Spot", "11.420", "%0.40")
-    v3.metric("Fark", "+30", "Pozitif")
+    st.subheader("Kointegrasyon - Pairs Trading")
+    st.caption("Kointegre olan hisse ciftleri ve Z-skoru. |Z| > 2 = islem sinyali.")
+    if sat:
+        top10 = [r["Hisse"] for r in sat[:10]]
+        if st.button("Top 10 Hisse Icin Pairs Analizi Yap"):
+            with st.spinner("Kointegrasyon test ediliyor..."):
+                pairs = pairs_tara(hv, top10)
+            if pairs:
+                pdf2 = pd.DataFrame(pairs)
+                st.dataframe(pdf2, use_container_width=True)
+                st.info("Z > 2: 1. hisse asiri pahali (SAT), 2. hisse asiri ucuz (AL) | Z < -2: tersi")
+            else:
+                st.warning("Kointegre cift bulunamadi.")
+        st.caption("Top 10 hisse: " + ", ".join(top10))
 
 st.markdown("---")
 st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
