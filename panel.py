@@ -1,335 +1,161 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import plotly.graph_objects as go
-import requests
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta, time
-from streamlit_autorefresh import st_autorefresh
-
-try:
-    from arch import arch_model
-    HAS_ARCH = True
-except ImportError:
-    HAS_ARCH = False
-
-try:
-    from statsmodels.tsa.stattools import coint
-    HAS_SM = True
-except ImportError:
-    HAS_SM = False
-
-TELEGRAM_TOKEN = ""
-TELEGRAM_CHAT = ""
-
-st.set_page_config(page_title="BIST Pro", layout="wide")
-
-H = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
-
-K = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
 
 
-def turkiye_saati():
-    return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=3)))
+# ==================== DERIN TEKNOLOJI MODULLERI ====================
+
+POZ_KELIMELER = ["yukselis", "artis", "rekor", "kar", "buyume", "guclu", "pozitif", "kazanc", "ihale", "anlasma", "yatirim", "genisleme", "hedef", "basari", "onay", "kabul", "sozlesme", "ortaklik", "siparis", "temettu", "prim"]
+NEG_KELIMELER = ["dusus", "azalis", "zarar", "kriz", "iflas", "kayip", "zayif", "negatif", "risk", "borc", "ceza", "sorusturma", "dava", "konkordato", "temerrut", "iptal", "durdurma", "uyari", "not indirimi", "satis baskisi"]
 
 
-def piyasa_acik_mi():
-    s = turkiye_saati()
-    if s.weekday() >= 5:
-        return False
-    return time(9, 40) <= s.time() <= time(18, 30)
+def lstm_tahmin(g):
+    """LSTM benzeri agirlikli bellek ile 5 adim sonra tahmin."""
+    if len(g) < 30:
+        return 0.0, 50.0
+    s = g['Close'].tail(30).values
+    agirlik = np.array([np.exp(-0.15 * i) for i in range(30)])
+    agirlik = agirlik / agirlik.sum()
+    hafiza = float(np.sum(s * agirlik))
+    son = float(s[-1])
+    egim = (son - hafiza) / hafiza * 100 if hafiza > 0 else 0
+    hf = g['High'].tail(30).values
+    lf = g['Low'].tail(30).values
+    vol = float(np.std((hf - lf) / s) * 100)
+    tahmin_yuzde = egim * 0.6 + (1 if egim > 0 else -1) * vol * 0.2
+    guven = min(95, max(30, 100 - vol * 2))
+    return round(tahmin_yuzde, 2), round(guven, 1)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def toplu_veri_cek(hisse_listesi):
-    tum = {}
-    for i in range(0, len(hisse_listesi), 40):
-        grup = hisse_listesi[i:i + 40]
-        grup_uz = [x + ".IS" for x in grup]
-        try:
-            hv = yf.download(grup_uz, period="5d", interval="15m", group_by='ticker', threads=True, progress=False, auto_adjust=True, timeout=30)
-            if hv is None or hv.empty:
-                continue
-            if len(grup_uz) == 1:
-                tum[grup_uz[0]] = hv
-            else:
-                ust = hv.columns.get_level_values(0).unique().tolist()
-                for k in grup_uz:
-                    if k in ust:
-                        alt = hv[k].dropna()
-                        if not alt.empty and len(alt) >= 30:
-                            tum[k] = alt
-        except Exception:
+def nlp_duygu(basliklar, hisse):
+    """Türkçe finansal haber duygu analizi."""
+    if not basliklar:
+        return 0.0, 0
+    skor = 0
+    bulunan = 0
+    for h in basliklar:
+        b = h.lower()
+        if hisse.lower() not in b and hisse not in b:
             continue
-    return tum
+        bulunan += 1
+        for k in POZ_KELIMELER:
+            if k in b:
+                skor += 1
+        for k in NEG_KELIMELER:
+            if k in b:
+                skor -= 1
+    if bulunan == 0:
+        return 0.0, 0
+    return round(skor / bulunan, 2), bulunan
 
 
-@st.cache_data(ttl=300, show_spinner=False)
-def bist_endeks_verisi():
-    try:
-        return yf.Ticker("XU100.IS").history(period="1d")
-    except Exception:
-        return None
-
-
-def garch_vol(seri):
-    if not HAS_ARCH or len(seri) < 50:
-        return 0.0
-    try:
-        ret = seri.pct_change().dropna() * 100
-        if len(ret) < 50:
-            return 0.0
-        m = arch_model(ret, vol='Garch', p=1, q=1)
-        r = m.fit(disp='off', show_warning=False)
-        return round(float(r.conditional_volatility.iloc[-1]), 3)
-    except Exception:
-        return 0.0
-
-
-def kointegrasyon(s1, s2):
-    if not HAS_SM:
-        return None
-    try:
-        s1 = s1.dropna()
-        s2 = s2.dropna()
-        n = min(len(s1), len(s2))
-        if n < 30:
-            return None
-        a = s1.iloc[-n:].values
-        b = s2.iloc[-n:].values
-        _, pval, _ = coint(a, b)
-        if pval > 0.05:
-            return None
-        X = np.column_stack([np.ones(n), b])
-        beta = np.linalg.lstsq(X, a, rcond=None)[0]
-        hata = a - (beta[0] + beta[1] * b)
-        sd = hata.std()
-        if sd == 0:
-            return None
-        z = (hata[-1] - hata.mean()) / sd
-        return {"pvalue": round(float(pval), 4), "z": round(float(z), 2), "beta": round(float(beta[1]), 3)}
-    except Exception:
-        return None
-
-
-def haber_cek():
-    kaynaklar = ["https://www.paratic.com/rss/", "https://www.paratic.com/feed/"]
-    for url in kaynaklar:
-        try:
-            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code != 200:
-                continue
-            icerik = r.text
-            try:
-                root = ET.fromstring(icerik)
-            except ET.ParseError:
-                continue
-            items = root.findall(".//item")
-            if not items:
-                items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
-            sonuc = []
-            for item in items[:20]:
-                baslik_el = item.find("title")
-                if baslik_el is None:
-                    baslik_el = item.find("{http://www.w3.org/2005/Atom}title")
-                link_el = item.find("link")
-                if link_el is None:
-                    link_el = item.find("{http://www.w3.org/2005/Atom}link")
-                tarih_el = item.find("pubDate")
-                if tarih_el is None:
-                    tarih_el = item.find("{http://www.w3.org/2005/Atom}updated")
-                baslik = baslik_el.text if baslik_el is not None and baslik_el.text else "-"
-                link = link_el.text if link_el is not None and link_el.text else "#"
-                tarih = tarih_el.text if tarih_el is not None and tarih_el.text else "-"
-                sonuc.append({"baslik": baslik[:90], "link": link, "tarih": str(tarih)[:16]})
-            if sonuc:
-                return sonuc
-        except Exception:
-            continue
-    return []
-
-
-def telegram_gonder(mesaj):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        return False
-    try:
-        r = requests.post("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage", json={"chat_id": TELEGRAM_CHAT, "text": mesaj, "parse_mode": "HTML"}, timeout=10)
-        return r.status_code == 200
-    except Exception:
-        return False
-
-
-def telegram_toplu_gonder(kdf, baslik):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
-        return False
-    try:
-        mesaj = "<b>" + baslik + "</b>\n\n"
-        for _, r in kdf.head(5).iterrows():
-            mesaj += "- " + str(r['Hisse']) + " | Skor: " + str(r['KararSkor']) + " | " + str(r['KararSinyal']) + "\n"
-            mesaj += "  SL: " + str(r['SL']) + " | Hedef: " + str(r['Hedef']) + "\n"
-        r = requests.post("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage", json={"chat_id": TELEGRAM_CHAT, "text": mesaj, "parse_mode": "HTML"}, timeout=10)
-        return r.status_code == 200
-    except Exception:
-        return False
-
-
-def pairs_tara(hv, top_list):
-    sonuc = []
-    for i in range(len(top_list)):
-        for j in range(i + 1, len(top_list)):
-            h1 = top_list[i] + ".IS"
-            h2 = top_list[j] + ".IS"
-            if h1 not in hv or h2 not in hv:
-                continue
-            r = kointegrasyon(hv[h1]['Close'], hv[h2]['Close'])
-            if r is not None:
-                if r["z"] > 2:
-                    sin = "1.SAT 2.AL"
-                elif r["z"] < -2:
-                    sin = "1.AL 2.SAT"
-                else:
-                    sin = "BEKLE"
-                sonuc.append({"Hisse1": top_list[i], "Hisse2": top_list[j], "p-value": r["pvalue"], "Z-Skor": r["z"], "Beta": r["beta"], "Aksiyon": sin})
-    return sonuc
-
-
-def sinyal_degisim_tespit(kdf, gecmis_dict):
-    yeni = []
-    for _, r in kdf.iterrows():
-        h = r['Hisse']
-        yeni_sin = r['KararSinyal']
-        eski_sin = gecmis_dict.get(h, None)
-        if eski_sin is not None and eski_sin != yeni_sin:
-            yeni.append({"Hisse": h, "Eski": eski_sin, "Yeni": yeni_sin, "Skor": r['KararSkor'], "Fiyat": r['Fiyat']})
-    return yeni
-
-
-def sinyal_dict_olustur(kdf):
-    return {r['Hisse']: r['KararSinyal'] for _, r in kdf.iterrows()}
-
-
-def rsi(s, p=14):
-    d = s.diff()
-    k = d.where(d > 0, 0).rolling(p).mean()
-    y = -d.where(d < 0, 0).rolling(p).mean()
-    return 100 - (100 / (1 + k / y))
-
-
-def atr_f(h, l, c, p=14):
-    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
-    return tr.rolling(p).mean()
-
-
-def tahmin_15(g):
+def rl_portfoy_agi(g):
+    """Pekiştirmeli ogrenme proxy - Q-degeri."""
     if len(g) < 20:
-        return "YATAY", 50.0, 0.0
-    s5 = g.iloc[-5:]
-    s10 = g.iloc[-10:]
-    f0 = float(s5['Close'].iloc[0])
-    f1 = float(s5['Close'].iloc[-1])
-    mom = ((f1 - f0) / f0) * 100 if f0 > 0 else 0
-    yh, dh = 0.0, 0.0
-    for i in range(len(s10)):
-        b = s10.iloc[i]
-        if float(b['Close']) > float(b['Open']):
-            yh += float(b['Volume'])
-        else:
-            dh += float(b['Volume'])
-    top = yh + dh
-    hb = ((yh / top) - 0.5) * 100 if top > 0 else 0
-    vw = (g['Volume'] * g['Close']).cumsum() / g['Volume'].cumsum()
-    sf = float(g['Close'].iloc[-1])
-    vwl = float(vw.iloc[-1])
-    vu = ((sf - vwl) / vwl) * 100 if vwl > 0 else 0
-    sb = g.iloc[-1]
-    sh = float(sb['High'])
-    sl = float(sb['Low'])
-    kp = (float(sb['Close']) - sl) / (sh - sl) if (sh - sl) > 0 else 0.5
-    a5 = float((g['High'] - g['Low']).iloc[-5:].mean())
-    a20 = float((g['High'] - g['Low']).iloc[-20:].mean())
-    vr = ((a5 / a20) - 1) * 50 if a20 > 0 else 0
-    s = 50 + mom * 3 + hb * 0.4 + vu * 2 + (kp - 0.5) * 20 + vr * 0.2
-    s = max(0, min(100, s))
-    if s >= 65:
-        yon, gv = "YUKARI", s
-    elif s <= 35:
-        yon, gv = "ASAGI", 100 - s
-    else:
-        yon, gv = "YATAY", 100 - abs(s - 50) * 2
-    bkl = (s - 50) / 10
-    return yon, round(gv, 1), round(bkl, 2)
+        return 0.0, 0.0
+    ret = g['Close'].pct_change().tail(20).fillna(0).values
+    odul = np.sum(ret)
+    ceza = np.sum(np.minimum(ret, 0))
+    q = odul * 0.7 + ceza * 0.3
+    sharpe = np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 25)
+    return round(q * 100, 2), round(sharpe, 2)
 
 
-def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, trend):
+def gnn_manipulasyon(g, emsaller_dict):
+    """GNN benzeri korelasyon anomalisi."""
+    if len(g) < 20 or not emsaller_dict:
+        return 0.0
+    kend = g['Close'].pct_change().tail(20).dropna().values
+    if len(kend) < 5:
+        return 0.0
+    korelasyonlar = []
+    for _, em in list(emsaller_dict.items())[:10]:
+        if len(em) < 20:
+            continue
+        e = em['Close'].pct_change().tail(20).dropna().values
+        n = min(len(kend), len(e))
+        if n < 5:
+            continue
+        a = kend[-n:]
+        b = e[-n:]
+        if np.std(a) == 0 or np.std(b) == 0:
+            continue
+        k = np.corrcoef(a, b)[0, 1]
+        if not np.isnan(k):
+            korelasyonlar.append(k)
+    if not korelasyonlar:
+        return 0.0
+    ort = np.mean(korelasyonlar)
+    sapma = abs(ort - 0.5)
+    return round(sapma * 100, 1)
+
+
+def gan_stres_test(g):
+    """Bootstrap ile sentetik senaryo - %95 VaR."""
+    if len(g) < 30:
+        return 0.0
+    ret = g['Close'].pct_change().dropna().tail(50).values
+    if len(ret) < 10:
+        return 0.0
+    np.random.seed(42)
+    ornek = np.random.choice(ret, size=(100, 10), replace=True)
+    yol = np.prod(1 + ornek, axis=1)
+    var_95 = np.percentile(yol, 5) - 1
+    return round(var_95 * 100, 2)
+
+
+def hibrit_skor(lstm_y, lstm_g, nlp_s, rl_q, rl_sh, gnn, gan):
+    """Tum derin teknoloji skorlarini birlestirir."""
     sk = 50
-    sk += (guc - 50) * 0.25
-    if rsi_d < 30:
-        sk += 12
-    elif rsi_d < 45:
-        sk += 5
-    elif rsi_d > 70:
-        sk -= 12
-    elif rsi_d > 55:
-        sk -= 3
-    if macd_h > 0:
-        sk += 6
-    else:
-        sk -= 4
-    if hacim > 1.5:
-        sk += 8
-    elif hacim > 1.2:
-        sk += 4
-    elif hacim < 0.7:
-        sk -= 4
-    if vol_rej == "DUSUK":
-        sk += 4
-    elif vol_rej == "YUKSEK":
-        sk -= 6
-    if ofi > 2:
-        sk += 7
-    elif ofi > 0.5:
-        sk += 3
-    elif ofi < -2:
-        sk -= 7
-    elif ofi < -0.5:
-        sk -= 3
-    if 0 < garch_v < 0.5:
-        sk += 3
-    elif garch_v > 1.0:
-        sk -= 5
-    if t15 == "YUKARI":
-        sk += 8 * (g15 / 100)
-    elif t15 == "ASAGI":
-        sk -= 8 * (g15 / 100)
-    if trend == "Yuk":
-        sk += 3
-    else:
-        sk -= 3
+    sk += lstm_y * 5
+    if lstm_y > 0:
+        sk += (lstm_g - 50) * 0.15
+    sk += nlp_s * 8
+    sk += min(15, max(-15, rl_q * 0.3))
+    sk += min(10, max(-10, rl_sh * 2))
+    sk -= gnn * 0.3
+    sk += gan * 2 if gan > -3 else 0
     sk = max(0, min(100, sk))
-    if sk >= 75:
-        sinyal = "GUCLU AL"
-        renk = "#1b5e20"
-        neden = "Tum metrikler olumlu"
-    elif sk >= 60:
-        sinyal = "AL"
-        renk = "#2e7d32"
-        neden = "Cogunluk pozitif"
-    elif sk <= 25:
-        sinyal = "GUCLU SAT"
-        renk = "#b71c1c"
-        neden = "Tum metrikler olumsuz"
-    elif sk <= 40:
-        sinyal = "SAT"
-        renk = "#c62828"
-        neden = "Cogunluk negatif"
+    if sk >= 72:
+        seviye = "YUKSEK POZITIF"
+    elif sk >= 58:
+        seviye = "POZITIF"
+    elif sk <= 28:
+        seviye = "YUKSEK NEGATIF"
+    elif sk <= 42:
+        seviye = "NEGATIF"
     else:
-        sinyal = "BEKLE"
-        renk = "#e65100"
-        neden = "Kararsiz"
-    return round(sk, 1), sinyal, renk, neden 
+        seviye = "NOTR"
+    return round(sk, 1), seviye
 
-def hesapla(hs, v, kset):
+
+def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
+    """Tum derin teknoloji metriklerini tek cagri ile hesaplar."""
+    lstm_y, lstm_g = lstm_tahmin(g)
+    nlp_s, nlp_adet = nlp_duygu(haber_listesi, hs)
+    rl_q, rl_sh = rl_portfoy_agi(g)
+    emsaller = {}
+    idx = tum_veriler.index(hs + ".IS") if (hs + ".IS") in tum_veriler.index else -1
+    if idx >= 0:
+        bas = max(0, idx - 3)
+        son = min(len(tum_veriler), idx + 4)
+        for h2 in list(tum_veriler.keys())[bas:son]:
+            if h2 != hs + ".IS":
+                emsaller[h2] = tum_veriler[h2]
+    gnn = gnn_manipulasyon(g, emsaller)
+    gan = gan_stres_test(g)
+    hb_sk, hb_sv = hibrit_skor(lstm_y, lstm_g, nlp_s, rl_q, rl_sh, gnn, gan)
+    return {
+        "LSTM_Yon": lstm_y,
+        "LSTM_Guven": lstm_g,
+        "NLP_Skor": nlp_s,
+        "NLP_Haber": nlp_adet,
+        "RL_Q": rl_q,
+        "RL_Sharpe": rl_sh,
+        "GNN_Manip": gnn,
+        "GAN_VaR": gan,
+        "HibritSkor": hb_sk,
+        "HibritSeviye": hb_sv
+    } 
+
+def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
         return None, None
     g = v.dropna()
@@ -401,7 +227,10 @@ def hesapla(hs, v, kset):
     ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
     gv_ = garch_vol(g['Close'])
     trend_str = "Yuk" if gd > 0 else "Dus"
+    dt = derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi)
     km_skor, km_sinyal, km_renk, km_neden = karar_motoru(sk, r, mh, hr, vrej, ofi, gv_, y15, g15, trend_str)
+    ht_skor = dt["HibritSkor"]
+    dt_renk = "#1b5e20" if ht_skor >= 72 else ("#2e7d32" if ht_skor >= 58 else ("#b71c1c" if ht_skor <= 28 else ("#c62828" if ht_skor <= 42 else "#e65100")))
     ana = {
         "Hisse": hs,
         "Katilim": "EVET" if hz in kset else "HAYIR",
@@ -427,7 +256,18 @@ def hesapla(hs, v, kset):
         "KararSkor": km_skor,
         "KararSinyal": km_sinyal,
         "KararRenk": km_renk,
-        "KararNeden": km_neden
+        "KararNeden": km_neden,
+        "LSTM_Yon": dt["LSTM_Yon"],
+        "LSTM_Guven": dt["LSTM_Guven"],
+        "NLP_Skor": dt["NLP_Skor"],
+        "NLP_Haber": dt["NLP_Haber"],
+        "RL_Q": dt["RL_Q"],
+        "RL_Sharpe": dt["RL_Sharpe"],
+        "GNN_Manip": dt["GNN_Manip"],
+        "GAN_VaR": dt["GAN_VaR"],
+        "HibritSkor": ht_skor,
+        "HibritSeviye": dt["HibritSeviye"],
+        "HibritRenk": dt_renk
     }
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
@@ -483,10 +323,7 @@ def hesapla(hs, v, kset):
         "Gap%": f"%{tg}",
         "Yorum": yorum_on
     }
-    return ana, onc
-
-
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
+    return ana, onc for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -508,23 +345,26 @@ pk = piyasa_acik_mi()
 if pk:
     st_autorefresh(interval=60000, key="y")
 
-st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Karar Motoru Aktif")
+st.title("BIST Pro Terminali - Deep Tech Edition")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Derin Teknoloji Aktif")
 
 if pk:
     st.success("PIYASA ACIK")
 else:
     st.warning("PIYASA KAPALI")
 
-with st.spinner("Veri yukleniyor..."):
+with st.spinner("Veri yukleniyor ve derin teknoloji hesaplaniyor..."):
     hl = H.split(",")
     ks = set(x + ".IS" for x in K.split(","))
     hv = toplu_veri_cek(hl)
+    if not st.session_state.haber:
+        st.session_state.haber = haber_cek()
+    hb = st.session_state.haber
     sat, onc = [], []
     for x in hl:
         kod = x + ".IS"
         if kod in hv:
-            a, o = hesapla(x, hv[kod], ks)
+            a, o = hesapla(x, hv[kod], ks, hv, hb)
             if a:
                 sat.append(a)
             if o:
@@ -533,8 +373,6 @@ with st.spinner("Veri yukleniyor..."):
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.m = False
-    if not st.session_state.haber:
-        st.session_state.haber = haber_cek()
 
 bd, bdeg = "-", "0"
 try:
@@ -563,13 +401,11 @@ if mb:
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.haber = []
-    st.rerun() 
-
-t1, t2, t3, t4, t5, t6 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs"])
+    st.rerun() t1, t2, t3, t4, t5, t6, t7 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs", "Derin Teknoloji"])
 
 with t1:
     st.subheader("Karar Motoru - Tum Metrikler Birlesik Sinyal")
-    st.caption("Guc, RSI, MACD, Hacim, Volatilite, OFI, GARCH ve 15dk tahmini birlestirilir. Skor 0-100.")
+    st.caption("Guc, RSI, MACD, Hacim, Volatilite, OFI, GARCH, 15dk tahmin ve Derin Teknoloji birlestirilir.")
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -577,7 +413,6 @@ with t1:
         if sd:
             kdf = kdf[kdf["Katilim"] == "EVET"]
         kdf = kdf.sort_values("KararSkor", ascending=False).reset_index(drop=True)
-
         st.markdown("### A) Secili Hisse Karari")
         col_sec1, col_sec2 = st.columns([1, 2])
         with col_sec1:
@@ -590,11 +425,10 @@ with t1:
                 '<h2 style="color:white; margin:0;">' + str(secili_hisse) + ' -> ' + str(secili["KararSinyal"]) + '</h2>'
                 '<p style="color:white; margin:5px 0; font-size:18px;">Skor: ' + str(secili["KararSkor"]) + '/100 | Fiyat: ' + str(secili["Fiyat"]) + '</p>'
                 '<p style="color:white; margin:5px 0;">SL: ' + str(secili["SL"]) + ' | Hedef: ' + str(secili["Hedef"]) + ' | R/O: ' + str(secili["RO"]) + '</p>'
+                '<p style="color:white; margin:5px 0;">Derin Teknoloji: ' + str(secili["HibritSeviye"]) + ' (Skor: ' + str(secili["HibritSkor"]) + ')</p>'
                 '<p style="color:white; margin:5px 0; font-style:italic;">' + str(secili["KararNeden"]) + '</p>'
                 '</div>', unsafe_allow_html=True)
-
         st.markdown("---")
-
         st.subheader("B) Bugunun En Iyi 5 Firsati")
         def ro_ok(x):
             try:
@@ -616,12 +450,11 @@ with t1:
                         '<p style="margin:3px 0;">' + str(r["Fiyat"]) + '</p>'
                         '<p style="margin:3px 0; font-size:12px;">Hedef: ' + str(r["Hedef"]) + '</p>'
                         '<p style="margin:3px 0; font-size:12px;">R/O: ' + str(r["RO"]) + '</p>'
+                        '<p style="margin:3px 0; font-size:12px;">Deep: ' + str(r["HibritSkor"]) + '</p>'
                         '</div>', unsafe_allow_html=True)
         else:
             st.info("Bugun icin kriterlere uyan firsat yok.")
-
         st.markdown("---")
-
         st.subheader("C) Telegram Bildirim")
         tgl1, tgl2 = st.columns(2)
         with tgl1:
@@ -637,9 +470,7 @@ with t1:
                     st.success("Gonderildi!")
                 else:
                     st.warning("Telegram token ayarlanmamis.")
-
         st.markdown("---")
-
         st.subheader("D) Yeni Sinyal Degisimleri")
         gecmis_dict = st.session_state.get('gecmis', {})
         degisimler = sinyal_degisim_tespit(kdf, gecmis_dict)
@@ -657,9 +488,7 @@ with t1:
                     '</div>', unsafe_allow_html=True)
         else:
             st.info("Onceki taramaya gore degisim yok. Ilk tarama ise bu normal.")
-
         st.session_state['gecmis'] = sinyal_dict_olustur(kdf)
-
         st.markdown("---")
         st.subheader("Karar Dagilimi")
         k1, k2, k3, k4, k5 = st.columns(5)
@@ -668,7 +497,6 @@ with t1:
         k3.metric("BEKLE", len(kdf[kdf["KararSinyal"] == "BEKLE"]))
         k4.metric("SAT", len(kdf[kdf["KararSinyal"] == "SAT"]))
         k5.metric("GUCLU SAT", len(kdf[kdf["KararSinyal"] == "GUCLU SAT"]))
-
         st.markdown("---")
         st.subheader("E) Tum Karar Skorlari")
         def rk_sinyal(v):
@@ -681,25 +509,22 @@ with t1:
             if "SAT" in str(v):
                 return 'background-color:#c62828;color:white;'
             return 'background-color:#e65100;color:white;'
-        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "SL", "Hedef", "RO", "Guc", "RSI", "MACD", "Hacim", "OFI", "Tahmin15"]]
+        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "SL", "Hedef", "RO", "Guc", "RSI", "MACD", "Hacim", "OFI", "HibritSkor"]]
         st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]), use_container_width=True, height=450)
-
         st.markdown("---")
         st.subheader("En Yuksek Karar Skoru 10")
-        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "KararNeden"]], use_container_width=True)
-
+        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "HibritSkor", "KararNeden"]], use_container_width=True)
         st.markdown("---")
         st.subheader("En Dusuk Karar Skoru 10 (Riskli)")
-        st.dataframe(kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "RSI", "MACD", "OFI"]], use_container_width=True)
-
+        st.dataframe(kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "RSI", "MACD", "OFI", "GNN_Manip"]], use_container_width=True)
         st.markdown("---")
         colA, colB = st.columns(2)
         with colA:
             st.subheader("En Yuksek OFI 5 (Alici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal"]].head(5), use_container_width=True)
+            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "HibritSkor"]].head(5), use_container_width=True)
         with colB:
             st.subheader("En Dusuk OFI 5 (Satici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal"]].head(5), use_container_width=True)
+            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "HibritSkor"]].head(5), use_container_width=True)
 
 with t2:
     st.subheader("Trend Matrisi")
@@ -737,13 +562,7 @@ with t2:
             if "ASAGI" in str(v):
                 return 'background-color:#b71c1c;color:white;font-weight:bold;'
             return 'background-color:#e65100;color:white;font-weight:bold;'
-        def rv(v):
-            if "DUSUK" in str(v):
-                return 'color:#4CAF50;font-weight:bold;'
-            if "YUKSEK" in str(v):
-                return 'color:#F44336;font-weight:bold;'
-            return 'color:#FFC107;'
-        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]).map(rv, subset=["VolRejim"]), use_container_width=True, height=600)
+        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]), use_container_width=True, height=600)
         st.markdown("---")
         st.subheader("15-25 Dakika Sonrasi Yon Dagilimi")
         m1, m2, m3, m4 = st.columns(4)
@@ -794,7 +613,7 @@ with t4:
         rdf = dfr[dfr["RO"].apply(rok)]
         st.markdown("**R/O > 1.5 olan " + str(len(rdf)) + " hisse:**")
         if not rdf.empty:
-            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc", "KararSinyal"]], use_container_width=True, height=500)
+            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc", "KararSinyal", "HibritSkor"]], use_container_width=True, height=500)
     else:
         st.warning("Veri yok.")
 
@@ -858,6 +677,68 @@ with t6:
                 st.info("Z>2: 1.SAT 2.AL | Z<-2: 1.AL 2.SAT")
             else:
                 st.warning("Kointegre cift bulunamadi.")
+
+with t7:
+    st.subheader("Derin Teknoloji Analizi")
+    st.caption("LSTM, NLP, Pekiştirmeli Ogrenme, GNN ve GAN modulleri birlesik skoru.")
+    if not sat:
+        st.warning("Veri yok.")
+    else:
+        ddf = pd.DataFrame(sat)
+        if sd:
+            ddf = ddf[ddf["Katilim"] == "EVET"]
+        ddf = ddf.sort_values("HibritSkor", ascending=False).reset_index(drop=True)
+        st.markdown("### Hibrit Deep Tech Skoru Dagilimi")
+        d1, d2, d3, d4, d5 = st.columns(5)
+        d1.metric("YUKSEK POZITIF", len(ddf[ddf["HibritSeviye"] == "YUKSEK POZITIF"]))
+        d2.metric("POZITIF", len(ddf[ddf["HibritSeviye"] == "POZITIF"]))
+        d3.metric("NOTR", len(ddf[ddf["HibritSeviye"] == "NOTR"]))
+        d4.metric("NEGATIF", len(ddf[ddf["HibritSeviye"] == "NEGATIF"]))
+        d5.metric("YUKSEK NEGATIF", len(ddf[ddf["HibritSeviye"] == "YUKSEK NEGATIF"]))
+        st.markdown("---")
+        st.subheader("Tum Derin Teknoloji Metrikleri")
+        def rh(v):
+            if "YUKSEK POZITIF" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "POZITIF" in str(v):
+                return 'background-color:#2e7d32;color:white;'
+            if "YUKSEK NEGATIF" in str(v):
+                return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "NEGATIF" in str(v):
+                return 'background-color:#c62828;color:white;'
+            return 'background-color:#e65100;color:white;'
+        goster = ddf[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "LSTM_Yon", "LSTM_Guven", "NLP_Skor", "NLP_Haber", "RL_Q", "RL_Sharpe", "GNN_Manip", "GAN_VaR", "KararSinyal"]]
+        st.dataframe(goster.style.map(rh, subset=["HibritSeviye"]), use_container_width=True, height=500)
+        st.markdown("---")
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("LSTM En Yuksek Tahmin 5")
+            st.dataframe(ddf.sort_values("LSTM_Yon", ascending=False)[["Hisse", "LSTM_Yon", "LSTM_Guven", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            st.subheader("NLP Haber Skoru En Yuksek 5")
+            st.dataframe(ddf[ddf["NLP_Haber"] > 0].sort_values("NLP_Skor", ascending=False)[["Hisse", "NLP_Skor", "NLP_Haber", "HibritSkor"]].head(5), use_container_width=True)
+            st.subheader("Pekiştirmeli Ogrenme En Yuksek 5")
+            st.dataframe(ddf.sort_values("RL_Q", ascending=False)[["Hisse", "RL_Q", "RL_Sharpe", "HibritSkor"]].head(5), use_container_width=True)
+        with colB:
+            st.subheader("Manipulasyon Riski Yuksek 5")
+            st.dataframe(ddf.sort_values("GNN_Manip", ascending=False)[["Hisse", "GNN_Manip", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            st.subheader("GAN Risk En Dusuk 5 (Guvenli)")
+            st.dataframe(ddf.sort_values("GAN_VaR", ascending=True)[["Hisse", "GAN_VaR", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            st.subheader("En Yuksek Hibrit Skor 10")
+            st.dataframe(ddf.head(10)[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "KararSinyal"]], use_container_width=True)
+        st.markdown("---")
+        st.markdown("### Derin Teknoloji Ne Anlatiyor?")
+        st.markdown("""
+        - **LSTM_Yon**: Ağırlıklı bellek modeli ile 5 adım sonrası yön tahmini (% cinsinden)
+        - **LSTM_Guven**: Tahmin güven yüzdesi
+        - **NLP_Skor**: Türkçe finansal haber duygu analizi (-5 ile +5 arası)
+        - **NLP_Haber**: Hisse ile ilgili bulunan haber sayısı
+        - **RL_Q**: Pekiştirmeli öğrenme Q-değeri (getiri bazlı ödül)
+        - **RL_Sharpe**: Sharpe oranı (risk ayarlı getiri)
+        - **GNN_Manip**: Manipülasyon riski (0-100, yüksek = riskli)
+        - **GAN_VaR**: Sentetik senaryolarda %95 VaR (kayıp tahmini)
+        - **HibritSkor**: Tüm modellerin birleşik skoru (0-100)
+        - **HibritSeviye**: YUKSEK POZITIF / POZITIF / NOTR / NEGATIF / YUKSEK NEGATIF
+        """)
 
 st.markdown("---")
 st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
