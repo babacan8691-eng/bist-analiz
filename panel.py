@@ -415,25 +415,29 @@ def fetch_final_universe_data(b100_benchmark):
         )
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
+
+        # Kararlı ve dengeli Net Güç Skoru hesaplaması
         net_guc_skoru = (
-            (ai_prob * 0.30)
-            + (min(vol_ratio, 3.0) * 25.0)
+            (ai_prob * 0.35)
+            + (min(vol_ratio, 2.5) * 25.0)
             + (max(0.0, 1.0 - compression_ratio) * 25.0)
-            + (max(0.0, rel_strength) * 2.0)
+            + (max(0.0, rel_strength) * 1.5)
         )
-        net_guc_skoru = float(np.clip(net_guc_skoru, 10.0, 99.9))
-        skor_genel = net_guc_skoru + (projeksiyon_getiri * 2.0)
+        net_guc_skoru = float(np.clip(net_guc_skoru, 15.0, 92.5))
+
+        skor_genel = net_guc_skoru + (projeksiyon_getiri * 1.5)
         skor_gunluk = (
             (vol_ratio * 30.0)
-            + (float(compression_ratio <= 0.8) * 20.0)
+            + (float(compression_ratio <= 0.8) * 25.0)
             + (max(0, clv) * 25.0)
-            + (net_guc_skoru * 0.25)
+            + (net_guc_skoru * 0.20)
         )
         skor_overnight = (
             (vol_ratio * 35.0)
             + (max(0, clv) * 35.0)
             + (float(compression_ratio <= 0.75) * 30.0)
         )
+
         is_katilim = t in katilim_listesi
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
         if hurst_val >= 0.45:
@@ -639,8 +643,4 @@ with tab2:
     )
     st.dataframe(
         guvenli_styler(df_gunluk),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warnin
+        use_container_width=
