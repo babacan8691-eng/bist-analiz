@@ -448,25 +448,30 @@ def fetch_final_universe_data(b100_benchmark):
             compression_ratio,
         )
 
-        skor_genel = (
-            (hurst_val * 30)
-            + (rel_strength * 2.0)
-            + (clv * 10.0)
-            + (projeksiyon_getiri * 5.0)
+        ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
+        ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
+
+        # YENİ: Net Güç Skoru (Kombine Başarı Ölçütü)
+        net_guc_skoru = (
+            (ai_prob * 0.30)
+            + (min(vol_ratio, 3.0) * 25.0)
+            + (max(0.0, 1.0 - compression_ratio) * 25.0)
+            + (max(0.0, rel_strength) * 2.0)
         )
+        net_guc_skoru = float(np.clip(net_guc_skoru, 10.0, 99.9))
+
+        skor_genel = net_guc_skoru + (projeksiyon_getiri * 2.0)
         skor_gunluk = (
             (vol_ratio * 30.0)
             + (float(compression_ratio <= 0.8) * 20.0)
             + (max(0, clv) * 25.0)
+            + (net_guc_skoru * 0.25)
         )
         skor_overnight = (
             (vol_ratio * 35.0)
             + (max(0, clv) * 35.0)
             + (float(compression_ratio <= 0.75) * 30.0)
         )
-
-        ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
-        ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
 
         is_katilim = t in katilim_listesi
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
@@ -496,6 +501,7 @@ def fetch_final_universe_data(b100_benchmark):
             "_SkorGenel": skor_genel,
             "_SkorGunluk": skor_gunluk,
             "_SkorOvernight": skor_overnight,
+            "🏆 Net Güç Skoru": f"{net_guc_skoru:.1f} Puan",
             "Sinyal": sinyal,
             "🎯 Trend Kararı": trend_karar,
             "Olası Haber / Beklenti": haber_beklenti,
@@ -551,7 +557,14 @@ def kapsamli_radar_stilleri(val):
         " bold;"
     )
   try:
-    if "%" in val_str:
+    if "Puan" in val_str:
+      num = float(val_str.replace("Puan", "").strip())
+      if num >= 75.0:
+        return (
+            "background-color: rgba(0, 150, 255, 0.3); color: #00bfff;"
+            " font-weight: bold;"
+        )
+    elif "%" in val_str:
       num = float(val_str.replace("%", "").strip())
       if num > 0:
         return "background-color: rgba(0, 255, 0, 0.15); color: #00ff00;"
@@ -571,6 +584,7 @@ def kapsamli_radar_stilleri(val):
 
 def guvenli_styler(df):
   cols_to_style = [
+      "🏆 Net Güç Skoru",
       "Sinyal",
       "🎯 Trend Kararı",
       "Trend Projeksiyon",
@@ -665,23 +679,4 @@ with tab2:
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
     df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-    st.dataframe(
-        guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-
-with tab3:
-  st.subheader(
-      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
-      " Etkilenen Alan)"
-  )
-  st.info(
-      "Seans kapanışına doğru sıkışmasını tamamlayan ve gün sonu hacim patlaması"
-      " yaşayan Katılım hisselerini gösterir. Kararlar net gün sonu verileriyle"
-      " alındığı için gecikmeden etkilenmez."
-  )
-  if not df_tarama.empty:
-    df_overnight = df_tarama
+        columns=["_SkorGenel", "_Skor
