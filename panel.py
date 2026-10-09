@@ -71,12 +71,11 @@ with col_btn:
 
 st.markdown("---")
 st.markdown(
-    "<div class='strateji-kutu'>💡 <b>Nicel Trend & Sıkışma Felsefesi:</b>"
-    " Sistemimiz saniyelik scalping yarışları yerine, <b>15-30 dakikalık"
-    " çubuklardaki hacim patlamalarını ve dar bant sıkışmalarını"
-    " (compression ratio)</b> baz alır. 15 dakikalık gecikme, gürültüyü"
-    " eleyerek büyük oyuncuların gün içine ve sonraki seanslara yayılan"
-    " kırılma hamlelerini net görmenizi sağlar.</div>",
+    "<div class='strateji-kutu'>💡 <b>Rakamsal Sıkışma & Patlama Felsefesi:</b>"
+    " Fiyat %2-%3 gittikten sonraki geç kalmış kanal hareketleri yerine,"
+    " <b>dar bant sıkışması (Compression <= 0.75) ve hacim patlaması"
+    " (Vol Ratio >= 1.3)</b> matematiksel eşikleriyle patlama anındaki tahtalar"
+    " hedeflenir.</div>",
     unsafe_allow_html=True,
 )
 
@@ -138,28 +137,30 @@ def nicel_trend_projeksiyon(
     return "🚀 Güçlü Trend Devamı Bekleniyor", 1.25
 
 
-def trend_karar_motoru(
-    close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio
+def rakamsal_trend_karar_motoru(
+    close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio, vol_ratio
 ):
   try:
     c = np.array(close_s)
     if len(c) < 5:
       return "🎯 Trend: NÖTR / BEKLE", "Standart Bant Akışı"
-    egim_kisa = (c[-1] - c[-3]) / c[-3] if c[-3] > 0 else 0
-    hacim_faktor = (
-        float(vol_s[-1] / np.mean(vol_s[-5:])) if len(vol_s) >= 5 else 1.0
-    )
-    if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
+
+    # Rakamsal ve net patlama kriterleri (gecikmeyi ekarte eden matris)
+    if comp_ratio <= 0.72 and vol_ratio >= 1.25:
       karar = "🎯 Trend: HACİM SIKIŞMASI & KIRILMA"
-      beklenti = (
-          "Bant Darelmesi Tamamlandı -> Güçlü İhale/KAP veya Trend Kırılması"
-      )
-    elif egim_kisa > 0.003 and z_score < 1.5:
+      beklenti = "Dar Bant Sıkışması Tamamlandı -> Patlama Eşiği"
+    elif vol_ratio >= 1.8 and (c[-1] > c[-2]):
+      karar = "🚨 ANLIK HACİM PATLAMASI"
+      beklenti = "Kurumsal Para Girişi Başladı"
+    elif comp_ratio <= 0.65:
+      karar = "⚡ KRİTİK SIKIŞMA (BANT DARALMASI)"
+      beklenti = "Yön Kırılması An Meselesi"
+    elif z_score > 1.2 and vol_ratio >= 1.1:
       karar = "🟢 Trend: YÜKSELİŞ KANALI AKTİF"
-      beklenti = "Orta Vadeli Alım İvmesi Korunuyor"
-    elif egim_kisa < -0.003 and z_score > -1.5:
+      beklenti = "Orta Vadeli Alım İvmesi"
+    elif z_score < -1.2:
       karar = "📉 Trend: GERİ ÇEKİLME / DESTEK TESTİ"
-      beklenti = "Kısa Vadeli Konsolidasyon Süreci"
+      beklenti = "Destek Seviyesi İzlenmeli"
     else:
       karar = "⚖️ Trend: YATAY DAR BANT"
       beklenti = "Hacim Genişlemesi Bekleniyor"
@@ -214,8 +215,8 @@ def get_live_kap_news():
   simdiet = datetime.now(tr_tz)
   saat_Str = simdiet.strftime("%H:%M:%S")
   return [
-      f"🔔 **[Saat {saat_Str}] KAP & Sıkışma Bülteni:** 15m-30m Bar Verilerine Göre Hacim Patlamaları Güncellendi.",
-      "⚡ **[Trend Modu]** Comp Ratio (Sıkışma Oranı) ve Vol Ratio (Hacim Çarpanı) Taraması Aktif.",
+      f"🔔 **[Saat {saat_Str}] Rakamsal Sıkışma Bülteni:** 15m Bar Sıkışma (Compression) ve Hacim Çarpanı Matrisi Güncellendi.",
+      "⚡ **[Quant Modu]** Fiyat %2 Gitmeden Önceki Dar Bant Kırılım Aşaması Taranıyor.",
       "📢 **[Seans Kapanışı]** Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.",
   ]
 
@@ -404,7 +405,9 @@ def fetch_final_universe_data(b100_benchmark):
         ma10 = close.rolling(window=10).mean().iloc[-1]
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
-        trend_karar, haber_beklenti = trend_karar_motoru(
+
+        # Rakamsal Karar Motoru Çağrısı
+        trend_karar, haber_beklenti = rakamsal_trend_karar_motoru(
             close.values,
             high.values,
             low.values,
@@ -412,45 +415,56 @@ def fetch_final_universe_data(b100_benchmark):
             hurst_val,
             z_score,
             compression_ratio,
+            vol_ratio,
         )
+
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
+
+        # Rakamsal Ağırlıklı Net Güç Skoru
         net_guc_skoru = (
             (ai_prob * 0.35)
             + (min(vol_ratio, 2.5) * 25.0)
-            + (max(0.0, 1.0 - compression_ratio) * 25.0)
-            + (max(0.0, rel_strength) * 1.5)
+            + (max(0.0, 1.0 - compression_ratio) * 30.0)
+            + (max(0.0, rel_strength) * 1.0)
         )
-        net_guc_skoru = float(np.clip(net_guc_skoru, 15.0, 92.5))
+        net_guc_skoru = float(np.clip(net_guc_skoru, 15.0, 95.0))
+
         skor_genel = net_guc_skoru + (projeksiyon_getiri * 1.5)
         skor_gunluk = (
-            (vol_ratio * 30.0)
-            + (float(compression_ratio <= 0.8) * 25.0)
-            + (max(0, clv) * 25.0)
-            + (net_guc_skoru * 0.20)
+            (vol_ratio * 35.0)
+            + (float(compression_ratio <= 0.75) * 30.0)
+            + (max(0, clv) * 20.0)
+            + (net_guc_skoru * 0.15)
         )
         skor_overnight = (
             (vol_ratio * 35.0)
             + (max(0, clv) * 35.0)
             + (float(compression_ratio <= 0.75) * 30.0)
         )
+
         is_katilim = t in katilim_listesi
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
-        if hurst_val >= 0.45:
-          sinyal = "🟢 GÜÇLÜ TREND"
+
+        if hurst_val >= 0.45 or compression_ratio <= 0.72:
+          sinyal = "🟢 GÜÇLÜ PATLAMA ADAYI"
         elif hurst_val >= 0.38:
           sinyal = "🟡 TOPARLANMA"
         else:
           sinyal = "⏳ BEKLE"
+
         if is_katilim:
           gunluk_sinyal = (
-              "⚡ SWING / İNTEL UYGUN" if vol_ratio >= 0.7 else "⏳ BEKLE"
+              "⚡ ERKEN PATLAMA UYGUN"
+              if (compression_ratio <= 0.75 or vol_ratio >= 1.2)
+              else "⏳ BEKLE"
           )
         else:
           gunluk_sinyal = "HARİÇ"
+
         erken_durum = (
             "🚨 HACİM & SIKIŞMA PATLAMASI"
-            if (vol_ratio >= 1.3 or compression_ratio <= 0.7)
+            if (vol_ratio >= 1.25 or compression_ratio <= 0.7)
             else "NORMAL"
         )
         sonuclar.append({
@@ -482,7 +496,7 @@ def fetch_final_universe_data(b100_benchmark):
 
 
 with st.spinner(
-    "15m-30m Trend çubukları, sıkışma ve hacim matrisleri yükleniyor..."
+    "Rakamsal sıkışma matrisleri, hacim ve patlama eşikleri hesaplanıyor..."
 ):
   df_tarama = fetch_final_universe_data(b100_val)
 
@@ -493,6 +507,8 @@ def kapsamli_radar_stilleri(val):
       "🚨 HACİM & SIKIŞMA PATLAMASI" in val_str
       or "🚀 Güçlü Trend Devamı" in val_str
       or "HACİM SIKIŞMASI & KIRILMA" in val_str
+      or "ANLIK HACİM PATLAMASI" in val_str
+      or "KRİTİK SIKIŞMA" in val_str
   ):
     return (
         "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
@@ -501,8 +517,8 @@ def kapsamli_radar_stilleri(val):
   elif any(
       k in val_str
       for k in [
-          "SWING / İNTEL UYGUN",
-          "GÜÇLÜ TREND",
+          "ERKEN PATLAMA UYGUN",
+          "GÜÇLÜ PATLAMA ADAYI",
           "EVET (Katılım)",
           "TOPARLANMA",
           "YÜKSELİŞ KANALI AKTİF",
@@ -591,7 +607,7 @@ with tab1:
       df_goster = df_goster[df_goster["Sinyal"].str.contains("TREND")]
     elif "Erken Sıkışma" in strateji_secimi:
       df_goster = df_goster[
-          df_goster["🎯 Trend Kararı"].str.contains("SIKIŞMASI")
+          df_goster["🎯 Trend Kararı"].str.contains("SIKIŞMASI|SIKIŞMA")
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
@@ -631,16 +647,4 @@ with tab2:
     ].copy()
     if df_gunluk.empty:
       df_gunluk = df_tarama.copy()
-    df_gunluk = df_gunluk.sort_values(
-        by="_SkorGunluk", ascending=False
-    ).reset_index(drop=True)
-    df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore"
-    )
-    st.dataframe(
-        guvenli_styler(df_gunluk),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warnin
+    df_gunluk = df_gunl
