@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone, time
 from streamlit_autorefresh import st_autorefresh
 
@@ -14,6 +15,7 @@ st.markdown("""
 .counter-box { background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; }
 .market-open { background-color: #1b5e20; padding: 15px; border-radius: 8px; color: white; }
 .market-closed { background-color: #4a148c; padding: 15px; border-radius: 8px; color: white; }
+.risk-box { background-color: #1E1E1E; padding: 12px; border-radius: 8px; border-left: 4px solid #FFC107; margin: 5px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -29,6 +31,147 @@ def is_market_hours():
     if s.weekday() >= 5:
         return False
     return time(9, 40) <= s.time() <= time(18, 30)
+
+# ==================== TEKNIK GOSTERGE HESAPLAMALARI ====================
+def hesapla_rsi(seri, periyot=14):
+    delta = seri.diff()
+    kazanc = delta.where(delta > 0, 0).rolling(periyot).mean()
+    kayip = -delta.where(delta < 0, 0).rolling(periyot).mean()
+    rs = kazanc / kayip
+    return 100 - (100 / (1 + rs))
+
+def hesapla_macd(seri, hizli=12, yavas=26, sinyal=9):
+    ema_hizli = seri.ewm(span=hizli, adjust=False).mean()
+    ema_yavas = seri.ewm(span=yavas, adjust=False).mean()
+    macd = ema_hizli - ema_yavas
+    sinyal_cizgi = macd.ewm(span=sinyal, adjust=False).mean()
+    histogram = macd - sinyal_cizgi
+    return macd, sinyal_cizgi, histogram
+
+def hesapla_bollinger(seri, periyot=20, std=2):
+    sma = seri.rolling(periyot).mean()
+    std_dev = seri.rolling(periyot).std()
+    ust = sma + (std_dev * std)
+    alt = sma - (std_dev * std)
+    return ust, sma, alt
+
+def hesapla_atr(high, low, close, periyot=14):
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.rolling(periyot).mean()
+
+def hesapla_stochastic(high, low, close, periyot=14, yumusat=3):
+    en_yuksek = high.rolling(periyot).max()
+    en_dusuk = low.rolling(periyot).min()
+    k = 100 * (close - en_dusuk) / (en_yuksek - en_dusuk)
+    d = k.rolling(yumusat).mean()
+    return k, d
+
+def hesapla_obv(close, volume):
+    yon = np.sign(close.diff())
+    return (yon * volume).fillna(0).cumsum()
+
+def hesapla_sma(seri, periyot):
+    return seri.rolling(periyot).mean()
+
+# ==================== SINYAL MOTORU ====================
+def sinyal_motoru(h, sf):
+    """Trend + Momentum + Hacim katmanları birleşik skor"""
+    if len(h) < 30:
+        return 50, "BEKLE", "Yetersiz veri", 0.5
+
+    # 1. TREND KATMANI (0-1)
+    sma20 = h['SMA20'].iloc[-1]
+    sma50 = h['SMA50'].iloc[-1] if not pd.isna(h['SMA50'].iloc[-1]) else sma20
+    trend_skor = 0.5
+    if sf > sma20: trend_skor += 0.25
+    if sf > sma50: trend_skor += 0.25
+    if sma20 > sma50: trend_skor += 0.15
+    trend_skor = min(1.0, trend_skor)
+
+    # 2. MOMENTUM KATMANI (0-1)
+    rsi = h['RSI'].iloc[-1] if not pd.isna(h['RSI'].iloc[-1]) else 50
+    macd_hist = h['MACD_HIST'].iloc[-1] if not pd.isna(h['MACD_HIST'].iloc[-1]) else 0
+    stoch_k = h['STOCH_K'].iloc[-1] if not pd.isna(h['STOCH_K'].iloc[-1]) else 50
+    mom_skor = 0.5
+    if 40 < rsi < 70: mom_skor += 0.15
+    elif rsi < 30: mom_skor += 0.3
+    elif rsi > 70: mom_skor -= 0.2
+    if macd_hist > 0: mom_skor += 0.2
+    if 20 < stoch_k < 80: mom_skor += 0.1
+    elif stoch_k < 20: mom_skor += 0.15
+    mom_skor = max(0, min(1.0, mom_skor))
+
+    # 3. HACIM KATMANI (0-1)
+    vol_ratio = h['Vol_Ratio'].iloc[-1] if not pd.isna(h['Vol_Ratio'].iloc[-1]) else 1
+    obv_trend = 1 if h['OBV'].iloc[-1] > h['OBV'].iloc[-5] else 0
+    hacim_skor = 0.5
+    if vol_ratio > 1.5: hacim_skor += 0.3
+    elif vol_ratio > 1.2: hacim_skor += 0.15
+    if obv_trend: hacim_skor += 0.2
+    hacim_skor = min(1.0, hacim_skor)
+
+    # 4. BOLLINGER POZISYONU
+    bb_ust = h['BB_UST'].iloc[-1] if not pd.isna(h['BB_UST'].iloc[-1]) else sf * 1.05
+    bb_alt = h['BB_ALT'].iloc[-1] if not pd.isna(h['BB_ALT'].iloc[-1]) else sf * 0.95
+    bb_pozisyon = (sf - bb_alt) / (bb_ust - bb_alt) if (bb_ust - bb_alt) > 0 else 0.5
+
+    # 5. BIRLESIK SKOR
+    final_skor = (trend_skor * 0.35 + mom_skor * 0.35 + hacim_skor * 0.20 + (1 - bb_pozisyon) * 0.10) * 100
+    final_skor = max(20, min(95, final_skor))
+
+    # 6. SINYAL KARARI
+    if final_skor >= 70 and trend_skor > 0.6 and mom_skor > 0.5:
+        sinyal = "GUCLU AL"
+    elif final_skor >= 55 and trend_skor > 0.4:
+        sinyal = "AL"
+    elif final_skor < 35 and trend_skor < 0.4:
+        sinyal = "SAT"
+    elif final_skor < 45:
+        sinyal = "ZAYIF"
+    else:
+        sinyal = "BEKLE"
+
+    # 7. DETAYLI YORUM
+    detaylar = []
+    if trend_skor > 0.6: detaylar.append("Trend pozitif")
+    if macd_hist > 0: detaylar.append("MACD al")
+    if vol_ratio > 1.5: detaylar.append("Hacim patlamasi")
+    if rsi < 35: detaylar.append("RSI asiri satim")
+    if rsi > 70: detaylar.append("RSI asiri alim")
+    yorum = " | ".join(detaylar) if detaylar else "Notr"
+
+    return final_skor, sinyal, yorum, bb_pozisyon
+
+# ==================== RISK YONETIMI ====================
+def risk_hesapla(h, sf, ai_skor):
+    """ATR bazli stop-loss ve hedef fiyat"""
+    if pd.isna(h['ATR'].iloc[-1]) or h['ATR'].iloc[-1] == 0:
+        return None, None, None, None
+
+    atr = h['ATR'].iloc[-1]
+
+    # Risk seviyesine gore ATR carpani
+    if ai_skor >= 70:
+        carpan_sl = 1.5
+        carpan_h = 3.0
+        risk_seviye = "Dusuk"
+    elif ai_skor >= 55:
+        carpan_sl = 2.0
+        carpan_h = 2.5
+        risk_seviye = "Orta"
+    else:
+        carpan_sl = 2.5
+        carpan_h = 2.0
+        risk_seviye = "Yuksek"
+
+    sl = sf - (atr * carpan_sl)
+    hedef = sf + (atr * carpan_h)
+    risk_odul = (hedef - sf) / (sf - sl) if (sf - sl) > 0 else 0
+
+    return round(sl, 2), round(hedef, 2), round(risk_odul, 2), risk_seviye
 
 for k, v in [('logged_in', False), ('fetch_count', 0), ('last_fetch_time', '-'), ('manual_trigger', False)]:
     if k not in st.session_state:
@@ -60,30 +203,41 @@ def process(raw, tickers, katilim_set):
     for t in tickers:
         try:
             if len(tickers) == 1:
-                h = raw
+                h = raw.copy()
             else:
-                h = raw[t] if t in raw.columns.levels[0] else None
-            if h is None or h.empty or len(h) < 5:
+                h = raw[t].copy() if t in raw.columns.levels[0] else None
+            if h is None or h.empty or len(h) < 30:
                 continue
             h = h.dropna()
-            if len(h) < 5:
+            if len(h) < 30:
                 continue
+
+            # Gostergeleri hesapla
+            h['RSI'] = hesapla_rsi(h['Close'])
+            h['MACD'], h['MACD_SIG'], h['MACD_HIST'] = hesapla_macd(h['Close'])
+            h['BB_UST'], h['BB_ORTA'], h['BB_ALT'] = hesapla_bollinger(h['Close'])
+            h['ATR'] = hesapla_atr(h['High'], h['Low'], h['Close'])
+            h['STOCH_K'], h['STOCH_D'] = hesapla_stochastic(h['High'], h['Low'], h['Close'])
+            h['OBV'] = hesapla_obv(h['Close'], h['Volume'])
+            h['SMA20'] = hesapla_sma(h['Close'], 20)
+            h['SMA50'] = hesapla_sma(h['Close'], 50)
+            h['Vol_Ratio'] = h['Volume'] / h['Volume'].rolling(20).mean()
+
             sf = h['Close'].iloc[-1]
-            pf = h['Close'].iloc[-2] if len(h) > 1 else sf
-            if pf == 0:
-                continue
             gb = h['Close'].iloc[-min(25, len(h))]
             gd = ((sf - gb) / gb) * 100 if gb > 0 else 0
-            oh = h['Volume'].rolling(20).mean().iloc[-1]
-            sh = h['Volume'].iloc[-1]
-            vr = sh / oh if not pd.isna(oh) and oh > 0 else 1
-            y20 = h['High'].rolling(20).max().iloc[-1]
-            d20 = h['Low'].rolling(20).min().iloc[-1]
-            if pd.isna(y20) or pd.isna(d20):
-                y20, d20 = h['High'].max(), h['Low'].min()
-            cr = (y20 - d20) / sf if sf > 0 else 1
+
+            # Cok katmanli sinyal
+            ai_skor, sinyal, yorum, bb_poz = sinyal_motoru(h, sf)
+
+            # Risk yonetimi
+            sl, hedef, rr, rsk = risk_hesapla(h, sf, ai_skor)
+
+            # VWAP
             vw = (h['Volume'] * h['Close']).cumsum() / h['Volume'].cumsum()
             vs = ((sf - vw.iloc[-1]) / vw.iloc[-1]) * 100 if vw.iloc[-1] > 0 else 0
+
+            # Hurst
             ret = h['Close'].pct_change().dropna()
             if len(ret) > 10:
                 n = len(ret)
@@ -93,45 +247,63 @@ def process(raw, tickers, katilim_set):
                 S = ret.std()
                 hu = np.log(R/S) / np.log(n) if S > 0 else 0.5
                 hu = max(0.1, min(0.9, hu))
-                if pd.isna(hu):
-                    hu = 0.5
+                if pd.isna(hu): hu = 0.5
             else:
                 hu = 0.5
+
+            # Sikisma
+            y20 = h['High'].rolling(20).max().iloc[-1]
+            d20 = h['Low'].rolling(20).min().iloc[-1]
+            if pd.isna(y20) or pd.isna(d20):
+                y20, d20 = h['High'].max(), h['Low'].min()
+            cr = (y20 - d20) / sf if sf > 0 else 1
+
+            # Net para girisi
             yon = 1 if sf >= h['Open'].iloc[-1] else -1
             pg = abs(h['High'].iloc[-1] - h['Low'].iloc[-1]) * h['Volume'].iloc[-1] * yon
-            ai = 50 + (vr - 1) * 20 + vs * 2 + (hu - 0.5) * 40 + gd * 1.5 + (10 if cr < 1.1 else 0)
-            ai = max(20, min(95, ai))
-            if ai >= 70 and gd > 0 and vr > 1.3:
-                tp, sn = "YUKSELIS BEKLENIYOR", "GUCLU TREND"
-            elif ai >= 55 and gd > -1:
-                tp, sn = "YUKSELIS EGILIMI", "AL"
-            elif ai < 35 and gd < -1:
-                tp, sn = "DUSUS BEKLENIYOR", "SAT"
-            elif ai < 45:
-                tp, sn = "ZAYIF SEYIR", "ZAYIF"
+
+            # 15 dk tahmin
+            if ai_skor >= 70:
+                tp = "YUKSELIS BEKLENIYOR"
+            elif ai_skor >= 55:
+                tp = "YUKSELIS EGILIMI"
+            elif ai_skor < 35:
+                tp = "DUSUS BEKLENIYOR"
+            elif ai_skor < 45:
+                tp = "ZAYIF SEYIR"
             else:
-                tp, sn = "BEKLE", "BEKLE"
+                tp = "BEKLE"
+
             rows.append({
                 "Hisse": t.replace(".IS", ""),
                 "Katilim Uygun": "EVET" if t in katilim_set else "HAYIR",
-                "Net Guc Skoru": round(ai, 2),
-                "Sinyal": sn,
+                "Net Guc Skoru": round(ai_skor, 2),
+                "Sinyal": sinyal,
+                "Yorum": yorum,
+                "RSI": round(h['RSI'].iloc[-1], 1) if not pd.isna(h['RSI'].iloc[-1]) else 50,
+                "MACD Hist": round(h['MACD_HIST'].iloc[-1], 3) if not pd.isna(h['MACD_HIST'].iloc[-1]) else 0,
+                "Stoch K": round(h['STOCH_K'].iloc[-1], 1) if not pd.isna(h['STOCH_K'].iloc[-1]) else 50,
+                "BB Pozisyon": round(bb_poz, 2),
                 "Trend Karari": "Yukselis Kanali" if gd > 0 else "Dusus Kanali",
-                "OlasI Haber": "Hacim Genislemesi" if vr > 1.5 else "Normal",
-                "Trend Projeksiyon": "Guclu Trend Devami" if ai > 70 else "Bant Ici Toparlanma",
+                "OlasI Haber": "Hacim Genislemesi" if h['Vol_Ratio'].iloc[-1] > 1.5 else "Normal",
+                "Trend Projeksiyon": "Guclu Trend Devami" if ai_skor > 70 else "Bant Ici Toparlanma",
                 "Beklenen Getiri": "%" + str(round(gd, 2)),
-                "Erken Konum": "HACIM & SIKISMA" if cr < 1.1 and vr > 1.5 else "NORMAL",
-                "Swing Al-Sat": "SWING / INTEL UYGUN" if ai > 60 else "HARIC",
-                "Al Olasiligi": "%" + str(round(ai, 1)),
-                "Hacim (Vol)": str(round(vr, 2)) + "x",
+                "Erken Konum": "HACIM & SIKISMA" if cr < 1.1 else "NORMAL",
+                "Swing Al-Sat": "SWING UYGUN" if ai_skor > 60 else "HARIC",
+                "Al Olasiligi": "%" + str(round(ai_skor, 1)),
+                "Hacim (Vol)": str(round(h['Vol_Ratio'].iloc[-1], 2)) + "x",
                 "Sikisma (Comp)": str(round(cr, 2)) + "x",
                 "Fiyat": str(round(sf, 2)) + " TL",
+                "Stop-Loss": str(sl) + " TL" if sl else "-",
+                "Hedef": str(hedef) + " TL" if hedef else "-",
+                "Risk/Odul": str(rr) if rr else "-",
+                "Risk Seviye": rsk if rsk else "-",
                 "Donem Degisimi": "%" + str(round(gd, 2)),
                 "Endeks RS": "%" + str(round(gd, 2)),
                 "Hurst": round(hu, 2),
                 "VWAP Sapma": "%" + str(round(vs, 2)),
                 "Net Para Girisi": round(pg, 2),
-                "Guclu Yukselis": "EVET" if ai > 75 else "HAYIR",
+                "Guclu Yukselis": "EVET" if ai_skor > 75 else "HAYIR",
                 "15 Dk Sonra Tahmin": tp
             })
         except:
@@ -143,18 +315,31 @@ def process(raw, tickers, katilim_set):
     df = df.sort_values(by=['Agirlik', 'Net Guc Skoru'], ascending=[True, False]).drop(columns=['Agirlik'])
     return df
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_chart_data(ticker):
+    try:
+        h = yf.Ticker(ticker).history(period="5d", interval="15m")
+        if h.empty:
+            return None
+        h['RSI'] = hesapla_rsi(h['Close'])
+        h['MACD'], h['MACD_SIG'], h['MACD_HIST'] = hesapla_macd(h['Close'])
+        h['BB_UST'], h['BB_ORTA'], h['BB_ALT'] = hesapla_bollinger(h['Close'])
+        return h
+    except:
+        return None
+
 piyasa = is_market_hours()
 if piyasa:
     st_autorefresh(interval=60000, key="refresh")
 
 st.title("BIST Swing/Intraday Trend & Hacim Sikismasi Patlama Terminali")
-st.caption("Son Guncelleme (TRT): " + trt_now().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli Mod")
+st.caption("Son Guncelleme (TRT): " + trt_now().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli | 20+ Teknik Gosterge")
 
 if piyasa:
-    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri akisi 09:40-18:30 arasi her 60 saniyede bir calisiyor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri akisi 09:40-18:30 arasi her 60 saniyede bir</div>', unsafe_allow_html=True)
 else:
     if trt_now().weekday() >= 5:
-        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Hafta sonu. Otomatik cekim durduruldu.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Hafta sonu.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Seans saatleri (09:40-18:30) disinda.</div>', unsafe_allow_html=True)
 
@@ -177,10 +362,10 @@ with c3:
 with c4:
     st.metric("Veri Cekme", str(st.session_state.fetch_count), "Son: " + st.session_state.last_fetch_time)
 
-t1, t2, t3, t4, t5 = st.tabs(["Trend Matrisi", "VIOP Denge", "KAP Haberleri", "Gorsel", "Kapanis"])
+t1, t2, t3, t4, t5, t6 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "VIOP Denge", "KAP Haberleri", "Kapanis"])
 
 with t1:
-    st.subheader("Gelismis Nicel Trend Matrisi")
+    st.subheader("Gelismis Nicel Trend Matrisi (20+ Gosterge)")
     cf1, cf2, cf3, cf4 = st.columns([2, 2, 2, 2])
     with cf1:
         sk = st.checkbox("Sadece Islam'a Uygun", value=True)
@@ -196,7 +381,7 @@ with t1:
         st.session_state.fetch_count += 1
         st.session_state.last_fetch_time = trt_now().strftime("%H:%M:%S")
         st.rerun()
-    with st.spinner("Gercek BIST verileri yukleniyor..."):
+    with st.spinner("Gercek BIST verileri ve gostergeler hesaplaniyor..."):
         tk = TUM_HISSELER.split(",")
         ks = set(KATILIM.split(","))
         rw = fetch_all(tuple(tk))
@@ -219,58 +404,9 @@ with t1:
             if "BEKLE" in str(v):
                 return 'background-color: #e65100; color: white; font-weight: bold;'
             return ''
-        def rk(v):
-            return 'color: #4CAF50; font-weight: bold;' if v == "EVET" else 'color: #F44336;'
-        st.dataframe(df.style.map(rt, subset=["15 Dk Sonra Tahmin"]).map(rk, subset=["Katilim Uygun"]), use_container_width=True, height=700)
-        st.markdown("---")
-        st.subheader("Ozet Istatistikler")
-        s1, s2, s3, s4, s5 = st.columns(5)
-        s1.metric("Gosterilen", len(df))
-        s2.metric("Yukselis", len(df[df["15 Dk Sonra Tahmin"].str.contains("YUKSELIS")]))
-        s3.metric("Katilim", len(df[df["Katilim Uygun"] == "EVET"]))
-        s4.metric("Ort. Guc", str(round(df["Net Guc Skoru"].mean(), 1)))
-        s5.metric("Al Sinyali", len(df[df["Sinyal"].isin(["GUCLU TREND", "AL"])]))
-    else:
-        st.warning("Veri cekilemedi.")
-
-with t2:
-    st.subheader("VIOP Denge Analizi")
-    st.info("Vadeli islemler ile spot piyasa arasindaki denge pozitif yonlu.")
-    v1, v2, v3 = st.columns(3)
-    v1.metric("VIOP 30 Endeks", "11.450", "%0.45")
-    v2.metric("Spot Endeks", "11.420", "%0.40")
-    v3.metric("Denge Farki", "+30 Puan", "Pozitif")
-
-with t3:
-    st.subheader("Canli KAP Haberleri")
-    st.warning("Paneldeki hisselerle ilgili KAP bildirimleri burada listelenecek.")
-    st.write("**[14:18:40] ASELS** - Yeni Siparis Anlasmasi (Pozitif)")
-    st.write("**[14:15:20] TUPRS** - Uretim Verileri (Notr)")
-    st.write("**[13:50:10] BIMAS** - Yeni Magaza (Pozitif)")
-
-with t4:
-    st.subheader("Tum Hisseler Gorseli")
-    st.line_chart(pd.DataFrame(np.random.randn(20, 3), columns=['A', 'B', 'C']))
-
-with t5:
-    st.subheader("Seans Kapanisi & Overnight Firsatlari")
-    st.success("Overnight tasinabilecek katilim hisseleri hazirlandi.")
-    st.write("- ASELS: Hacim patlamasi ve sikisma sonrasi kirilim bekleniyor.")
-    st.write("- TUPRS: Endeks RS pozitif, VWAP uzerinde tutunma var.")
-
-st.markdown("---")
-b1, b2 = st.columns(2)
-with b1:
-    st.markdown('<div class="counter-box"><h4>Veri Cekme Istatistikleri</h4><p><b>Toplam Cekim:</b> ' + str(st.session_state.fetch_count) + '</p><p><b>Son Cekim:</b> ' + st.session_state.last_fetch_time + '</p><p><b>Taranan Hisse:</b> 300</p></div>', unsafe_allow_html=True)
-with b2:
-    dm = "ACIK" if piyasa else "KAPALI"
-    st.markdown('<div class="counter-box"><h4>Sistem Durumu</h4><p><b>Otomatik Yenileme:</b> 60 sn</p><p><b>Veri Gecikmesi:</b> 15 dakika</p><p><b>Turkiye Saati:</b> ' + trt_now().strftime('%H:%M:%S') + '</p><p><b>Piyasa:</b> ' + dm + '</p></div>', unsafe_allow_html=True)
-
-st.caption("Bu paneldeki veriler 15 dakika gecikmelidir. Gercek yatirim tavsiyesi degildir.")
-
-if piyasa:
-    st.success("Otomatik yenileme AKTIF. 60 saniye icinde guncellenecek.")
-else:
-    st.warning("Piyasa kapali. Otomatik yenileme devre disi.")
-
-# BITTI
+        def rs(v):
+            if "GUCLU AL" in str(v):
+                return 'background-color: #1b5e20; color: white; font-weight: bold;'
+            if "AL" in str(v) and "GUCLU" not in str(v):
+                return 'background-color: #2e7d32; color: white;'
+            if "SAT" in st
