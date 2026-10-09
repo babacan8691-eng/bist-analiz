@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
-from datetime import datetime, timedelta
 import random
+from datetime import datetime
 
 # Sayfa Ayarları (Karanlık Tema ve Geniş Ekran)
 st.set_page_config(page_title="BIST Pro Terminali", layout="wide", initial_sidebar_state="collapsed")
@@ -13,7 +12,7 @@ st.markdown("""
 <style>
     .stApp { background-color: #0E1117; color: #FFFFFF; }
     .stDataFrame { background-color: #1E1E1E; }
-    .css-1d391kg { background-color: #1E1E1E; }
+    div[data-testid="stMetricValue"] { font-size: 20px; }
     .stMetric { background-color: #1E1E1E; padding: 10px; border-radius: 5px; }
 </style>
 """, unsafe_allow_html=True)
@@ -44,7 +43,7 @@ if not st.session_state.logged_in:
 # --- 2. VERİ SİMÜLASYONU (Gerçek API Bağlanana Kadar) ---
 def get_mock_data():
     # İlk 350 hisseyi ve İslami filtreyi simüle ediyoruz
-    hisseler = ["BRISA.IS", "CCOLA.IS", "HEKTS.IS", "SAHOL.IS", "SASA.IS", "EKSUN.IS", "GLYHO.IS", "ENKAI.IS", "PETKM.IS", "ENERY.IS"]
+    hisseler = ["BRISA.IS", "CCOLA.IS", "HEKTS.IS", "SAHOL.IS", "SASA.IS", "EKSUN.IS", "GLYHO.IS", "ENKAI.IS", "PETKM.IS", "ENERY.IS", "ASELS.IS", "KCHOL.IS", "TUPRS.IS", "BIMAS.IS", "FROTO.IS"]
     data = []
     for h in hisseler:
         net_guc = random.uniform(30, 95)
@@ -55,13 +54,10 @@ def get_mock_data():
         # 15 Dakika Sonrası Tahmin Mantığı
         if comp > 1.3 and vol > 2.0:
             tahmin = "🚀 YÜKSELİŞ BEKLENİYOR (%78)"
-            renk = "green"
         elif comp < 0.9 and vol < 1.0:
             tahmin = "📉 DÜŞÜŞ BEKLENİYOR (%65)"
-            renk = "red"
         else:
             tahmin = "⏳ BEKLE (%50)"
-            renk = "orange"
             
         data.append({
             "Hisse": h,
@@ -83,8 +79,7 @@ def get_mock_data():
             "VWAP Sapma": f"%{round(random.uniform(-2, 3), 2)}",
             "Net Para Girişi": round(random.uniform(-1000000, 5000000), 2),
             "Güçlü Yükseliş": "EVET" if net_guc > 80 else "HAYIR",
-            "15 Dk Sonra Tahmin": tahmin,
-            "Tahmin Renk": renk
+            "15 Dk Sonra Tahmin": tahmin
         })
     return pd.DataFrame(data)
 
@@ -92,7 +87,7 @@ def get_mock_data():
 st.title("🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali")
 st.caption(f"Son Güncelleme (TRT): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 15Dk Gecikmeli Güvenli Trend & Sıkışma Avcısı Modu")
 
-# Üst Metrikler (Görsellerdeki gibi)
+# Üst Metrikler
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(label="🌐 BIST 100 Trend Teyidi", value="YÜKSELİŞ ONAYLI", delta="%0.02")
@@ -118,19 +113,25 @@ with tab1:
 
     df = get_mock_data()
     
-    # Renklendirme Fonksiyonu
-    def color_prediction(val):
-        if "YÜKSELİŞ" in str(val):
-            return 'background-color: #1b5e20; color: white; font-weight: bold;'
-        elif "DÜŞÜŞ" in str(val):
-            return 'background-color: #b71c1c; color: white; font-weight: bold;'
-        elif "BEKLE" in str(val):
-            return 'background-color: #e65100; color: white; font-weight: bold;'
-        return ''
+    # Veri boş değilse tabloyu göster
+    if not df.empty:
+        # Renklendirme Fonksiyonu (Yeni Pandas sürümleri için)
+        def color_prediction(val):
+            if "YÜKSELİŞ" in str(val):
+                return 'background-color: #1b5e20; color: white; font-weight: bold;'
+            elif "DÜŞÜŞ" in str(val):
+                return 'background-color: #b71c1c; color: white; font-weight: bold;'
+            elif "BEKLE" in str(val):
+                return 'background-color: #e65100; color: white; font-weight: bold;'
+            return ''
 
-    # Tabloyu Göster
-    styled_df = df.style.applymap(color_prediction, subset=["15 Dk Sonra Tahmin"])
-    st.dataframe(styled_df, use_container_width=True, height=600)
+        # HATA VEREN KISIM DÜZELTİLDİ: applymap yerine map kullanıldı
+        styled_df = df.style.map(color_prediction, subset=["15 Dk Sonra Tahmin"])
+        
+        # Tabloyu Göster
+        st.dataframe(styled_df, use_container_width=True, height=600)
+    else:
+        st.warning("Gösterilecek hisse verisi bulunamadı.")
 
 with tab2:
     st.subheader("VIOP Denge Analizi")
@@ -149,14 +150,3 @@ with tab4:
 with tab5:
     st.subheader("Seans Kapanışı & Overnight Fırsatları")
     st.success("Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.")
-
-# --- 4. OTOMATİK YENİLEME (Her 1 Dakika) ---
-# Streamlit'te otomatik yenileme için sayfa sonunda bir bekleme süresi koyuyoruz.
-# Gerçek sunucuda bu bir Cron Job ile yapılmalıdır, ancak arayüzde simüle ediyoruz.
-if st.button("🔄 Verileri Şimdi Yenile"):
-    st.rerun()
-
-# Sayfanın her dakika başında yenilenmesini sağlayan gizli döngü (Streamlit Cloud için uygun)
-# Not: Bu yöntem sunucuyu yorabilir, ideal olanı arka planda APScheduler çalıştırmaktır.
-# time.sleep(60)
-# st.rerun()
