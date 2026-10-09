@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, time
+from datetime import datetime, timedelta, timezone
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="BIST Pro", layout="wide", initial_sidebar_state="collapsed")
 
@@ -16,8 +17,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- TURKIYE SAATI FONKSIYONU (UTC+3) ---
+def trt_now():
+    utc_simdi = datetime.now(timezone.utc)
+    trt = utc_simdi.astimezone(timezone(timedelta(hours=3)))
+    return trt
+
 def is_market_hours():
-    simdi = datetime.now()
+    simdi = trt_now()
     if simdi.weekday() >= 5:
         return False
     su_an = simdi.time()
@@ -249,17 +256,24 @@ def process_data(raw_data, tickers):
         return df
     return pd.DataFrame()
 
-st.title("BIST Swing/Intraday Trend & Hacim Sikismasi Patlama Terminali")
-st.caption("Son Guncelleme (TRT): " + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli Mod")
-
+# ==================== OTOMATIK YENILEME ====================
 piyasa_acik = is_market_hours()
+
+# Piyasa acikken her 60 saniyede bir otomatik yenile
 if piyasa_acik:
-    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri akisi 09:40 - 18:30 arasi her 60 saniyede bir</div>', unsafe_allow_html=True)
+    st_autorefresh(interval=60000, key="auto_refresh_key")
+
+# ==================== BASLIK ====================
+st.title("BIST Swing/Intraday Trend & Hacim Sikismasi Patlama Terminali")
+st.caption("Son Guncelleme (TRT): " + trt_now().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli Mod")
+
+if piyasa_acik:
+    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri akisi 09:40 - 18:30 arasi her 60 saniyede bir calisiyor</div>', unsafe_allow_html=True)
 else:
-    if datetime.now().weekday() >= 5:
+    if trt_now().weekday() >= 5:
         st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Hafta sonu. Otomatik cekim durduruldu.</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Seans saatleri disinda. Otomatik cekim durduruldu.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Seans saatleri (09:40-18:30) disinda. Otomatik cekim durduruldu.</div>', unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -299,7 +313,7 @@ with tab1:
         st.cache_data.clear()
         st.session_state.manual_trigger = True
         st.session_state.fetch_count += 1
-        st.session_state.last_fetch_time = datetime.now().strftime("%H:%M:%S")
+        st.session_state.last_fetch_time = trt_now().strftime("%H:%M:%S")
         st.rerun()
 
     with st.spinner("Gercek BIST verileri yukleniyor..."):
@@ -309,7 +323,7 @@ with tab1:
             df = process_data(raw, tickers)
             if not st.session_state.manual_trigger:
                 st.session_state.fetch_count += 1
-                st.session_state.last_fetch_time = datetime.now().strftime("%H:%M:%S")
+                st.session_state.last_fetch_time = trt_now().strftime("%H:%M:%S")
             st.session_state.manual_trigger = False
         else:
             df = pd.DataFrame()
@@ -385,17 +399,9 @@ with b1:
     st.markdown('<div class="counter-box"><h4>Veri Cekme Istatistikleri</h4><p><b>Toplam Cekim:</b> ' + str(st.session_state.fetch_count) + '</p><p><b>Son Cekim:</b> ' + st.session_state.last_fetch_time + '</p><p><b>Taranan Hisse:</b> 300</p></div>', unsafe_allow_html=True)
 with b2:
     durum = "ACIK" if piyasa_acik else "KAPALI"
-    st.markdown('<div class="counter-box"><h4>Sistem Durumu</h4><p><b>Otomatik Yenileme:</b> 09:40-18:30 arasi 60 sn</p><p><b>Veri Gecikmesi:</b> 15 dakika</p><p><b>Saat:</b> ' + datetime.now().strftime('%H:%M:%S') + '</p><p><b>Piyasa:</b> ' + durum + '</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="counter-box"><h4>Sistem Durumu</h4><p><b>Otomatik Yenileme:</b> 09:40-18:30 arasi 60 sn</p><p><b>Veri Gecikmesi:</b> 15 dakika</p><p><b>Turkiye Saati:</b> ' + trt_now().strftime('%H:%M:%S') + '</p><p><b>Piyasa:</b> ' + durum + '</p></div>', unsafe_allow_html=True)
 
 st.caption("Bu paneldeki veriler 15 dakika gecikmelidir. Gercek yatirim tavsiyesi degildir.")
 
-if piyasa_acik and not st.session_state.manual_trigger:
-    st.markdown('<script>setTimeout(function(){window.location.reload(1);}, 60000);</script>', unsafe_allow_html=True)
-    st.info("Otomatik yenileme aktif. Sayfa 60 saniye icinde yenilenecek.")
-else:
-    if not piyasa_acik:
-        st.warning("Piyasa kapali. Otomatik yenileme devre disi. Manuel buton ile veri cekebilirsiniz.")
-    else:
-        st.info("Manuel mod aktif.")
-
-# BITTI
+if piyasa_acik:
+    st.success("Otomatik yenileme AKTIF. Sayfa
