@@ -144,8 +144,6 @@ def rakamsal_trend_karar_motoru(
     c = np.array(close_s)
     if len(c) < 5:
       return "🎯 Trend: NÖTR / BEKLE", "Standart Bant Akışı"
-
-    # Rakamsal ve net patlama kriterleri (gecikmeyi ekarte eden matris)
     if comp_ratio <= 0.72 and vol_ratio >= 1.25:
       karar = "🎯 Trend: HACİM SIKIŞMASI & KIRILMA"
       beklenti = "Dar Bant Sıkışması Tamamlandı -> Patlama Eşiği"
@@ -405,8 +403,6 @@ def fetch_final_universe_data(b100_benchmark):
         ma10 = close.rolling(window=10).mean().iloc[-1]
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
-
-        # Rakamsal Karar Motoru Çağrısı
         trend_karar, haber_beklenti = rakamsal_trend_karar_motoru(
             close.values,
             high.values,
@@ -417,11 +413,8 @@ def fetch_final_universe_data(b100_benchmark):
             compression_ratio,
             vol_ratio,
         )
-
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
-
-        # Rakamsal Ağırlıklı Net Güç Skoru
         net_guc_skoru = (
             (ai_prob * 0.35)
             + (min(vol_ratio, 2.5) * 25.0)
@@ -429,7 +422,6 @@ def fetch_final_universe_data(b100_benchmark):
             + (max(0.0, rel_strength) * 1.0)
         )
         net_guc_skoru = float(np.clip(net_guc_skoru, 15.0, 95.0))
-
         skor_genel = net_guc_skoru + (projeksiyon_getiri * 1.5)
         skor_gunluk = (
             (vol_ratio * 35.0)
@@ -442,17 +434,14 @@ def fetch_final_universe_data(b100_benchmark):
             + (max(0, clv) * 35.0)
             + (float(compression_ratio <= 0.75) * 30.0)
         )
-
         is_katilim = t in katilim_listesi
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
-
         if hurst_val >= 0.45 or compression_ratio <= 0.72:
           sinyal = "🟢 GÜÇLÜ PATLAMA ADAYI"
         elif hurst_val >= 0.38:
           sinyal = "🟡 TOPARLANMA"
         else:
           sinyal = "⏳ BEKLE"
-
         if is_katilim:
           gunluk_sinyal = (
               "⚡ ERKEN PATLAMA UYGUN"
@@ -461,7 +450,6 @@ def fetch_final_universe_data(b100_benchmark):
           )
         else:
           gunluk_sinyal = "HARİÇ"
-
         erken_durum = (
             "🚨 HACİM & SIKIŞMA PATLAMASI"
             if (vol_ratio >= 1.25 or compression_ratio <= 0.7)
@@ -583,6 +571,8 @@ tab1, tab2, tab3 = st.tabs([
     "🌙 Seans Kapanışı & Overnight Fırsatları",
 ])
 
+col_trend_key = "🎯 Trend Kararı"
+
 with tab1:
   st.subheader(
       "📊 Gelişmiş Nicel Trend Matrisi (Hacim & Sıkışma Odaklı Tarama)"
@@ -607,7 +597,7 @@ with tab1:
       df_goster = df_goster[df_goster["Sinyal"].str.contains("TREND")]
     elif "Erken Sıkışma" in strateji_secimi:
       df_goster = df_goster[
-          df_goster["🎯 Trend Kararı"].str.contains("SIKIŞMASI|SIKIŞMA")
+          df_goster[col_trend_key].str.contains("SIKIŞMASI|SIKIŞMA")
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
@@ -647,4 +637,8 @@ with tab2:
     ].copy()
     if df_gunluk.empty:
       df_gunluk = df_tarama.copy()
-    df_gunluk = df_gunl
+    df_gunluk = df_gunluk.sort_values(
+        by="_SkorGunluk", ascending=False
+    ).reset_index(drop=True)
+    df_gunluk = df_gunluk.drop(
+        column
