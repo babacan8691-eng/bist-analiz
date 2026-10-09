@@ -4,10 +4,10 @@ import numpy as np
 import random
 from datetime import datetime
 
-# Sayfa Ayarları (Karanlık Tema ve Geniş Ekran)
+# Sayfa Ayarları
 st.set_page_config(page_title="BIST Pro Terminali", layout="wide", initial_sidebar_state="collapsed")
 
-# Karanlık Tema CSS (Görsellerinizdeki gibi)
+# Karanlık Tema CSS
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; color: #FFFFFF; }
@@ -17,32 +17,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. OTURUM AÇMA (LOGIN) MODÜLÜ ---
+# --- 1. OTURUM AÇMA (LOGIN) MODÜLÜ (DÜZELTİLDİ) ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 def login():
     st.title("🔐 BIST Pro Terminali Girişi")
-    col1, col2 = st.columns(2)
-    with col1:
-        username = st.text_input("Kullanıcı Adı")
-    with col2:
-        password = st.text_input("Şifre", type="password")
     
-    if st.button("Giriş Yap"):
-        if username == "Cuma Babacan" and password == "784512":
-            st.session_state.logged_in = True
-            st.rerun()
-        else:
-            st.error("Hatalı kullanıcı adı veya şifre!")
+    # st.form kullanarak butona basılana kadar sayfanın yenilenmesini engelliyoruz
+    with st.form("login_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            username = st.text_input("Kullanıcı Adı")
+        with col2:
+            password = st.text_input("Şifre", type="password")
+        
+        submit_button = st.form_submit_button("Giriş Yap")
+
+        if submit_button:
+            # .strip() komutu başta ve sondaki görünmez boşlukları temizler
+            if username.strip() == "Cuma Babacan" and password.strip() == "784512":
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Hatalı kullanıcı adı veya şifre! Lütfen büyük/küçük harf ve boşluklara dikkat edin.")
 
 if not st.session_state.logged_in:
     login()
-    st.stop() # Giriş yapılmadan aşağıyı gösterme
+    st.stop()
 
-# --- 2. VERİ SİMÜLASYONU (Gerçek API Bağlanana Kadar) ---
+# --- 2. VERİ SİMÜLASYONU ---
 def get_mock_data():
-    # İlk 350 hisseyi ve İslami filtreyi simüle ediyoruz
     hisseler = ["BRISA.IS", "CCOLA.IS", "HEKTS.IS", "SAHOL.IS", "SASA.IS", "EKSUN.IS", "GLYHO.IS", "ENKAI.IS", "PETKM.IS", "ENERY.IS", "ASELS.IS", "KCHOL.IS", "TUPRS.IS", "BIMAS.IS", "FROTO.IS"]
     data = []
     for h in hisseler:
@@ -51,7 +56,6 @@ def get_mock_data():
         comp = random.uniform(0.8, 1.8)
         fiyat = random.uniform(10, 100)
         
-        # 15 Dakika Sonrası Tahmin Mantığı
         if comp > 1.3 and vol > 2.0:
             tahmin = "🚀 YÜKSELİŞ BEKLENİYOR (%78)"
         elif comp < 0.9 and vol < 1.0:
@@ -87,7 +91,6 @@ def get_mock_data():
 st.title("🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali")
 st.caption(f"Son Güncelleme (TRT): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 15Dk Gecikmeli Güvenli Trend & Sıkışma Avcısı Modu")
 
-# Üst Metrikler
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(label="🌐 BIST 100 Trend Teyidi", value="YÜKSELİŞ ONAYLI", delta="%0.02")
@@ -96,13 +99,11 @@ with col2:
 with col3:
     st.metric(label="🔄 Trend Tarama Akışı", value="Aktif (30 Sn Döngü)", delta="Sayfa: 34")
 
-# Sekmeler
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Genel Trend & Sıkışma Matrisi", "⚖️ VIOP Denge", "📰 Canlı KAP Haberleri", "📈 Tüm Hisseler Görseli", "🌙 Seans Kapanış Fırsatları"])
 
 with tab1:
     st.subheader("Gelişmiş Nicel Trend Matrisi (Hacim & Sıkışma Odaklı Tarama)")
     
-    # Filtreleme Seçenekleri
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         strateji = st.radio("Strateji Modu:", ["Tüm Hisseler / Nötr", "Yüksek Güvenli Trend", "İslam'a Uygun Öncüler"], horizontal=True)
@@ -113,9 +114,7 @@ with tab1:
 
     df = get_mock_data()
     
-    # Veri boş değilse tabloyu göster
     if not df.empty:
-        # Renklendirme Fonksiyonu (Yeni Pandas sürümleri için)
         def color_prediction(val):
             if "YÜKSELİŞ" in str(val):
                 return 'background-color: #1b5e20; color: white; font-weight: bold;'
@@ -125,10 +124,7 @@ with tab1:
                 return 'background-color: #e65100; color: white; font-weight: bold;'
             return ''
 
-        # HATA VEREN KISIM DÜZELTİLDİ: applymap yerine map kullanıldı
         styled_df = df.style.map(color_prediction, subset=["15 Dk Sonra Tahmin"])
-        
-        # Tabloyu Göster
         st.dataframe(styled_df, use_container_width=True, height=600)
     else:
         st.warning("Gösterilecek hisse verisi bulunamadı.")
