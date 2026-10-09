@@ -6,32 +6,26 @@ from streamlit_autorefresh import st_autorefresh
 import streamlit as st
 import yfinance as yf
 
-# Sayfa Yapılandırması
 st.set_page_config(
     page_title="BIST Profesyonel Nicel Trend & Sıkışma Terminali", layout="wide"
 )
 
-# --- GELİŞMİŞ RADAR, DİNAMİK ANİMASYON VE STİLLER ---
 st.markdown(
     "<style>@keyframes yanip-son { 0% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); } 50% { opacity: 0.4; transform: scale(0.98); box-shadow: 0 0 15px rgba(255, 75, 75, 0.9); } 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 5px rgba(255, 75, 75, 0.4); } } .flash-badge { background-color: #ff4b4b; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; display: inline-block; animation: yanip-son 1.5s infinite ease-in-out; } .kap-kutu { background-color: rgba(255, 165, 0, 0.12); border-left: 4px solid #ffaa00; padding: 10px; border-radius: 4px; margin-bottom: 8px; font-size: 14px; } .strateji-kutu { background-color: rgba(0, 150, 255, 0.08); border-left: 4px solid #00bfff; padding: 12px; border-radius: 4px; margin-bottom: 12px; font-size: 14px; }</style>",
     unsafe_allow_html=True,
 )
 
 
-# Şifre Koruma
 def check_password():
   if "password_correct" not in st.session_state:
     st.session_state["password_correct"] = False
-
   if st.session_state["password_correct"]:
     return True
-
   st.subheader("🔐 Yetkili Giriş Paneli")
   with st.form("login_form"):
     username = st.text_input("Kullanıcı Adı:")
     password = st.text_input("Erişim Şifresi:", type="password")
     submitted = st.form_submit_button("Giriş Yap")
-
     if submitted:
       if username.strip() == "Cuma Babacan" and password.strip() == "784512":
         st.session_state["password_correct"] = True
@@ -44,7 +38,6 @@ def check_password():
 if not check_password():
   st.stop()
 
-# Türkiye Saat Dilimi ve Borsa Saatleri
 tr_tz = pytz.timezone("Europe/Istanbul")
 simdi = datetime.now(tr_tz)
 aktif_gun = simdi.weekday()
@@ -53,7 +46,6 @@ borsa_acik_mi = (aktif_gun < 5) and (
     time(9, 40) <= aktif_saat <= time(18, 30)
 )
 
-# Canlı Otomatik Akış Döngüsü
 if borsa_acik_mi:
   count = st_autorefresh(interval=30000, key="bist_canli_akis_30s")
   st.sidebar.success(
@@ -64,7 +56,6 @@ else:
       "🔴 Borsa Kapalı - Gün Sonu & Seans Kapanış Modu Devrede"
   )
 
-# Başlık ve Felsefe Vurgusu
 st.markdown(
     "## 🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali"
 )
@@ -79,8 +70,6 @@ with col_btn:
     st.rerun()
 
 st.markdown("---")
-
-# Felsefe Bilgilendirme Kutusu
 st.markdown(
     "<div class='strateji-kutu'>💡 <b>Nicel Trend & Sıkışma Felsefesi:</b>"
     " Sistemimiz saniyelik scalping yarışları yerine, <b>15-30 dakikalık"
@@ -117,14 +106,11 @@ def nicel_trend_projeksiyon(
     high = np.array(high_series)
     low = np.array(low_series)
     volume = np.array(volume_series)
-
     if len(close) < 10:
       return "⚖️ Denge / Yatay Bant", 0.35
-
     fiyat_suan = close[-1]
     fiyat_onceki = close[-3]
     fiyat_degisim = ((fiyat_suan - fiyat_onceki) / fiyat_onceki) * 100
-
     vol_ortalama = np.mean(volume[-5:]) if len(volume) >= 5 else volume[-1]
     vol_carpan = (
         float(volume[-1] / vol_ortalama) if vol_ortalama > 0 else 1.0
@@ -134,14 +120,11 @@ def nicel_trend_projeksiyon(
         if fiyat_suan > 0
         else 0.01
     ) * 100
-
     projeksiyon_getiri = (fiyat_degisim * 0.5) + (
         ortalama_marj * np.sign(fiyat_degisim if fiyat_degisim != 0 else 1) * 0.3
     ) * min(vol_carpan, 1.8)
-
     if abs(projeksiyon_getiri) < 0.05:
       projeksiyon_getiri = 1.15 if fiyat_suan >= close[-2] else -1.15
-
     if projeksiyon_getiri > 0.4:
       durum = "🚀 Güçlü Trend Devamı Bekleniyor"
     elif projeksiyon_getiri < -0.4:
@@ -150,7 +133,6 @@ def nicel_trend_projeksiyon(
       durum = "🔄 Bant İçi Toparlanma"
     else:
       durum = "⚠️ Sıkışma / Yön Arayışı"
-
     return durum, float(projeksiyon_getiri)
   except:
     return "🚀 Güçlü Trend Devamı Bekleniyor", 1.25
@@ -163,12 +145,10 @@ def trend_karar_motoru(
     c = np.array(close_s)
     if len(c) < 5:
       return "🎯 Trend: NÖTR / BEKLE", "Standart Bant Akışı"
-
     egim_kisa = (c[-1] - c[-3]) / c[-3] if c[-3] > 0 else 0
     hacim_faktor = (
         float(vol_s[-1] / np.mean(vol_s[-5:])) if len(vol_s) >= 5 else 1.0
     )
-
     if comp_ratio <= 0.75 and hacim_faktor >= 1.25:
       karar = "🎯 Trend: HACİM SIKIŞMASI & KIRILMA"
       beklenti = (
@@ -183,7 +163,6 @@ def trend_karar_motoru(
     else:
       karar = "⚖️ Trend: YATAY DAR BANT"
       beklenti = "Hacim Genişlemesi Bekleniyor"
-
     return karar, beklenti
   except:
     return "🎯 Trend: YÜKSELİŞ BEKLENTİSİ", "Hacim Akış Beklentisi"
@@ -203,7 +182,6 @@ def get_market_indicators():
       trend = "YÜKSELİŞ ONAYLI" if b100_degisim >= 0 else "KONSOLİDASYON"
     else:
       trend = "YÜKSELİŞ"
-
     xu030 = yf.Ticker("XU030.IS")
     u30_hist = xu030.history(period="5d", interval="15m")
     if u30_hist.empty:
@@ -218,7 +196,6 @@ def get_market_indicators():
         viop_durum = f"⚡ VIOP Alım Baskısı (%{v_degisim:+.2f})"
       elif v_degisim < -0.15:
         viop_durum = f"⚠️ VIOP Satış Baskısı (%{v_degisim:+.2f})"
-
     return trend, f"%{b100_degisim:.2f}", b100_degisim, viop_durum
   except:
     return "YÜKSELİŞ", "%1.25", 1.25, "⚡ VIOP Alım Baskısı"
@@ -243,9 +220,10 @@ def get_live_kap_news():
   ]
 
 
-with st.expander(
+expander_container = st.expander(
     "🚨 Canlı Haberler, Sıkışma Alarmları & Seans Bilgi Paneli", expanded=True
-):
+)
+with expander_container:
   for haber in get_live_kap_news():
     st.markdown(f"<div class='kap-kutu'>{haber}</div>", unsafe_allow_html=True)
 
@@ -335,7 +313,6 @@ def fetch_final_universe_data(b100_benchmark):
       "YYLGD.IS",
   ]
   tickers = list(dict.fromkeys(tickers))
-
   katilim_listesi = [
       "THYAO.IS",
       "EREGL.IS",
@@ -380,7 +357,6 @@ def fetch_final_universe_data(b100_benchmark):
       "VESBE.IS",
       "YEOTK.IS",
   ]
-
   sonuclar = []
   for t in tickers:
     try:
@@ -388,24 +364,19 @@ def fetch_final_universe_data(b100_benchmark):
       hist = stock.history(period="5d", interval="15m")
       if hist.empty or len(hist) < 3:
         hist = stock.history(period="5d")
-
       if not hist.empty and len(hist) >= 3:
         fiyat = float(hist["Close"].iloc[-1])
         fiyat_once = float(hist["Close"].iloc[0])
         degisim = ((fiyat - fiyat_once) / fiyat_once) * 100
-
         close = hist["Close"]
         high = hist["High"]
         low = hist["Low"]
         volume = hist["Volume"]
-
         projeksiyon_durum, projeksiyon_getiri = nicel_trend_projeksiyon(
             close.values, high.values, low.values, volume.values
         )
-
         hurst_val = calculate_hurst(close.values)
         rel_strength = degisim - b100_benchmark
-
         ortalama_hacim = (
             volume.iloc[:-1].mean() if len(volume) > 1 else volume.iloc[-1]
         )
@@ -413,7 +384,6 @@ def fetch_final_universe_data(b100_benchmark):
         vol_ratio = (
             float(son_hacim / ortalama_hacim) if ortalama_hacim > 0 else 1.0
         )
-
         typical_price = (high + low + close) / 3
         vwap = (
             (typical_price * volume).sum() / volume.sum()
@@ -421,23 +391,19 @@ def fetch_final_universe_data(b100_benchmark):
             else fiyat
         )
         vwap_sapma = ((fiyat - vwap) / vwap) * 100
-
         h_l_diff = high.iloc[-1] - low.iloc[-1]
         clv = (
             (close.iloc[-1] - low.iloc[-1])
             - (high.iloc[-1] - close.iloc[-1])
         ) / h_l_diff if h_l_diff > 0 else 0.0
-
         rolling_range = (high - low).rolling(window=3).mean().iloc[-1]
         avg_range = (high - low).rolling(window=10).mean().iloc[-1]
         compression_ratio = (
             float(rolling_range / avg_range) if avg_range > 0 else 1.0
         )
-
         ma10 = close.rolling(window=10).mean().iloc[-1]
         std10 = close.rolling(window=10).std().iloc[-1]
         z_score = float((fiyat - ma10) / (std10 + 1e-9))
-
         trend_karar, haber_beklenti = trend_karar_motoru(
             close.values,
             high.values,
@@ -447,54 +413,46 @@ def fetch_final_universe_data(b100_benchmark):
             z_score,
             compression_ratio,
         )
-
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
-
         net_guc_skoru = (
-            (ai_prob * 0.30)
-            + (min(vol_ratio, 3.0) * 25.0)
+            (ai_prob * 0.35)
+            + (min(vol_ratio, 2.5) * 25.0)
             + (max(0.0, 1.0 - compression_ratio) * 25.0)
-            + (max(0.0, rel_strength) * 2.0)
+            + (max(0.0, rel_strength) * 1.5)
         )
-        net_guc_skoru = float(np.clip(net_guc_skoru, 10.0, 99.9))
-
-        skor_genel = net_guc_skoru + (projeksiyon_getiri * 2.0)
+        net_guc_skoru = float(np.clip(net_guc_skoru, 15.0, 92.5))
+        skor_genel = net_guc_skoru + (projeksiyon_getiri * 1.5)
         skor_gunluk = (
             (vol_ratio * 30.0)
-            + (float(compression_ratio <= 0.8) * 20.0)
+            + (float(compression_ratio <= 0.8) * 25.0)
             + (max(0, clv) * 25.0)
-            + (net_guc_skoru * 0.25)
+            + (net_guc_skoru * 0.20)
         )
         skor_overnight = (
             (vol_ratio * 35.0)
             + (max(0, clv) * 35.0)
             + (float(compression_ratio <= 0.75) * 30.0)
         )
-
         is_katilim = t in katilim_listesi
         katilim_durum = "EVET (Katılım)" if is_katilim else "HAYIR"
-
         if hurst_val >= 0.45:
           sinyal = "🟢 GÜÇLÜ TREND"
         elif hurst_val >= 0.38:
           sinyal = "🟡 TOPARLANMA"
         else:
           sinyal = "⏳ BEKLE"
-
         if is_katilim:
           gunluk_sinyal = (
               "⚡ SWING / İNTEL UYGUN" if vol_ratio >= 0.7 else "⏳ BEKLE"
           )
         else:
           gunluk_sinyal = "HARİÇ"
-
         erken_durum = (
             "🚨 HACİM & SIKIŞMA PATLAMASI"
             if (vol_ratio >= 1.3 or compression_ratio <= 0.7)
             else "NORMAL"
         )
-
         sonuclar.append({
             "Hisse": t,
             "_SkorGenel": skor_genel,
@@ -520,7 +478,6 @@ def fetch_final_universe_data(b100_benchmark):
         })
     except:
       continue
-
   return pd.DataFrame(sonuclar)
 
 
@@ -604,7 +561,6 @@ def guvenli_styler(df):
     return df
 
 
-# 3'LÜ SEKME YAPISI
 tab1, tab2, tab3 = st.tabs([
     "Genel Trend & Sıkışma Terminali",
     "Katılım Özel Intraday Swing",
@@ -629,7 +585,6 @@ with tab1:
   sadece_katilim = st.checkbox(
       "Yalnızca İslam'a Uygun (Katılım) Hisseler", value=False, key="t1_c"
   )
-
   if not df_tarama.empty:
     df_goster = df_tarama.copy()
     if "Trend" in strateji_secimi or "Güvenli" in strateji_secimi:
@@ -640,10 +595,8 @@ with tab1:
       ]
     elif "İslam'a Uygun" in strateji_secimi or sadece_katilim:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
-
     if sadece_katilim and "İslam'a Uygun" not in strateji_secimi:
       df_goster = df_goster[df_goster["Katılım Uygun"].str.contains("EVET")]
-
     if df_goster.empty:
       st.warning(
           "⚠️ Seçilen filtre kombinasyonuna uygun hisse bulunamadı. Lütfen 'Tüm"
@@ -654,7 +607,7 @@ with tab1:
           by="_SkorGenel", ascending=False
       ).reset_index(drop=True)
       df_goster = df_goster.drop(
-          columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
+          columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore"
       )
       st.dataframe(
           guvenli_styler(df_goster),
@@ -674,12 +627,20 @@ with tab2:
   )
   if not df_tarama.empty:
     df_gunluk = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET")
+        df_tarama["Katılım Uygun"].str.contains("EVET", na=False)
     ].copy()
+    if df_gunluk.empty:
+      df_gunluk = df_tarama.copy()
     df_gunluk = df_gunluk.sort_values(
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
     df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-      )
-                      
+        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore"
+    )
+    st.dataframe(
+        guvenli_styler(df_gunluk),
+        use_container_width=True,
+        hide_index=True,
+    )
+  else:
+    st.warnin
