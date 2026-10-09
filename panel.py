@@ -4,6 +4,7 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta, time
 from streamlit_autorefresh import st_autorefresh
 
@@ -112,23 +113,44 @@ def kointegrasyon(s1, s2):
         return None
 
 
-def kap_haberleri():
-    try:
-        r = requests.get("https://www.kap.org.tr/tr/api/disclosures", timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code != 200:
-            return []
-        data = r.json()
-        sonuc = []
-        for h in data[:25]:
-            sonuc.append({
-                "saat": str(h.get("publishDate", ""))[-8:],
-                "hisse": str(h.get("stockCode", "-")),
-                "baslik": str(h.get("subject", "-"))[:70],
-                "tip": str(h.get("disclosureType", "-"))
-            })
-        return sonuc
-    except Exception:
-        return []
+def haber_cek():
+    kaynaklar = [
+        "https://www.paratic.com/rss/",
+        "https://www.paratic.com/feed/",
+    ]
+    for url in kaynaklar:
+        try:
+            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                continue
+            icerik = r.text
+            try:
+                root = ET.fromstring(icerik)
+            except ET.ParseError:
+                continue
+            items = root.findall(".//item")
+            if not items:
+                items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+            sonuc = []
+            for item in items[:20]:
+                baslik_el = item.find("title")
+                if baslik_el is None:
+                    baslik_el = item.find("{http://www.w3.org/2005/Atom}title")
+                link_el = item.find("link")
+                if link_el is None:
+                    link_el = item.find("{http://www.w3.org/2005/Atom}link")
+                tarih_el = item.find("pubDate")
+                if tarih_el is None:
+                    tarih_el = item.find("{http://www.w3.org/2005/Atom}updated")
+                baslik = baslik_el.text if baslik_el is not None and baslik_el.text else "-"
+                link = link_el.text if link_el is not None and link_el.text else "#"
+                tarih = tarih_el.text if tarih_el is not None and tarih_el.text else "-"
+                sonuc.append({"baslik": baslik[:90], "link": link, "tarih": str(tarih)[:16]})
+            if sonuc:
+                return sonuc
+        except Exception:
+            continue
+    return []
 
 
 def telegram_gonder(mesaj):
@@ -213,6 +235,74 @@ def tahmin_15(g):
     return yon, round(gv, 1), round(bkl, 2)
 
 
+def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, trend):
+    sk = 50
+    sk += (guc - 50) * 0.25
+    if rsi_d < 30:
+        sk += 12
+    elif rsi_d < 45:
+        sk += 5
+    elif rsi_d > 70:
+        sk -= 12
+    elif rsi_d > 55:
+        sk -= 3
+    if macd_h > 0:
+        sk += 6
+    else:
+        sk -= 4
+    if hacim > 1.5:
+        sk += 8
+    elif hacim > 1.2:
+        sk += 4
+    elif hacim < 0.7:
+        sk -= 4
+    if vol_rej == "DUSUK":
+        sk += 4
+    elif vol_rej == "YUKSEK":
+        sk -= 6
+    if ofi > 2:
+        sk += 7
+    elif ofi > 0.5:
+        sk += 3
+    elif ofi < -2:
+        sk -= 7
+    elif ofi < -0.5:
+        sk -= 3
+    if 0 < garch_v < 0.5:
+        sk += 3
+    elif garch_v > 1.0:
+        sk -= 5
+    if t15 == "YUKARI":
+        sk += 8 * (g15 / 100)
+    elif t15 == "ASAGI":
+        sk -= 8 * (g15 / 100)
+    if trend == "Yuk":
+        sk += 3
+    else:
+        sk -= 3
+    sk = max(0, min(100, sk))
+    if sk >= 75:
+        sinyal = "GUCLU AL"
+        renk = "#1b5e20"
+        neden = "Tum metrikler olumlu"
+    elif sk >= 60:
+        sinyal = "AL"
+        renk = "#2e7d32"
+        neden = "Cogunluk pozitif"
+    elif sk <= 25:
+        sinyal = "GUCLU SAT"
+        renk = "#b71c1c"
+        neden = "Tum metrikler olumsuz"
+    elif sk <= 40:
+        sinyal = "SAT"
+        renk = "#c62828"
+        neden = "Cogunluk negatif"
+    else:
+        sinyal = "BEKLE"
+        renk = "#e65100"
+        neden = "Kararsiz"
+    return round(sk, 1), sinyal, renk, neden  
+
 def hesapla(hs, v, kset):
     if v is None or v.empty or len(v) < 30:
         return None, None
@@ -254,21 +344,28 @@ def hesapla(hs, v, kset):
         yr.append("Hacim+")
     sk = max(20, min(95, sk))
     if sk >= 70 and gd > 0:
-        sn, tp = "GUCLU AL", "YUKSELIS BEKLENIYOR"
+        sn = "GUCLU AL"
+        tp = "YUKSELIS BEKLENIYOR"
     elif sk >= 55:
-        sn, tp = "AL", "YUKSELIS EGILIMI"
+        sn = "AL"
+        tp = "YUKSELIS EGILIMI"
     elif sk < 35:
-        sn, tp = "SAT", "DUSUS BEKLENIYOR"
+        sn = "SAT"
+        tp = "DUSUS BEKLENIYOR"
     elif sk < 45:
-        sn, tp = "ZAYIF", "ZAYIF"
+        sn = "ZAYIF"
+        tp = "ZAYIF"
     else:
-        sn, tp = "BEKLE", "BEKLE"
+        sn = "BEKLE"
+        tp = "BEKLE"
     if a > 0:
         sl = round(sf - a * 2, 2)
         hd = round(sf + a * 3, 2)
         ro = round((hd - sf) / (sf - sl), 2) if (sf - sl) > 0 else 0
     else:
-        sl, hd, ro = 0, 0, 0
+        sl = 0
+        hd = 0
+        ro = 0
     hz = hs + ".IS"
     y15, g15, b15 = tahmin_15(g)
     v5 = float((g['High'] - g['Low']).iloc[-5:].mean())
@@ -277,7 +374,35 @@ def hesapla(hs, v, kset):
     obv_s = (np.sign(g['Close'].diff()) * g['Volume']).fillna(0).cumsum()
     ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
     gv_ = garch_vol(g['Close'])
-    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "VolRejim": vrej, "OFI": round(ofi, 2), "GARCH": gv_}
+    trend_str = "Yuk" if gd > 0 else "Dus"
+    km_skor, km_sinyal, km_renk, km_neden = karar_motoru(sk, r, mh, hr, vrej, ofi, gv_, y15, g15, trend_str)
+    ana = {
+        "Hisse": hs,
+        "Katilim": "EVET" if hz in kset else "HAYIR",
+        "Guc": round(sk, 1),
+        "Sinyal": sn,
+        "Yorum": " | ".join(yr) if yr else "Notr",
+        "RSI": f"{r:.1f}",
+        "MACD": f"{mh:.3f}",
+        "Trend": trend_str,
+        "Getiri": f"%{gd:.2f}",
+        "Hacim": f"{hr:.2f}x",
+        "Fiyat": f"{sf:.2f} TL",
+        "SL": f"{sl} TL",
+        "Hedef": f"{hd} TL",
+        "RO": f"{ro:.2f}",
+        "Tahmin": tp,
+        "Tahmin15": y15,
+        "Guven15": f"%{g15}",
+        "Beklenti15": f"%{b15}",
+        "VolRejim": vrej,
+        "OFI": round(ofi, 2),
+        "GARCH": gv_,
+        "KararSkor": km_skor,
+        "KararSinyal": km_sinyal,
+        "KararRenk": km_renk,
+        "KararNeden": km_neden
+    }
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
@@ -302,17 +427,39 @@ def hesapla(hs, v, kset):
         gs += 8
     gs = max(0, min(100, gs))
     if gs >= 70:
-        os, bg, tg = "GECE TASI", "YUKARI", round(ay * 0.6, 2)
+        os = "GECE TASI"
+        bg = "YUKARI"
+        tg = round(ay * 0.6, 2)
     elif gs >= 55:
-        os, bg, tg = "ZAYIF TASI", "NOTR", round(ay * 0.3, 2)
+        os = "ZAYIF TASI"
+        bg = "NOTR"
+        tg = round(ay * 0.3, 2)
     elif gs < 35:
-        os, bg, tg = "GECE TASIMA", "ASAGI", round(-ay * 0.5, 2)
+        os = "GECE TASIMA"
+        bg = "ASAGI"
+        tg = round(-ay * 0.5, 2)
     else:
-        os, bg, tg = "BEKLE", "NOTR", 0
-    onc = {"Hisse": hs, "Kapanis": f"{sf:.2f} TL", "GapSkor": round(gs, 1), "Overnight": os, "GapYon": bg, "Gap%": f"%{tg}", "Yorum": "Zirve" if kp > 0.75 else ("Dip" if kp < 0.25 else "Notr")}
-    return ana, onc
+        os = "BEKLE"
+        bg = "NOTR"
+        tg = 0
+    if kp > 0.75:
+        yorum_on = "Zirve"
+    elif kp < 0.25:
+        yorum_on = "Dip"
+    else:
+        yorum_on = "Notr"
+    onc = {
+        "Hisse": hs,
+        "Kapanis": f"{sf:.2f} TL",
+        "GapSkor": round(gs, 1),
+        "Overnight": os,
+        "GapYon": bg,
+        "Gap%": f"%{tg}",
+        "Yorum": yorum_on
+    }. 
+    return ana, onc 
 
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('kap', [])]:
+for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', [])]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -335,7 +482,7 @@ if pk:
     st_autorefresh(interval=60000, key="y")
 
 st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Pro Analiz Aktif")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Karar Motoru Aktif")
 
 if pk:
     st.success("PIYASA ACIK")
@@ -359,8 +506,8 @@ with st.spinner("Veri yukleniyor..."):
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.m = False
-    if not st.session_state.kap:
-        st.session_state.kap = kap_haberleri()
+    if not st.session_state.haber:
+        st.session_state.haber = haber_cek()
 
 bd, bdeg = "-", "0"
 try:
@@ -388,12 +535,59 @@ if mb:
     st.session_state.m = True
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
-    st.session_state.kap = []
+    st.session_state.haber = []
     st.rerun()
 
-t1, t2, t3, t4, t5 = st.tabs(["Trend", "Mum", "Risk", "Overnight", "KAP & Pairs"])
+t1, t2, t3, t4, t5, t6 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs"])
 
 with t1:
+    st.subheader("Karar Motoru - Tum Metrikler Birlesik Sinyal")
+    st.caption("Guc, RSI, MACD, Hacim, Volatilite, OFI, GARCH ve 15dk tahmini birlestirilir. Skor 0-100.")
+    if not sat:
+        st.warning("Veri yok.")
+    else:
+        kdf = pd.DataFrame(sat)
+        if sd:
+            kdf = kdf[kdf["Katilim"] == "EVET"]
+        kdf = kdf.sort_values("KararSkor", ascending=False).reset_index(drop=True)
+        def rk_sinyal(v):
+            if "GUCLU AL" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "AL" in str(v):
+                return 'background-color:#2e7d32;color:white;font-weight:bold;'
+            if "GUCLU SAT" in str(v):
+                return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "SAT" in str(v):
+                return 'background-color:#c62828;color:white;'
+            return 'background-color:#e65100;color:white;'
+        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "Guc", "RSI", "MACD", "Hacim", "VolRejim", "OFI", "GARCH", "Tahmin15"]]
+        st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]), use_container_width=True, height=500)
+        st.markdown("---")
+        st.subheader("Karar Dagilimi")
+        k1, k2, k3, k4, k5 = st.columns(5)
+        k1.metric("GUCLU AL", len(kdf[kdf["KararSinyal"] == "GUCLU AL"]))
+        k2.metric("AL", len(kdf[kdf["KararSinyal"] == "AL"]))
+        k3.metric("BEKLE", len(kdf[kdf["KararSinyal"] == "BEKLE"]))
+        k4.metric("SAT", len(kdf[kdf["KararSinyal"] == "SAT"]))
+        k5.metric("GUCLU SAT", len(kdf[kdf["KararSinyal"] == "GUCLU SAT"]))
+        st.markdown("---")
+        st.subheader("En Yuksek Karar Skoru 10")
+        top10 = kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "KararNeden"]]
+        st.dataframe(top10, use_container_width=True)
+        st.markdown("---")
+        st.subheader("En Dusuk Karar Skoru 10 (Riskli)")
+        bot10 = kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "RSI", "MACD", "OFI"]]
+        st.dataframe(bot10, use_container_width=True)
+        st.markdown("---")
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("En Yuksek OFI 5 (Alici Baskisi)")
+            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal"]].head(5), use_container_width=True)
+        with colB:
+            st.subheader("En Dusuk OFI 5 (Satici Baskisi)")
+            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal"]].head(5), use_container_width=True)
+
+with t2:
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -449,9 +643,8 @@ with t1:
         pdf['GV'] = pd.to_numeric(pdf['Guven15'].str.replace('%', ''), errors='coerce')
         pdf = pdf.sort_values('GV', ascending=False)
         st.dataframe(pdf[["Hisse", "Fiyat", "VolRejim", "OFI", "GARCH", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
-        st.caption("GARCH: Kosullu volatilite | VolRejim: ATR orani | OFI: OBV proxy")
 
-with t2:
+with t3:
     st.subheader("Mum Grafigi")
     try:
         hs = st.selectbox("Hisse", hl[:80])
@@ -478,7 +671,7 @@ with t2:
     except Exception:
         st.error("Grafik yuklenemedi")
 
-with t3:
+with t4:
     st.subheader("ATR Bazli Risk")
     if sat:
         dfr = pd.DataFrame(sat)
@@ -492,11 +685,11 @@ with t3:
         rdf = dfr[dfr["RO"].apply(rok)]
         st.markdown("**R/O > 1.5 olan " + str(len(rdf)) + " hisse:**")
         if not rdf.empty:
-            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc"]], use_container_width=True, height=500)
+            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc", "KararSinyal"]], use_container_width=True, height=500)
     else:
         st.warning("Veri yok.")
 
-with t4:
+with t5:
     st.subheader("Overnight Gap Stratejisi")
     st.info("Kapanista al, acilista sat")
     if onc:
@@ -535,13 +728,14 @@ with t4:
     else:
         st.warning("Veri yok.")
 
-with t5:
-    st.subheader("Canli KAP Haberleri")
-    if st.session_state.kap:
-        for h in st.session_state.kap[:15]:
-            st.write("**[" + h['saat'] + "] " + h['hisse'] + "** - " + h['baslik'] + " (" + h['tip'] + ")")
+with t6:
+    st.subheader("Finansal Haberler (Paratic RSS)")
+    if st.session_state.haber:
+        for i, h in enumerate(st.session_state.haber[:15]):
+            st.markdown("**" + h['baslik'] + "**")
+            st.caption(h['tarih'] + " | " + h['link'])
     else:
-        st.info("KAP verisi yuklenemedi.")
+        st.info("Haber verisi yuklenemedi.")
     st.markdown("---")
     st.subheader("Kointegrasyon - Pairs Trading")
     st.caption("Kointegre hisse ciftleri. |Z| > 2 = islem sinyali.")
