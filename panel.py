@@ -3,8 +3,9 @@ import pandas as pd
 import numpy as np
 import random
 from datetime import datetime
+import time
 
-# Sayfa Ayarları
+# Sayfa Ayarları (Karanlık Tema ve Geniş Ekran)
 st.set_page_config(page_title="BIST Pro Terminali", layout="wide", initial_sidebar_state="collapsed")
 
 # Karanlık Tema CSS
@@ -17,14 +18,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. OTURUM AÇMA (LOGIN) MODÜLÜ (DÜZELTİLDİ) ---
+# --- 1. OTURUM AÇMA (LOGIN) MODÜLÜ ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 def login():
     st.title("🔐 BIST Pro Terminali Girişi")
-    
-    # st.form kullanarak butona basılana kadar sayfanın yenilenmesini engelliyoruz
     with st.form("login_form"):
         col1, col2 = st.columns(2)
         with col1:
@@ -35,7 +34,6 @@ def login():
         submit_button = st.form_submit_button("Giriş Yap")
 
         if submit_button:
-            # .strip() komutu başta ve sondaki görünmez boşlukları temizler
             if username.strip() == "Cuma Babacan" and password.strip() == "784512":
                 st.session_state.logged_in = True
                 st.rerun()
@@ -46,16 +44,27 @@ if not st.session_state.logged_in:
     login()
     st.stop()
 
-# --- 2. VERİ SİMÜLASYONU ---
+# --- 2. VERİ SİMÜLASYONU (300 HİSSE VE İSLAMİ FİLTRE) ---
+@st.cache_data(ttl=60) # Verileri 60 saniye önbelleğe al (her dakika güncelleme simülasyonu)
 def get_mock_data():
-    hisseler = ["BRISA.IS", "CCOLA.IS", "HEKTS.IS", "SAHOL.IS", "SASA.IS", "EKSUN.IS", "GLYHO.IS", "ENKAI.IS", "PETKM.IS", "ENERY.IS", "ASELS.IS", "KCHOL.IS", "TUPRS.IS", "BIMAS.IS", "FROTO.IS"]
+    # 300 adet hisse kodu üretelim (Gerçekte burası API'den gelecek)
+    hisseler = [f"HISSE{i}.IS" for i in range(1, 301)]
+    
+    # Bilinen bazı BIST hisselerini başa koyalım ki gerçekçi görünsün
+    bilinen_hisseler = ["ASELS.IS", "TUPRS.IS", "BIMAS.IS", "FROTO.IS", "KCHOL.IS", "SAHOL.IS", "CCOLA.IS", "HEKTS.IS", "BRISA.IS", "SASA.IS"]
+    hisseler = bilinen_hisseler + hisseler[:290]
+    
     data = []
     for h in hisseler:
-        net_guc = random.uniform(30, 95)
+        net_guc = random.uniform(20, 95)
         vol = random.uniform(0.5, 3.5)
         comp = random.uniform(0.8, 1.8)
-        fiyat = random.uniform(10, 100)
+        fiyat = random.uniform(10, 150)
         
+        # İslam'a Uygunluk Simülasyonu (%70 Evet, %30 Hayır)
+        katilim_uygun = "EVET" if random.random() > 0.3 else "HAYIR"
+        
+        # 15 Dakika Sonrası Tahmin Mantığı
         if comp > 1.3 and vol > 2.0:
             tahmin = "🚀 YÜKSELİŞ BEKLENİYOR (%78)"
         elif comp < 0.9 and vol < 1.0:
@@ -65,6 +74,7 @@ def get_mock_data():
             
         data.append({
             "Hisse": h,
+            "Katılım Uygun": katilim_uygun, # Yeni sütun
             "Net Güç Skoru": round(net_guc, 2),
             "Sinyal": "GÜÇLÜ TREND" if net_guc > 70 else "BEKLE",
             "Trend Kararı": "Yükseliş Kanalı" if net_guc > 60 else "Yatay Dar Bant",
@@ -85,7 +95,11 @@ def get_mock_data():
             "Güçlü Yükseliş": "EVET" if net_guc > 80 else "HAYIR",
             "15 Dk Sonra Tahmin": tahmin
         })
-    return pd.DataFrame(data)
+    
+    df = pd.DataFrame(data)
+    # İslam'a Uygun olanları en üste al
+    df = df.sort_values(by="Katılım Uygun", ascending=False).reset_index(drop=True)
+    return df
 
 # --- 3. ANA PANEL ARAYÜZÜ ---
 st.title("🚀 BIST Swing/Intraday Trend & Hacim Sıkışması Patlama Terminali")
@@ -114,6 +128,11 @@ with tab1:
 
     df = get_mock_data()
     
+    # Filtreleme Mantığı
+    if strateji == "İslam'a Uygun Öncüler":
+        df = df[df["Katılım Uygun"] == "EVET"]
+    
+    # Tabloyu Göster (Yüksekliği 800 yaparak daha fazla hisse görünmesini sağladık)
     if not df.empty:
         def color_prediction(val):
             if "YÜKSELİŞ" in str(val):
@@ -124,25 +143,58 @@ with tab1:
                 return 'background-color: #e65100; color: white; font-weight: bold;'
             return ''
 
-        styled_df = df.style.map(color_prediction, subset=["15 Dk Sonra Tahmin"])
-        st.dataframe(styled_df, use_container_width=True, height=600)
+        # Katılım Uygun sütununu da renklendirelim
+        def color_katilim(val):
+            if val == "EVET":
+                return 'color: #4CAF50; font-weight: bold;'
+            return 'color: #F44336;'
+
+        styled_df = df.style.map(color_prediction, subset=["15 Dk Sonra Tahmin"]).map(color_katilim, subset=["Katılım Uygun"])
+        
+        st.dataframe(styled_df, use_container_width=True, height=800)
     else:
         st.warning("Gösterilecek hisse verisi bulunamadı.")
 
 with tab2:
     st.subheader("VIOP Denge Analizi")
-    st.info("Vadeli işlemler ile spot piyasa arasındaki dengeyi gösteren öncü sinyal paneli burada yer alacak.")
+    col_v1, col_v2, col_v3 = st.columns(3)
+    with col_v1:
+        st.metric(label="VIOP 30 Endeks", value="11.450", delta="%0.45")
+    with col_v2:
+        st.metric(label="Spot Endeks", value="11.420", delta="%0.40")
+    with col_v3:
+        st.metric(label="Denge Farkı", value="+30 Puan", delta="Pozitif", delta_color="normal")
+    st.info("Vadeli işlemler ile spot piyasa arasındaki denge pozitif yönlü. Öncü sinyal AL konumunda.")
 
 with tab3:
     st.subheader("Canlı KAP Haberleri")
     st.warning("Paneldeki hisselerle ilgili KAP bildirimleri burada listelenecek.")
-    st.write("- [Saat 14:18:40] KAP & Sıkışma Bülteni: 15m-30m Bar Verilerine Göre Hacim Patlamaları Güncellendi.")
-    st.write("- [Trend Modu] Comp Ratio (Sıkışma Oranı) ve Vol Ratio (Hacim Çarpanı) Taraması Aktif.")
+    # Örnek KAP haberleri
+    kap_haberleri = [
+        {"Saat": "14:18:40", "Hisse": "ASELS.IS", "Başlık": "Yeni Sipariş Anlaşması İmzalandı", "Etki": "Pozitif"},
+        {"Saat": "14:15:20", "Hisse": "TUPRS.IS", "Başlık": "Üretim Verileri Açıklandı", "Etki": "Nötr"},
+        {"Saat": "13:50:10", "Hisse": "BIMAS.IS", "Başlık": "Yeni Mağaza Açılışı", "Etki": "Pozitif"},
+        {"Saat": "13:20:00", "Hisse": "SASA.IS", "Başlık": "Kapasite Artırım Yatırımı", "Etki": "Pozitif"},
+    ]
+    for haber in kap_haberleri:
+        st.write(f"**[{haber['Saat']}] {haber['Hisse']}** - {haber['Başlık']} (Etki: {haber['Etki']})")
 
 with tab4:
     st.subheader("Tüm Hisseler Görseli")
     st.info("Tüm hisseleri gösteren grafiksel görünüm burada yer alacak.")
+    # Basit bir grafik simülasyonu
+    chart_data = pd.DataFrame(
+        np.random.randn(20, 3),
+        columns=['Hisse A', 'Hisse B', 'Hisse C']
+    )
+    st.line_chart(chart_data)
 
 with tab5:
     st.subheader("Seans Kapanışı & Overnight Fırsatları")
     st.success("Overnight Taşınabilecek Katılım Hisseleri Hazırlandı.")
+    st.write("- ASELS.IS: Hacim patlaması ve sıkışma sonrası kırılım bekleniyor.")
+    st.write("- TUPRS.IS: Endeks RS pozitif, VWAP üzerinde tutunma var.")
+
+# Alt Bilgi
+st.markdown("---")
+st.caption("⚠️ Bu paneldeki veriler simülasyondur. Gerçek yatırım tavsiyesi değildir.")
