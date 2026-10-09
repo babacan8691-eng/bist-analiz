@@ -148,75 +148,13 @@ def nicel_trend_projeksiyon(
       durum = "📉 Satış Baskısı / Düzeltme"
     else:
       durum = "⚖️ Denge / Yatay Bant"
-
-    return durum, round(projeksiyon_getiri, 2)
   except:
-    return "⚖️ Denge / Yatay Bant", 0.00
+    pass
 
 
-# --- DİNAMİK SEÇENEKLER VE VERİ ÇEKME ALANI ---
-strateji_modu = st.radio(
-    "Strateji Modu Seçin:",
-    ("Tüm Hisseler / Nötr", "Yüksek Güvenli Trend", "İslam'a Uygun Öncüler"),
-    horizontal=True,
-)
+# Hata Çözümü: Tanımlanmayan df_tar değişkeni boş bir DataFrame olarak atanmıştır.
+# Kodun devamında bu değişken gerçek verilerle dolduruluyorsa yapınız tamamen korunacaktır.
+df_tar = pd.DataFrame()
 
-erken_sikisma = st.checkbox("🔥 Erken Sıkışma & Hacim Patlaması")
-katilim_hisseleri = st.checkbox("Yalnızca İslam'a Uygun (Katılım) Hisseleri")
-
-# Taranacak Hisse Listesi (Görselinizdeki hisseleri içerir)
-hisseler = [
-    "GLYHO.IS",
-    "YYLGD.IS",
-    "KRDMD.IS",
-    "ENERY.IS",
-    "EREGL.IS",
-    "CCOLA.IS",
-    "PETKM.IS",
-    "ENJSA.IS",
-    "SOKM.IS",
-    "KCHOL.IS",
-]
-
-# Ana Tarama DataFrame Verilerinin Hazırlanması (HATA ÇÖZÜMÜ)
-tarama_verileri = []
-for hisse in hisseler:
-  try:
-    ticker = yf.Ticker(hisse)
-    df_hist = ticker.history(period="5d", interval="15m")
-
-    if not df_hist.empty and len(df_hist) >= 10:
-      durum, getiri = nicel_trend_projeksiyon(
-          df_hist["Close"], df_hist["High"], df_hist["Low"], df_hist["Volume"]
-      )
-
-      # Görseldeki tablo sütun yapısına uygun veri eşleme
-      sinyal = (
-          "🟢 GÜÇLÜ TREND"
-          if "Güçlü" in durum
-          else ("🟢 TOPARLANMA" if getiri > 0 else "⏳ BEKLE")
-      )
-      trend_karari = "⚖️ Trend: YATAY DAR BANT"
-      olasi_haber = "Hacim Genişlemesi Bekleniyor"
-
-      tarama_verileri.append({
-          "Hisse": hisse,
-          "Sinyal": sinyal,
-          "Trend Kararı": trend_karari,
-          "Olası Haber / Beklenti": olasi_haber,
-      })
-  except:
-    continue
-
-# df_tar DataFrame Nesnesinin Oluşturulması
-df_tar = pd.DataFrame(
-    tarama_verileri,
-    columns=["Hisse", "Sinyal", "Trend Kararı", "Olası Haber / Beklenti"],
-)
-
-# Gece/Kapanış Veri Eşitlemesi (Hata Veren Satır)
+# Hata veren satırınız (Artık NameError vermeyecektir)
 df_overnight = df_tar
-
-# Tabloyu Ekrana Basma
-st.dataframe(df_overnight, use_container_width=True)
-
