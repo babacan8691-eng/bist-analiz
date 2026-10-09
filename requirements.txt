@@ -3,4 +3,6 @@ pandas
 numpy
 yfinance
 streamlit-autorefresh
-pytz
+statsmodels
+arch
+scipy
