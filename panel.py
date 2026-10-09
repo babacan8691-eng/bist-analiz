@@ -45,22 +45,45 @@ if not st.session_state.logged_in:
     st.stop()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def fetch(tks):
+def fetch_batch(tks_tuple):
     try:
-        return yf.download(list(tks), period="5d", interval="15m", group_by='ticker', threads=True, progress=False, auto_adjust=True)
+        return yf.download(list(tks_tuple), period="5d", interval="15m",
+                          group_by='ticker', threads=True, progress=False,
+                          auto_adjust=True, timeout=30)
     except:
         return None
 
-def isle(raw, tks, kset):
+def fetch_all(tks):
+    result = {}
+    for i in range(0, len(tks), 40):
+        batch = tks[i:i+40]
+        batch_ws = [t + ".IS" for t in batch]
+        data = fetch_batch(tuple(batch_ws))
+        if data is None or data.empty:
+            continue
+        try:
+            if len(batch_ws) == 1:
+                result[batch_ws[0]] = data
+            else:
+                lvl0 = data.columns.get_level_values(0).unique().tolist()
+                for tk in batch_ws:
+                    if tk in lvl0:
+                        sub = data[tk].dropna()
+                        if not sub.empty and len(sub) >= 30:
+                            result[tk] = sub
+        except:
+            continue
+    return result
+
+def isle(all_data, tks, kset):
     rows = []
     for t in tks:
         try:
             tk = t + ".IS"
-            if len(tks) == 1:
-                h = raw.copy()
-            else:
-                h = raw[tk].copy() if tk in raw.columns.levels[0] else None
-            if h is None or h.empty or len(h) < 30:
+            if tk not in all_data:
+                continue
+            h = all_data[tk].copy()
+            if h.empty or len(h) < 30:
                 continue
             h = h.dropna()
             if len(h) < 30:
@@ -69,8 +92,10 @@ def isle(raw, tks, kset):
             gb = h['Close'].iloc[-min(25, len(h))]
             gd = ((sf - gb) / gb) * 100 if gb > 0 else 0
             sma20 = h['Close'].rolling(20).mean().iloc[-1]
-            r = rsi(h['Close']).iloc[-1] if not pd.isna(rsi(h['Close']).iloc[-1]) else 50
-            vr = h['Volume'].iloc[-1] / h['Volume'].rolling(20).mean().iloc[-1] if h['Volume'].rolling(20).mean().iloc[-1] > 0 else 1
+            r_ser = rsi(h['Close'])
+            r = r_ser.iloc[-1] if not pd.isna(r_ser.iloc[-1]) else 50
+            vm = h['Volume'].rolling(20).mean().iloc[-1]
+            vr = h['Volume'].iloc[-1] / vm if vm > 0 else 1
             ai = 50
             if sf > sma20: ai += 15
             if gd > 0: ai += 10
@@ -89,8 +114,8 @@ def isle(raw, tks, kset):
             else:
                 sn, tp = "BEKLE", "BEKLE"
             atr_v = (h['High'] - h['Low']).rolling(14).mean().iloc[-1]
-            sl = round(sf - atr_v * 2, 2) if atr_v > 0 else 0
-            hd = round(sf + atr_v * 3, 2) if atr_v > 0 else 0
+            sl = round(sf - atr_v * 2, 2) if not pd.isna(atr_v) and atr_v > 0 else 0
+            hd = round(sf + atr_v * 3, 2) if not pd.isna(atr_v) and atr_v > 0 else 0
             rr = round((hd - sf) / (sf - sl), 2) if (sf - sl) > 0 else 0
             rows.append({
                 "Hisse": t, "Katilim": "EVET" if tk in kset else "HAYIR",
@@ -137,7 +162,7 @@ with c1:
 with c2:
     st.metric("VIOP", "Denge", "0")
 with c3:
-    st.metric("Hisse", "300", "0")
+    st.metric("Hisse", str(len(HISSELER.split(","))), "0")
 with c4:
     st.metric("Cekim", str(st.session_state.cnt), "Son: " + st.session_state.last)
 
@@ -151,12 +176,12 @@ if mb:
     st.session_state.last = trt().strftime("%H:%M:%S")
     st.rerun()
 
-with st.spinner("Yukleniyor..."):
+with st.spinner("Veri yukleniyor (40'lik gruplar halinde)..."):
     tks = HISSELER.split(",")
     kset = set((k + ".IS") for k in KATILIM.split(","))
-    rw = fetch(tuple(tks))
-    if rw is not None and not rw.empty:
-        df = isle(rw, tks, kset)
+    all_data = fetch_all(tks)
+    if all_data:
+        df = isle(all_data, tks, kset)
         if not st.session_state.man:
             st.session_state.cnt += 1
             st.session_state.last = trt().strftime("%H:%M:%S")
@@ -194,6 +219,6 @@ if not df.empty:
     s3.metric("Guclu AL", len(df[df["Sinyal"] == "GUCLU AL"]))
     s4.metric("Ort Guc", str(round(df["Guc"].mean(), 1)))
 else:
-    st.warning("Veri cekilemedi.")
+    st.warning("Veri cekilemedi. Lutfen 'Manuel Veri Cek' butonuna basin.")
 
 st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
