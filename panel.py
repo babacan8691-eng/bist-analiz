@@ -138,32 +138,6 @@ def nicel_trend_projeksiyon(
     return "🚀 Güçlü Trend Devamı Bekleniyor", 1.25
 
 
-def gelecek_15dk_yon_tahmini(close_s, volume_s, vwap_sapma, compression_ratio):
-  try:
-    c = np.array(close_s)
-    v = np.array(volume_s)
-    if len(c) < 3:
-      return "⚖️ Yatay / Bekle"
-    son_bar_fark = c[-1] - c[-2]
-    vol_faktor = (
-        v[-1] / np.mean(v[-5:])
-        if len(v) >= 5 and np.mean(v[-5:]) > 0
-        else 1.0
-    )
-    if son_bar_fark > 0 and vol_faktor >= 1.15 and vwap_sapma >= 0:
-      return "🚀 +15Dk YUKARI (Güçlü İvme)"
-    elif son_bar_fark < 0 and vol_faktor >= 1.15 and vwap_sapma <= 0:
-      return "📉 +15Dk AŞAĞI (Satış Baskısı)"
-    elif compression_ratio <= 0.72 and vol_faktor >= 1.2:
-      return "⚡ +15Dk PATLAMA BEKLENTİSİ"
-    elif son_bar_fark > 0:
-      return "↗️ +15Dk Hafif Yukarı"
-    else:
-      return "↘️ +15Dk Hafif Aşağı"
-  except:
-    return "⚖️ Nötr / Bekle"
-
-
 def trend_karar_motoru(
     close_s, high_s, low_s, vol_s, hurst, z_score, comp_ratio
 ):
@@ -439,12 +413,6 @@ def fetch_final_universe_data(b100_benchmark):
             z_score,
             compression_ratio,
         )
-        
-        # 15 dakika sonrası için yön tahmini metriği
-        gelecek_yon = gelecek_15dk_yon_tahmini(
-            close.values, volume.values, vwap_sapma, compression_ratio
-        )
-
         ai_prob = 50.0 + (hurst_val * 20.0) + (min(vol_ratio, 2.0) * 10.0)
         ai_prob = float(np.clip(ai_prob, 20.0, 95.0))
         net_guc_skoru = (
@@ -491,7 +459,6 @@ def fetch_final_universe_data(b100_benchmark):
             "_SkorGunluk": skor_gunluk,
             "_SkorOvernight": skor_overnight,
             "🏆 Net Güç Skoru": f"{net_guc_skoru:.1f} Puan",
-            "🔮 +15Dk Yön Tahmini": gelecek_yon,
             "Sinyal": sinyal,
             "🎯 Trend Kararı": trend_karar,
             "Olası Haber / Beklenti": haber_beklenti,
@@ -526,8 +493,6 @@ def kapsamli_radar_stilleri(val):
       "🚨 HACİM & SIKIŞMA PATLAMASI" in val_str
       or "🚀 Güçlü Trend Devamı" in val_str
       or "HACİM SIKIŞMASI & KIRILMA" in val_str
-      or "YUKARI" in val_str
-      or "PATLAMA" in val_str
   ):
     return (
         "background-color: #ff4b4b; color: #ffffff; font-weight: bold;"
@@ -541,7 +506,6 @@ def kapsamli_radar_stilleri(val):
           "EVET (Katılım)",
           "TOPARLANMA",
           "YÜKSELİŞ KANALI AKTİF",
-          "Hafif Yukarı",
       ]
   ):
     return (
@@ -577,7 +541,6 @@ def kapsamli_radar_stilleri(val):
 def guvenli_styler(df):
   cols_to_style = [
       "🏆 Net Güç Skoru",
-      "🔮 +15Dk Yön Tahmini",
       "Sinyal",
       "🎯 Trend Kararı",
       "Trend Projeksiyon",
@@ -641,4 +604,43 @@ with tab1:
       )
     else:
       df_goster = df_goster.sort_values(
-    
+          by="_SkorGenel", ascending=False
+      ).reset_index(drop=True)
+      df_goster = df_goster.drop(
+          columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore"
+      )
+      st.dataframe(
+          guvenli_styler(df_goster),
+          use_container_width=True,
+          hide_index=True,
+      )
+  else:
+    st.warning("Veriler yükleniyor...")
+
+with tab2:
+  st.subheader(
+      "⚡ Katılım Özel Intraday Trend & Hacim Sıkışması Takip Ekranı"
+  )
+  st.info(
+      "Bu sekme yalnızca BIST içerisindeki Katılım kriterlerine uyan tahtalarda"
+      " orta vadeli hacim genişlemelerini listeler."
+  )
+  if not df_tarama.empty:
+    df_gunluk = df_tarama[
+        df_tarama["Katılım Uygun"].str.contains("EVET", na=False)
+    ].copy()
+    if df_gunluk.empty:
+      df_gunluk = df_tarama.copy()
+    df_gunluk = df_gunluk.sort_values(
+        by="_SkorGunluk", ascending=False
+    ).reset_index(drop=True)
+    df_gunluk = df_gunluk.drop(
+        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"], errors="ignore"
+    )
+    st.dataframe(
+        guvenli_styler(df_gunluk),
+        use_container_width=True,
+        hide_index=True,
+    )
+  else:
+    st.warnin
