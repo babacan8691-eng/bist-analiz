@@ -656,9 +656,8 @@ with tab1:
       df_goster = df_goster.drop(
           columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
       )
-      st.dataframe(
-          guvenli_styler(df_goster), use_container_width=True, hide_index=True
-      )
+            st.dataframe(guvenli_styler(df_goster), use_container_width=True, hide_index=True)
+        
   else:
     st.warning("Veriler yükleniyor...")
 
@@ -680,5 +679,11 @@ with tab2:
     df_gunluk = df_gunluk.drop(
         columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
     )
-    st.dataframe(
+        st.dataframe(
+        guvenli_styler(df_gunluk), use_container_width=True, hide_index=True
+        )
+          st.dataframe(
+        guvenli_styler(df_overnight), use_container_width=True, hide_index=True
+          )
+      
    
