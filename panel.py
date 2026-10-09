@@ -1,32 +1,165 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import yfinance as yf
 import plotly.graph_objects as go
+import requests
+from datetime import datetime, timezone, timedelta, time
 from streamlit_autorefresh import st_autorefresh
-from data.fetcher import toplu_veri_cek, piyasa_acik_mi, turkiye_saati, bist_endeks_verisi
+
+try:
+    from arch import arch_model
+    HAS_ARCH = True
+except ImportError:
+    HAS_ARCH = False
+
+try:
+    from statsmodels.tsa.stattools import coint
+    HAS_SM = True
+except ImportError:
+    HAS_SM = False
+
+TELEGRAM_TOKEN = ""
+TELEGRAM_CHAT = ""
 
 st.set_page_config(page_title="BIST Pro", layout="wide")
 
 H = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
+
 K = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
 
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False)]:
-    if k not in st.session_state:
-        st.session_state[k] = v
 
-if not st.session_state.g:
-    st.title("BIST Pro Giris")
-    with st.form("f"):
-        c1, c2 = st.columns(2)
-        u = c1.text_input("Kullanici")
-        p = c2.text_input("Sifre", type="password")
-        if st.form_submit_button("Gir"):
-            if u.strip() == "Cuma Babacan" and p.strip() == "784512":
-                st.session_state.g = True
-                st.rerun()
+def turkiye_saati():
+    return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=3)))
+
+
+def piyasa_acik_mi():
+    s = turkiye_saati()
+    if s.weekday() >= 5:
+        return False
+    return time(9, 40) <= s.time() <= time(18, 30)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def toplu_veri_cek(hisse_listesi):
+    tum = {}
+    for i in range(0, len(hisse_listesi), 40):
+        grup = hisse_listesi[i:i + 40]
+        grup_uz = [x + ".IS" for x in grup]
+        try:
+            hv = yf.download(grup_uz, period="5d", interval="15m", group_by='ticker', threads=True, progress=False, auto_adjust=True, timeout=30)
+            if hv is None or hv.empty:
+                continue
+            if len(grup_uz) == 1:
+                tum[grup_uz[0]] = hv
             else:
-                st.error("Hatali!")
-    st.stop()
+                ust = hv.columns.get_level_values(0).unique().tolist()
+                for k in grup_uz:
+                    if k in ust:
+                        alt = hv[k].dropna()
+                        if not alt.empty and len(alt) >= 30:
+                            tum[k] = alt
+        except Exception:
+            continue
+    return tum
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def bist_endeks_verisi():
+    try:
+        return yf.Ticker("XU100.IS").history(period="1d")
+    except Exception:
+        return None
+
+
+def garch_vol(seri):
+    if not HAS_ARCH or len(seri) < 50:
+        return 0.0
+    try:
+        ret = seri.pct_change().dropna() * 100
+        if len(ret) < 50:
+            return 0.0
+        m = arch_model(ret, vol='Garch', p=1, q=1)
+        r = m.fit(disp='off', show_warning=False)
+        return round(float(r.conditional_volatility.iloc[-1]), 3)
+    except Exception:
+        return 0.0
+
+
+def kointegrasyon(s1, s2):
+    if not HAS_SM:
+        return None
+    try:
+        s1 = s1.dropna()
+        s2 = s2.dropna()
+        n = min(len(s1), len(s2))
+        if n < 30:
+            return None
+        a = s1.iloc[-n:].values
+        b = s2.iloc[-n:].values
+        _, pval, _ = coint(a, b)
+        if pval > 0.05:
+            return None
+        X = np.column_stack([np.ones(n), b])
+        beta = np.linalg.lstsq(X, a, rcond=None)[0]
+        hata = a - (beta[0] + beta[1] * b)
+        sd = hata.std()
+        if sd == 0:
+            return None
+        z = (hata[-1] - hata.mean()) / sd
+        return {"pvalue": round(float(pval), 4), "z": round(float(z), 2), "beta": round(float(beta[1]), 3)}
+    except Exception:
+        return None
+
+
+def kap_haberleri():
+    try:
+        r = requests.get("https://www.kap.org.tr/tr/api/disclosures", timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        sonuc = []
+        for h in data[:25]:
+            sonuc.append({
+                "saat": str(h.get("publishDate", ""))[-8:],
+                "hisse": str(h.get("stockCode", "-")),
+                "baslik": str(h.get("subject", "-"))[:70],
+                "tip": str(h.get("disclosureType", "-"))
+            })
+        return sonuc
+    except Exception:
+        return []
+
+
+def telegram_gonder(mesaj):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
+        return False
+    try:
+        r = requests.post("https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage", json={"chat_id": TELEGRAM_CHAT, "text": mesaj, "parse_mode": "HTML"}, timeout=10)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def pairs_tara(hv, top_list):
+    sonuc = []
+    for i in range(len(top_list)):
+        for j in range(i + 1, len(top_list)):
+            h1 = top_list[i] + ".IS"
+            h2 = top_list[j] + ".IS"
+            if h1 not in hv or h2 not in hv:
+                continue
+            r = kointegrasyon(hv[h1]['Close'], hv[h2]['Close'])
+            if r is not None:
+                if r["z"] > 2:
+                    sin = "1.SAT 2.AL"
+                elif r["z"] < -2:
+                    sin = "1.AL 2.SAT"
+                else:
+                    sin = "BEKLE"
+                sonuc.append({"Hisse1": top_list[i], "Hisse2": top_list[j], "p-value": r["pvalue"], "Z-Skor": r["z"], "Beta": r["beta"], "Aksiyon": sin})
+    return sonuc
+
 
 def rsi(s, p=14):
     d = s.diff()
@@ -34,9 +167,11 @@ def rsi(s, p=14):
     y = -d.where(d < 0, 0).rolling(p).mean()
     return 100 - (100 / (1 + k / y))
 
+
 def atr_f(h, l, c, p=14):
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
     return tr.rolling(p).mean()
+
 
 def tahmin_15(g):
     if len(g) < 20:
@@ -76,6 +211,7 @@ def tahmin_15(g):
         yon, gv = "YATAY", 100 - abs(s - 50) * 2
     bkl = (s - 50) / 10
     return yon, round(gv, 1), round(bkl, 2)
+
 
 def hesapla(hs, v, kset):
     if v is None or v.empty or len(v) < 30:
@@ -135,16 +271,13 @@ def hesapla(hs, v, kset):
         sl, hd, ro = 0, 0, 0
     hz = hs + ".IS"
     y15, g15, b15 = tahmin_15(g)
-    pct20 = g['Close'].pct_change().iloc[-20:].fillna(0).abs()
-    dn20 = (g['Volume'].iloc[-20:] * g['Close'].iloc[-20:]).replace(0, np.nan).fillna(1)
-    amh = float((pct20 / dn20).sum() / 20)
-    lik = max(0, min(100, 100 - amh * 1e8))
     v5 = float((g['High'] - g['Low']).iloc[-5:].mean())
     v20 = float((g['High'] - g['Low']).iloc[-20:].mean())
     vrej = "YUKSEK" if v5 > v20 * 1.3 else ("DUSUK" if v5 < v20 * 0.7 else "NORMAL")
     obv_s = (np.sign(g['Close'].diff()) * g['Volume']).fillna(0).cumsum()
     ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
-    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "Likidite": round(lik, 1), "VolRejim": vrej, "OFI": round(ofi, 2)}
+    gv_ = garch_vol(g['Close'])
+    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "VolRejim": vrej, "OFI": round(ofi, 2), "GARCH": gv_}
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
@@ -179,6 +312,24 @@ def hesapla(hs, v, kset):
     onc = {"Hisse": hs, "Kapanis": f"{sf:.2f} TL", "GapSkor": round(gs, 1), "Overnight": os, "GapYon": bg, "Gap%": f"%{tg}", "Yorum": "Zirve" if kp > 0.75 else ("Dip" if kp < 0.25 else "Notr")}
     return ana, onc
 
+for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('kap', [])]:
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+if not st.session_state.g:
+    st.title("BIST Pro Giris")
+    with st.form("f"):
+        c1, c2 = st.columns(2)
+        u = c1.text_input("Kullanici")
+        p = c2.text_input("Sifre", type="password")
+        if st.form_submit_button("Gir"):
+            if u.strip() == "Cuma Babacan" and p.strip() == "784512":
+                st.session_state.g = True
+                st.rerun()
+            else:
+                st.error("Hatali!")
+    st.stop()
+
 pk = piyasa_acik_mi()
 if pk:
     st_autorefresh(interval=60000, key="y")
@@ -208,6 +359,8 @@ with st.spinner("Veri yukleniyor..."):
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.m = False
+    if not st.session_state.kap:
+        st.session_state.kap = kap_haberleri()
 
 bd, bdeg = "-", "0"
 try:
@@ -235,9 +388,10 @@ if mb:
     st.session_state.m = True
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
+    st.session_state.kap = []
     st.rerun()
 
-t1, t2, t3, t4 = st.tabs(["Trend", "Mum", "Risk", "Overnight"])
+t1, t2, t3, t4, t5 = st.tabs(["Trend", "Mum", "Risk", "Overnight", "KAP & Pairs"])
 
 with t1:
     if not sat:
@@ -249,48 +403,53 @@ with t1:
         if sd:
             df = df[df["Katilim"] == "EVET"]
         def rt(v):
-            if "YUKSELIS" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "DUSUS" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
-            if "BEKLE" in str(v): return 'background-color:#e65100;color:white;font-weight:bold;'
+            if "YUKSELIS" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "DUSUS" in str(v) or "ZAYIF" in str(v):
+                return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "BEKLE" in str(v):
+                return 'background-color:#e65100;color:white;font-weight:bold;'
             return ''
         def rs(v):
-            if "GUCLU AL" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "AL" in str(v): return 'background-color:#2e7d32;color:white;'
-            if "SAT" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;'
+            if "GUCLU AL" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "AL" in str(v):
+                return 'background-color:#2e7d32;color:white;'
+            if "SAT" in str(v) or "ZAYIF" in str(v):
+                return 'background-color:#b71c1c;color:white;'
             return 'background-color:#e65100;color:white;'
-        def rk(v): return 'color:#4CAF50;font-weight:bold;' if v == "EVET" else 'color:#F44336;'
+        def rk(v):
+            if v == "EVET":
+                return 'color:#4CAF50;font-weight:bold;'
+            return 'color:#F44336;'
         def r15(v):
-            if "YUKARI" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "ASAGI" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "YUKARI" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "ASAGI" in str(v):
+                return 'background-color:#b71c1c;color:white;font-weight:bold;'
             return 'background-color:#e65100;color:white;font-weight:bold;'
         def rv(v):
-            if "DUSUK" in str(v): return 'color:#4CAF50;font-weight:bold;'
-            if "YUKSEK" in str(v): return 'color:#F44336;font-weight:bold;'
+            if "DUSUK" in str(v):
+                return 'color:#4CAF50;font-weight:bold;'
+            if "YUKSEK" in str(v):
+                return 'color:#F44336;font-weight:bold;'
             return 'color:#FFC107;'
         st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]).map(rv, subset=["VolRejim"]), use_container_width=True, height=600)
         st.markdown("---")
         st.subheader("15-25 Dakika Sonrasi Yon Dagilimi")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("YUKARI KIRILIM", len(df[df["Tahmin15"] == "YUKARI"]))
-        m2.metric("ASAGI KIRILIM", len(df[df["Tahmin15"] == "ASAGI"]))
+        m1.metric("YUKARI", len(df[df["Tahmin15"] == "YUKARI"]))
+        m2.metric("ASAGI", len(df[df["Tahmin15"] == "ASAGI"]))
         m3.metric("YATAY", len(df[df["Tahmin15"] == "YATAY"]))
         gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
-        m4.metric("Ort Guven", f"%{round(gvv, 1) if not pd.isna(gvv) else 0}")
+        m4.metric("Ort Guven", "%" + str(round(gvv, 1) if not pd.isna(gvv) else 0))
         st.markdown("---")
-        st.subheader("Pro Analiz - Likidite, Volatilite, OFI")
+        st.subheader("Pro Analiz - Volatilite, OFI, GARCH")
         pdf = df.copy()
         pdf['GV'] = pd.to_numeric(pdf['Guven15'].str.replace('%', ''), errors='coerce')
         pdf = pdf.sort_values('GV', ascending=False)
-        st.dataframe(pdf[["Hisse", "Fiyat", "Likidite", "VolRejim", "OFI", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
-        st.markdown("---")
-        colA, colB = st.columns(2)
-        with colA:
-            st.subheader("Likidite En Yuksek 5")
-            st.dataframe(pdf.sort_values("Likidite", ascending=False)[["Hisse", "Likidite", "VolRejim", "OFI"]].head(5), use_container_width=True)
-        with colB:
-            st.subheader("OFI En Yuksek 5")
-            st.dataframe(pdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "Likidite", "Guven15"]].head(5), use_container_width=True)
-        st.caption("Likidite: Amihud (yuksek=iyi) | VolRejim: ATR oranina gore (DUSUK/NORMAL/YUKSEK) | OFI: OBV proxy emir akis (pozitif=alim baskisi)")
+        st.dataframe(pdf[["Hisse", "Fiyat", "VolRejim", "OFI", "GARCH", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
+        st.caption("GARCH: Kosullu volatilite | VolRejim: ATR orani | OFI: OBV proxy")
 
 with t2:
     st.subheader("Mum Grafigi")
@@ -326,10 +485,12 @@ with t3:
         if sd:
             dfr = dfr[dfr["Katilim"] == "EVET"]
         def rok(x):
-            try: return float(x) > 1.5
-            except: return False
+            try:
+                return float(x) > 1.5
+            except Exception:
+                return False
         rdf = dfr[dfr["RO"].apply(rok)]
-        st.markdown(f"**R/O > 1.5 olan {len(rdf)} hisse:**")
+        st.markdown("**R/O > 1.5 olan " + str(len(rdf)) + " hisse:**")
         if not rdf.empty:
             st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc"]], use_container_width=True, height=500)
     else:
@@ -344,26 +505,56 @@ with t4:
             odf = odf[odf["Hisse"].apply(lambda x: (x + ".IS") in ks)]
         odf = odf.sort_values(by="GapSkor", ascending=False).reset_index(drop=True)
         def ron(v):
-            if "GECE TASI" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
-            if "ZAYIF TASI" in str(v): return 'background-color:#2e7d32;color:white;'
-            if "GECE TASIMA" in str(v): return 'background-color:#b71c1c;color:white;'
+            if "GECE TASI" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "ZAYIF TASI" in str(v):
+                return 'background-color:#2e7d32;color:white;'
+            if "GECE TASIMA" in str(v):
+                return 'background-color:#b71c1c;color:white;'
             return 'background-color:#e65100;color:white;'
         def rg(v):
-            if "YUKARI" in str(v): return 'color:#4CAF50;font-weight:bold;'
-            if "ASAGI" in str(v): return 'color:#F44336;font-weight:bold;'
+            if "YUKARI" in str(v):
+                return 'color:#4CAF50;font-weight:bold;'
+            if "ASAGI" in str(v):
+                return 'color:#F44336;font-weight:bold;'
             return 'color:#FFC107;'
         st.dataframe(odf.style.map(ron, subset=["Overnight"]).map(rg, subset=["GapYon"]), use_container_width=True, height=450)
         st.markdown("---")
         st.subheader("En Guclu 10")
         st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%"]], use_container_width=True)
+        st.markdown("---")
+        if st.button("GECE TASI Sinyallerini Telegram'a Gonder"):
+            mesaj = "<b>BIST Gece Tasi Sinyalleri</b>\n\n"
+            for i in range(min(5, len(odf))):
+                r = odf.iloc[i]
+                mesaj += "- " + str(r['Hisse']) + " | Gap: " + str(r['GapSkor']) + " | " + str(r['Gap%']) + "\n"
+            if telegram_gonder(mesaj):
+                st.success("Gonderildi!")
+            else:
+                st.warning("Telegram token ayarlanmamis.")
     else:
         st.warning("Veri yok.")
+
+with t5:
+    st.subheader("Canli KAP Haberleri")
+    if st.session_state.kap:
+        for h in st.session_state.kap[:15]:
+            st.write("**[" + h['saat'] + "] " + h['hisse'] + "** - " + h['baslik'] + " (" + h['tip'] + ")")
+    else:
+        st.info("KAP verisi yuklenemedi.")
     st.markdown("---")
-    st.subheader("VIOP Denge")
-    v1, v2, v3 = st.columns(3)
-    v1.metric("VIOP 30", "11.450", "%0.45")
-    v2.metric("Spot", "11.420", "%0.40")
-    v3.metric("Fark", "+30", "Pozitif")
+    st.subheader("Kointegrasyon - Pairs Trading")
+    st.caption("Kointegre hisse ciftleri. |Z| > 2 = islem sinyali.")
+    if sat:
+        top10 = [r["Hisse"] for r in sat[:10]]
+        if st.button("Top 10 Icin Pairs Analizi"):
+            with st.spinner("Test ediliyor..."):
+                pairs = pairs_tara(hv, top10)
+            if pairs:
+                st.dataframe(pd.DataFrame(pairs), use_container_width=True)
+                st.info("Z>2: 1.SAT 2.AL | Z<-2: 1.AL 2.SAT")
+            else:
+                st.warning("Kointegre cift bulunamadi.")
 
 st.markdown("---")
 st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
