@@ -8,340 +8,244 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="BIST Pro", layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown("""
-<style>
+st.markdown("""<style>
 .stApp { background-color: #0E1117; color: #FFFFFF; }
 .stMetric { background-color: #1E1E1E; padding: 10px; border-radius: 5px; }
 .counter-box { background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; }
 .market-open { background-color: #1b5e20; padding: 15px; border-radius: 8px; color: white; }
 .market-closed { background-color: #4a148c; padding: 15px; border-radius: 8px; color: white; }
-.risk-box { background-color: #1E1E1E; padding: 12px; border-radius: 8px; border-left: 4px solid #FFC107; margin: 5px 0; }
-</style>
-""", unsafe_allow_html=True)
+</style>""", unsafe_allow_html=True)
 
-TUM_HISSELER = "THYAO.IS,GARAN.IS,ASELS.IS,BIMAS.IS,FROTO.IS,KCHOL.IS,SAHOL.IS,CCOLA.IS,HEKTS.IS,BRISA.IS,SASA.IS,TUPRS.IS,EREGL.IS,SISE.IS,TOASO.IS,PGSUS.IS,TAVHL.IS,VESTL.IS,ARCLK.IS,DOHOL.IS,EKGYO.IS,GUBRF.IS,ISCTR.IS,KRDMD.IS,MGROS.IS,ODAS.IS,PETKM.IS,SOKM.IS,TCELL.IS,TTKOM.IS,VAKBN.IS,YKBNK.IS,ZOREN.IS,ALARK.IS,AYGAZ.IS,ENKAI.IS,GESAN.IS,GLYHO.IS,KONTR.IS,SMRTG.IS,TUKAS.IS,ULKER.IS,AHGAZ.IS,AKCNS.IS,AKFYE.IS,ALBRK.IS,ARASE.IS,ATAKP.IS,AVPGY.IS,AYDEM.IS,BASGZ.IS,BETAE.IS,BUCIM.IS,EGGUB.IS,EGPRO.IS,ENERY.IS,GWIND.IS,HTTBT.IS,ASTOR.IS,BMSTL.IS,CVKMD.IS,DOFRB.IS,NETCD.IS,RALYH.IS,AKSA.IS,KUYAS.IS,ALKLC.IS,EFOR.IS,QUAGR.IS,SARKY.IS,BSOKE.IS,CANTE.IS,ADESE.IS,ADGYO.IS,AEFES.IS,AFYON.IS,AGHOL.IS,AGYO.IS,AKENR.IS,AKFGY.IS,AKGRT.IS,AKSEN.IS,AKSUE.IS,ALCTL.IS,ALFAS.IS,ALGYO.IS,ALKIM.IS,ANHYT.IS,ANSGR.IS,ARDYZ.IS,ARENA.IS,ARSAN.IS,ASGYO.IS,ASLAN.IS,ATEKS.IS,AVOD.IS,AYEN.IS,BAGFS.IS,BANVT.IS,BARMA.IS,BERA.IS,BEYAZ.IS,BIENY.IS,BINHO.IS,BIOEN.IS,BLACK.IS,BRKVY.IS,BRSAN.IS,BRYAT.IS,BURCE.IS,BURVA.IS,CATES.IS,CEMAS.IS,CEMTS.IS,CIMSA.IS,CLEBI.IS,CRDFA.IS,CRFSA.IS,DAGHL.IS,DAPGM.IS,DARDL.IS,DENGE.IS,DERIM.IS,DESA.IS,DESPC.IS,DGATE.IS,DGGYO.IS,DIRIT.IS,DITAS.IS,DMRGD.IS,DMSAS.IS,DNISI.IS,DOAS.IS,DOBUR.IS,DURDO.IS,DURKN.IS,DYOBY.IS,EBEBK.IS,ECILC.IS,ECZYT.IS,EDATA.IS,EDIP.IS,EGEEN.IS,EGSER.IS,ENJSA.IS,ENSRI.IS,ERBOS.IS,ERCB.IS,ERSU.IS,ESCAR.IS,ESCOM.IS,ESEN.IS,ETILR.IS,EUHOL.IS,EUPWR.IS,EUREN.IS,FENER.IS,FLAP.IS,FONET.IS,FORMT.IS,FORTE.IS,FRIGO.IS,GARFA.IS,GEDIK.IS,GEDZA.IS,GENIL.IS,GENTS.IS,GEREL.IS,GIPTA.IS,GLBMD.IS,GLCVY.IS,GLRYH.IS,GMTAS.IS,GOKNUR.IS,GOLTS.IS,GOODY.IS,GOZDE.IS,GRSEL.IS,GSDDE.IS,GSDHO.IS,GSRAY.IS,GUNDG.IS,HALKB.IS,HATEK.IS,HDFGS.IS,HEDEF.IS,HKTM.IS,HLGYO.IS,HUBVC.IS,HUNER.IS,HURGZ.IS,ICBCT.IS,IDEAS.IS,IHAAS.IS,IHEVA.IS,IHGZT.IS,IHLAS.IS,IHLGM.IS,IHYAY.IS,IMASM.IS,INDES.IS,INFO.IS,INGRM.IS,INTEM.IS,INVEO.IS,ISATR.IS,ISBTR.IS,ISDMR.IS,ISFIN.IS,ISGSY.IS,ISGYO.IS,ISKUR.IS,ISMEN.IS,ISYAT.IS,ITTFH.IS,IZFAS.IS,IZMDC.IS,JANTS.IS,KAPLM.IS,KAREL.IS,KARSN.IS,KARTN.IS,KATMR.IS,KAYSE.IS,KBORU.IS,KCAER.IS,KENT.IS,KERVT.IS,KFEIN.IS,KGYO.IS,KIMMR.IS,KLGYO.IS,KLKIM.IS,KLMSN.IS,KLRHO.IS,KLSYN.IS,KNFRT.IS,KONKA.IS,KONYA.IS,KORDS.IS,KOZAA.IS,KOZAL.IS,KRDMA.IS,KRDMB.IS,KRGYO.IS,KRONT.IS,KRSTL.IS,KRTEK.IS,KSTUR.IS,KUTPO.IS,KUVVA.IS,LIDER.IS,LIDFA.IS,LINK.IS,LKMNH.IS,LOGO.IS,LUKSK.IS,MAALT.IS,MACKO.IS,MAGEN.IS,MAKIM.IS,MAKTK.IS,MANAS.IS,MARKA.IS,MARTI.IS,MAVI.IS,MEDTR.IS,MEGAP.IS,MEKAG.IS,MERCN.IS,MERIT.IS,MERKO.IS,METRO.IS,MHRGY.IS,MIATK.IS,MNDRS.IS,MNDTR.IS,MOBTL.IS,MOGAN.IS,MPARK.IS,MRGYO.IS,MRSHL.IS,MSGYO.IS,MTRKS.IS,MTRYO.IS,MZHLD.IS,NATEN.IS,NETAS.IS,NIBAS.IS,NTGAZ.IS,NTHOL.IS,NUGYO.IS,OFSYM.IS,ONCSM.IS,ORCAY.IS,ORGE.IS,ORMA.IS,OSMEN.IS,OSTIM.IS,OTKAR.IS,OTTO.IS,OYAKC.IS,OYAYO.IS,OYLUM.IS,OYYAT.IS,OZGYO.IS,OZKGY.IS,OZRDN.IS,OZSUB.IS,PAGYO.IS,PAMEL.IS,PAPIL.IS,PARSN.IS,PASEU.IS,PATEK.IS"
+HISSELER = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
 
-KATILIM = "AHGAZ.IS,AKCNS.IS,AKFYE.IS,ALBRK.IS,ARASE.IS,ATAKP.IS,AVPGY.IS,AYDEM.IS,BASGZ.IS,BETAE.IS,BUCIM.IS,EGGUB.IS,EGPRO.IS,ENERY.IS,GWIND.IS,HTTBT.IS,ASTOR.IS,BMSTL.IS,CVKMD.IS,DOFRB.IS,NETCD.IS,RALYH.IS,AKSA.IS,KUYAS.IS,ALKLC.IS,EFOR.IS,QUAGR.IS,SARKY.IS,BSOKE.IS,CANTE.IS,ASELS.IS,TUPRS.IS,BIMAS.IS,FROTO.IS,SISE.IS,TOASO.IS,TCELL.IS,TTKOM.IS,MGROS.IS,SOKM.IS,ULKER.IS,AYGAZ.IS,ENKAI.IS,VESTL.IS,ARCLK.IS,PGSUS.IS,TAVHL.IS,ODAS.IS,GESAN.IS,KONTR.IS,SMRTG.IS,TUKAS.IS,ZOREN.IS,ALARK.IS,HEKTS.IS,BRISA.IS,SASA.IS,EREGL.IS,GUBRF.IS,PETKM.IS,KRDMD.IS,DOHOL.IS,EKGYO.IS,TKFEN.IS,OTKAR.IS,CIMSA.IS,EGEEN.IS,KORDS.IS,BRSAN.IS,TRGYO.IS,ISGYO.IS,ALGYO.IS,GLYHO.IS,BERA.IS,KARSN.IS,TTRAK.IS,TMSN.IS,ASGYO.IS,KLGYO.IS,LOGO.IS,NETAS.IS,VERUS.IS,TATGD.IS,PNSUT.IS,BIENY.IS,SUNTK.IS,KERVT.IS,YYAPI.IS,KGYO.IS"
+KATILIM = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
 
-def trt_now():
+def trt():
     return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=3)))
 
-def is_market_hours():
-    s = trt_now()
+def piyasa_acik():
+    s = trt()
     if s.weekday() >= 5:
         return False
     return time(9, 40) <= s.time() <= time(18, 30)
 
-# ==================== TEKNIK GOSTERGE HESAPLAMALARI ====================
-def hesapla_rsi(seri, periyot=14):
-    delta = seri.diff()
-    kazanc = delta.where(delta > 0, 0).rolling(periyot).mean()
-    kayip = -delta.where(delta < 0, 0).rolling(periyot).mean()
-    rs = kazanc / kayip
-    return 100 - (100 / (1 + rs))
+def rsi(s, p=14):
+    d = s.diff()
+    k = d.where(d > 0, 0).rolling(p).mean()
+    y = -d.where(d < 0, 0).rolling(p).mean()
+    return 100 - (100 / (1 + k / y))
 
-def hesapla_macd(seri, hizli=12, yavas=26, sinyal=9):
-    ema_hizli = seri.ewm(span=hizli, adjust=False).mean()
-    ema_yavas = seri.ewm(span=yavas, adjust=False).mean()
-    macd = ema_hizli - ema_yavas
-    sinyal_cizgi = macd.ewm(span=sinyal, adjust=False).mean()
-    histogram = macd - sinyal_cizgi
-    return macd, sinyal_cizgi, histogram
+def macd(s):
+    e1 = s.ewm(span=12, adjust=False).mean()
+    e2 = s.ewm(span=26, adjust=False).mean()
+    m = e1 - e2
+    sig = m.ewm(span=9, adjust=False).mean()
+    return m, sig, m - sig
 
-def hesapla_bollinger(seri, periyot=20, std=2):
-    sma = seri.rolling(periyot).mean()
-    std_dev = seri.rolling(periyot).std()
-    ust = sma + (std_dev * std)
-    alt = sma - (std_dev * std)
-    return ust, sma, alt
+def bb(s, p=20):
+    sma = s.rolling(p).mean()
+    sd = s.rolling(p).std()
+    return sma + sd * 2, sma, sma - sd * 2
 
-def hesapla_atr(high, low, close, periyot=14):
-    tr1 = high - low
-    tr2 = (high - close.shift()).abs()
-    tr3 = (low - close.shift()).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(periyot).mean()
+def atr(h, l, c, p=14):
+    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
+    return tr.rolling(p).mean()
 
-def hesapla_stochastic(high, low, close, periyot=14, yumusat=3):
-    en_yuksek = high.rolling(periyot).max()
-    en_dusuk = low.rolling(periyot).min()
-    k = 100 * (close - en_dusuk) / (en_yuksek - en_dusuk)
-    d = k.rolling(yumusat).mean()
-    return k, d
+def stoch(h, l, c, p=14):
+    hi = h.rolling(p).max()
+    lo = l.rolling(p).min()
+    k = 100 * (c - lo) / (hi - lo)
+    return k, k.rolling(3).mean()
 
-def hesapla_obv(close, volume):
-    yon = np.sign(close.diff())
-    return (yon * volume).fillna(0).cumsum()
+def obv(c, v):
+    return (np.sign(c.diff()) * v).fillna(0).cumsum()
 
-def hesapla_sma(seri, periyot):
-    return seri.rolling(periyot).mean()
-
-# ==================== SINYAL MOTORU ====================
-def sinyal_motoru(h, sf):
-    """Trend + Momentum + Hacim katmanları birleşik skor"""
+def sinyal(h, sf):
     if len(h) < 30:
-        return 50, "BEKLE", "Yetersiz veri", 0.5
+        return 50, "BEKLE", "Yetersiz veri", 0.5, 0
+    sma20 = h['SMA20'].iloc[-1] if not pd.isna(h['SMA20'].iloc[-1]) else sf
+    sma50 = h['SMA50'].iloc[-1] if not pd.isna(h['SMA50'].iloc[-1]) else sf
+    t = 0.5
+    if sf > sma20: t += 0.25
+    if sf > sma50: t += 0.25
+    if sma20 > sma50: t += 0.15
+    t = min(1.0, t)
+    r = h['RSI'].iloc[-1] if not pd.isna(h['RSI'].iloc[-1]) else 50
+    mh = h['MACD_H'].iloc[-1] if not pd.isna(h['MACD_H'].iloc[-1]) else 0
+    sk = h['STOCH_K'].iloc[-1] if not pd.isna(h['STOCH_K'].iloc[-1]) else 50
+    m = 0.5
+    if 40 < r < 70: m += 0.15
+    elif r < 30: m += 0.3
+    elif r > 70: m -= 0.2
+    if mh > 0: m += 0.2
+    if sk < 20: m += 0.15
+    elif 20 < sk < 80: m += 0.1
+    m = max(0, min(1.0, m))
+    vr = h['VR'].iloc[-1] if not pd.isna(h['VR'].iloc[-1]) else 1
+    ot = 1 if h['OBV'].iloc[-1] > h['OBV'].iloc[-5] else 0
+    hc = 0.5
+    if vr > 1.5: hc += 0.3
+    elif vr > 1.2: hc += 0.15
+    if ot: hc += 0.2
+    hc = min(1.0, hc)
+    bu = h['BB_U'].iloc[-1] if not pd.isna(h['BB_U'].iloc[-1]) else sf * 1.05
+    ba = h['BB_A'].iloc[-1] if not pd.isna(h['BB_A'].iloc[-1]) else sf * 0.95
+    bp = (sf - ba) / (bu - ba) if (bu - ba) > 0 else 0.5
+    ai = (t * 0.35 + m * 0.35 + hc * 0.20 + (1 - bp) * 0.10) * 100
+    ai = max(20, min(95, ai))
+    if ai >= 70 and t > 0.6 and m > 0.5: sn = "GUCLU AL"
+    elif ai >= 55 and t > 0.4: sn = "AL"
+    elif ai < 35 and t < 0.4: sn = "SAT"
+    elif ai < 45: sn = "ZAYIF"
+    else: sn = "BEKLE"
+    y = []
+    if t > 0.6: y.append("Trend+")
+    if mh > 0: y.append("MACD+")
+    if vr > 1.5: y.append("Hacim+")
+    if r < 35: y.append("RSI dipsiz")
+    if r > 70: y.append("RSI zirve")
+    return ai, sn, " | ".join(y) if y else "Notr", bp, h['ATR'].iloc[-1] if not pd.isna(h['ATR'].iloc[-1]) else 0
 
-    # 1. TREND KATMANI (0-1)
-    sma20 = h['SMA20'].iloc[-1]
-    sma50 = h['SMA50'].iloc[-1] if not pd.isna(h['SMA50'].iloc[-1]) else sma20
-    trend_skor = 0.5
-    if sf > sma20: trend_skor += 0.25
-    if sf > sma50: trend_skor += 0.25
-    if sma20 > sma50: trend_skor += 0.15
-    trend_skor = min(1.0, trend_skor)
-
-    # 2. MOMENTUM KATMANI (0-1)
-    rsi = h['RSI'].iloc[-1] if not pd.isna(h['RSI'].iloc[-1]) else 50
-    macd_hist = h['MACD_HIST'].iloc[-1] if not pd.isna(h['MACD_HIST'].iloc[-1]) else 0
-    stoch_k = h['STOCH_K'].iloc[-1] if not pd.isna(h['STOCH_K'].iloc[-1]) else 50
-    mom_skor = 0.5
-    if 40 < rsi < 70: mom_skor += 0.15
-    elif rsi < 30: mom_skor += 0.3
-    elif rsi > 70: mom_skor -= 0.2
-    if macd_hist > 0: mom_skor += 0.2
-    if 20 < stoch_k < 80: mom_skor += 0.1
-    elif stoch_k < 20: mom_skor += 0.15
-    mom_skor = max(0, min(1.0, mom_skor))
-
-    # 3. HACIM KATMANI (0-1)
-    vol_ratio = h['Vol_Ratio'].iloc[-1] if not pd.isna(h['Vol_Ratio'].iloc[-1]) else 1
-    obv_trend = 1 if h['OBV'].iloc[-1] > h['OBV'].iloc[-5] else 0
-    hacim_skor = 0.5
-    if vol_ratio > 1.5: hacim_skor += 0.3
-    elif vol_ratio > 1.2: hacim_skor += 0.15
-    if obv_trend: hacim_skor += 0.2
-    hacim_skor = min(1.0, hacim_skor)
-
-    # 4. BOLLINGER POZISYONU
-    bb_ust = h['BB_UST'].iloc[-1] if not pd.isna(h['BB_UST'].iloc[-1]) else sf * 1.05
-    bb_alt = h['BB_ALT'].iloc[-1] if not pd.isna(h['BB_ALT'].iloc[-1]) else sf * 0.95
-    bb_pozisyon = (sf - bb_alt) / (bb_ust - bb_alt) if (bb_ust - bb_alt) > 0 else 0.5
-
-    # 5. BIRLESIK SKOR
-    final_skor = (trend_skor * 0.35 + mom_skor * 0.35 + hacim_skor * 0.20 + (1 - bb_pozisyon) * 0.10) * 100
-    final_skor = max(20, min(95, final_skor))
-
-    # 6. SINYAL KARARI
-    if final_skor >= 70 and trend_skor > 0.6 and mom_skor > 0.5:
-        sinyal = "GUCLU AL"
-    elif final_skor >= 55 and trend_skor > 0.4:
-        sinyal = "AL"
-    elif final_skor < 35 and trend_skor < 0.4:
-        sinyal = "SAT"
-    elif final_skor < 45:
-        sinyal = "ZAYIF"
-    else:
-        sinyal = "BEKLE"
-
-    # 7. DETAYLI YORUM
-    detaylar = []
-    if trend_skor > 0.6: detaylar.append("Trend pozitif")
-    if macd_hist > 0: detaylar.append("MACD al")
-    if vol_ratio > 1.5: detaylar.append("Hacim patlamasi")
-    if rsi < 35: detaylar.append("RSI asiri satim")
-    if rsi > 70: detaylar.append("RSI asiri alim")
-    yorum = " | ".join(detaylar) if detaylar else "Notr"
-
-    return final_skor, sinyal, yorum, bb_pozisyon
-
-# ==================== RISK YONETIMI ====================
-def risk_hesapla(h, sf, ai_skor):
-    """ATR bazli stop-loss ve hedef fiyat"""
-    if pd.isna(h['ATR'].iloc[-1]) or h['ATR'].iloc[-1] == 0:
+def risk(sf, ai, a):
+    if a == 0:
         return None, None, None, None
+    if ai >= 70: cs, ch, rk = 1.5, 3.0, "Dusuk"
+    elif ai >= 55: cs, ch, rk = 2.0, 2.5, "Orta"
+    else: cs, ch, rk = 2.5, 2.0, "Yuksek"
+    sl = sf - a * cs
+    hd = sf + a * ch
+    rr = (hd - sf) / (sf - sl) if (sf - sl) > 0 else 0
+    return round(sl, 2), round(hd, 2), round(rr, 2), rk
 
-    atr = h['ATR'].iloc[-1]
-
-    # Risk seviyesine gore ATR carpani
-    if ai_skor >= 70:
-        carpan_sl = 1.5
-        carpan_h = 3.0
-        risk_seviye = "Dusuk"
-    elif ai_skor >= 55:
-        carpan_sl = 2.0
-        carpan_h = 2.5
-        risk_seviye = "Orta"
-    else:
-        carpan_sl = 2.5
-        carpan_h = 2.0
-        risk_seviye = "Yuksek"
-
-    sl = sf - (atr * carpan_sl)
-    hedef = sf + (atr * carpan_h)
-    risk_odul = (hedef - sf) / (sf - sl) if (sf - sl) > 0 else 0
-
-    return round(sl, 2), round(hedef, 2), round(risk_odul, 2), risk_seviye
-
-for k, v in [('logged_in', False), ('fetch_count', 0), ('last_fetch_time', '-'), ('manual_trigger', False)]:
+for k, v in [('logged_in', False), ('fetch_count', 0), ('last_fetch', '-'), ('manual', False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
 if not st.session_state.logged_in:
-    st.title("BIST Pro Terminali Girisi")
-    with st.form("login"):
+    st.title("BIST Pro Giris")
+    with st.form("l"):
         c1, c2 = st.columns(2)
         u = c1.text_input("Kullanici Adi")
         p = c2.text_input("Sifre", type="password")
-        if st.form_submit_button("Giris Yap"):
+        if st.form_submit_button("Giris"):
             if u.strip() == "Cuma Babacan" and p.strip() == "784512":
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("Hatali kullanici adi veya sifre!")
+                st.error("Hatali giris!")
     st.stop()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def fetch_all(tickers_tuple):
+def fetch(tks):
     try:
-        return yf.download(list(tickers_tuple), period="5d", interval="15m", group_by='ticker', threads=True, progress=False, auto_adjust=True)
+        return yf.download(list(tks), period="5d", interval="15m", group_by='ticker', threads=True, progress=False, auto_adjust=True)
     except:
         return None
 
-def process(raw, tickers, katilim_set):
+def isle(raw, tks, kset):
     rows = []
-    for t in tickers:
+    for t in tks:
         try:
-            if len(tickers) == 1:
-                h = raw.copy()
-            else:
-                h = raw[t].copy() if t in raw.columns.levels[0] else None
-            if h is None or h.empty or len(h) < 30:
-                continue
+            tk = t + ".IS"
+            if len(tks) == 1: h = raw.copy()
+            else: h = raw[tk].copy() if tk in raw.columns.levels[0] else None
+            if h is None or h.empty or len(h) < 30: continue
             h = h.dropna()
-            if len(h) < 30:
-                continue
-
-            # Gostergeleri hesapla
-            h['RSI'] = hesapla_rsi(h['Close'])
-            h['MACD'], h['MACD_SIG'], h['MACD_HIST'] = hesapla_macd(h['Close'])
-            h['BB_UST'], h['BB_ORTA'], h['BB_ALT'] = hesapla_bollinger(h['Close'])
-            h['ATR'] = hesapla_atr(h['High'], h['Low'], h['Close'])
-            h['STOCH_K'], h['STOCH_D'] = hesapla_stochastic(h['High'], h['Low'], h['Close'])
-            h['OBV'] = hesapla_obv(h['Close'], h['Volume'])
-            h['SMA20'] = hesapla_sma(h['Close'], 20)
-            h['SMA50'] = hesapla_sma(h['Close'], 50)
-            h['Vol_Ratio'] = h['Volume'] / h['Volume'].rolling(20).mean()
-
+            if len(h) < 30: continue
+            h['RSI'] = rsi(h['Close'])
+            h['MACD'], h['MACD_S'], h['MACD_H'] = macd(h['Close'])
+            h['BB_U'], h['BB_O'], h['BB_A'] = bb(h['Close'])
+            h['ATR'] = atr(h['High'], h['Low'], h['Close'])
+            h['STOCH_K'], h['STOCH_D'] = stoch(h['High'], h['Low'], h['Close'])
+            h['OBV'] = obv(h['Close'], h['Volume'])
+            h['SMA20'] = h['Close'].rolling(20).mean()
+            h['SMA50'] = h['Close'].rolling(50).mean()
+            h['VR'] = h['Volume'] / h['Volume'].rolling(20).mean()
             sf = h['Close'].iloc[-1]
             gb = h['Close'].iloc[-min(25, len(h))]
             gd = ((sf - gb) / gb) * 100 if gb > 0 else 0
-
-            # Cok katmanli sinyal
-            ai_skor, sinyal, yorum, bb_poz = sinyal_motoru(h, sf)
-
-            # Risk yonetimi
-            sl, hedef, rr, rsk = risk_hesapla(h, sf, ai_skor)
-
-            # VWAP
+            ai, sn, yr, bp, at = sinyal(h, sf)
+            sl, hd, rr, rk = risk(sf, ai, at)
             vw = (h['Volume'] * h['Close']).cumsum() / h['Volume'].cumsum()
             vs = ((sf - vw.iloc[-1]) / vw.iloc[-1]) * 100 if vw.iloc[-1] > 0 else 0
-
-            # Hurst
-            ret = h['Close'].pct_change().dropna()
-            if len(ret) > 10:
-                n = len(ret)
-                dv = ret - ret.mean()
+            rt = h['Close'].pct_change().dropna()
+            if len(rt) > 10:
+                n = len(rt)
+                dv = rt - rt.mean()
                 cs = dv.cumsum()
                 R = cs.max() - cs.min()
-                S = ret.std()
+                S = rt.std()
                 hu = np.log(R/S) / np.log(n) if S > 0 else 0.5
                 hu = max(0.1, min(0.9, hu))
                 if pd.isna(hu): hu = 0.5
-            else:
-                hu = 0.5
-
-            # Sikisma
+            else: hu = 0.5
             y20 = h['High'].rolling(20).max().iloc[-1]
             d20 = h['Low'].rolling(20).min().iloc[-1]
-            if pd.isna(y20) or pd.isna(d20):
-                y20, d20 = h['High'].max(), h['Low'].min()
+            if pd.isna(y20) or pd.isna(d20): y20, d20 = h['High'].max(), h['Low'].min()
             cr = (y20 - d20) / sf if sf > 0 else 1
-
-            # Net para girisi
             yon = 1 if sf >= h['Open'].iloc[-1] else -1
             pg = abs(h['High'].iloc[-1] - h['Low'].iloc[-1]) * h['Volume'].iloc[-1] * yon
-
-            # 15 dk tahmin
-            if ai_skor >= 70:
-                tp = "YUKSELIS BEKLENIYOR"
-            elif ai_skor >= 55:
-                tp = "YUKSELIS EGILIMI"
-            elif ai_skor < 35:
-                tp = "DUSUS BEKLENIYOR"
-            elif ai_skor < 45:
-                tp = "ZAYIF SEYIR"
-            else:
-                tp = "BEKLE"
-
+            if ai >= 70: tp = "YUKSELIS BEKLENIYOR"
+            elif ai >= 55: tp = "YUKSELIS EGILIMI"
+            elif ai < 35: tp = "DUSUS BEKLENIYOR"
+            elif ai < 45: tp = "ZAYIF SEYIR"
+            else: tp = "BEKLE"
             rows.append({
-                "Hisse": t.replace(".IS", ""),
-                "Katilim Uygun": "EVET" if t in katilim_set else "HAYIR",
-                "Net Guc Skoru": round(ai_skor, 2),
-                "Sinyal": sinyal,
-                "Yorum": yorum,
+                "Hisse": t, "Katilim": "EVET" if tk in kset else "HAYIR",
+                "Guc": round(ai, 2), "Sinyal": sn, "Yorum": yr,
                 "RSI": round(h['RSI'].iloc[-1], 1) if not pd.isna(h['RSI'].iloc[-1]) else 50,
-                "MACD Hist": round(h['MACD_HIST'].iloc[-1], 3) if not pd.isna(h['MACD_HIST'].iloc[-1]) else 0,
-                "Stoch K": round(h['STOCH_K'].iloc[-1], 1) if not pd.isna(h['STOCH_K'].iloc[-1]) else 50,
-                "BB Pozisyon": round(bb_poz, 2),
-                "Trend Karari": "Yukselis Kanali" if gd > 0 else "Dusus Kanali",
-                "OlasI Haber": "Hacim Genislemesi" if h['Vol_Ratio'].iloc[-1] > 1.5 else "Normal",
-                "Trend Projeksiyon": "Guclu Trend Devami" if ai_skor > 70 else "Bant Ici Toparlanma",
-                "Beklenen Getiri": "%" + str(round(gd, 2)),
-                "Erken Konum": "HACIM & SIKISMA" if cr < 1.1 else "NORMAL",
-                "Swing Al-Sat": "SWING UYGUN" if ai_skor > 60 else "HARIC",
-                "Al Olasiligi": "%" + str(round(ai_skor, 1)),
-                "Hacim (Vol)": str(round(h['Vol_Ratio'].iloc[-1], 2)) + "x",
-                "Sikisma (Comp)": str(round(cr, 2)) + "x",
+                "MACD_H": round(h['MACD_H'].iloc[-1], 3) if not pd.isna(h['MACD_H'].iloc[-1]) else 0,
+                "Stoch": round(h['STOCH_K'].iloc[-1], 1) if not pd.isna(h['STOCH_K'].iloc[-1]) else 50,
+                "BB_Poz": round(bp, 2),
+                "Trend": "Yukselis" if gd > 0 else "Dusus",
+                "Getiri": "%" + str(round(gd, 2)),
+                "Erken": "HACIM+SIKISMA" if cr < 1.1 else "NORMAL",
+                "Swing": "SWING UYGUN" if ai > 60 else "HARIC",
+                "Al_Olas": "%" + str(round(ai, 1)),
+                "Vol": str(round(h['VR'].iloc[-1], 2)) + "x" if not pd.isna(h['VR'].iloc[-1]) else "1x",
+                "Comp": str(round(cr, 2)) + "x",
                 "Fiyat": str(round(sf, 2)) + " TL",
-                "Stop-Loss": str(sl) + " TL" if sl else "-",
-                "Hedef": str(hedef) + " TL" if hedef else "-",
-                "Risk/Odul": str(rr) if rr else "-",
-                "Risk Seviye": rsk if rsk else "-",
-                "Donem Degisimi": "%" + str(round(gd, 2)),
-                "Endeks RS": "%" + str(round(gd, 2)),
+                "SL": str(sl) + " TL" if sl else "-",
+                "Hedef": str(hd) + " TL" if hd else "-",
+                "R/O": str(rr) if rr else "-",
+                "Risk": rk if rk else "-",
+                "EndeksRS": "%" + str(round(gd, 2)),
                 "Hurst": round(hu, 2),
-                "VWAP Sapma": "%" + str(round(vs, 2)),
-                "Net Para Girisi": round(pg, 2),
-                "Guclu Yukselis": "EVET" if ai_skor > 75 else "HAYIR",
-                "15 Dk Sonra Tahmin": tp
+                "VWAP": "%" + str(round(vs, 2)),
+                "Para": round(pg, 2),
+                "Tahmin": tp
             })
-        except:
-            continue
-    if not rows:
-        return pd.DataFrame()
+        except: continue
+    if not rows: return pd.DataFrame()
     df = pd.DataFrame(rows)
-    df['Agirlik'] = df['15 Dk Sonra Tahmin'].apply(lambda x: 1 if 'YUKSELIS' in x else (2 if 'BEKLE' in x or 'EGILIM' in x else 3))
-    df = df.sort_values(by=['Agirlik', 'Net Guc Skoru'], ascending=[True, False]).drop(columns=['Agirlik'])
-    return df
+    df['A'] = df['Tahmin'].apply(lambda x: 1 if 'YUKSELIS' in x else (2 if 'BEKLE' in x or 'EGILIM' in x else 3))
+    return df.sort_values(by=['A', 'Guc'], ascending=[True, False]).drop(columns=['A'])
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_chart_data(ticker):
+def grafik(tk):
     try:
-        h = yf.Ticker(ticker).history(period="5d", interval="15m")
-        if h.empty:
-            return None
-        h['RSI'] = hesapla_rsi(h['Close'])
-        h['MACD'], h['MACD_SIG'], h['MACD_HIST'] = hesapla_macd(h['Close'])
-        h['BB_UST'], h['BB_ORTA'], h['BB_ALT'] = hesapla_bollinger(h['Close'])
+        h = yf.Ticker(tk).history(period="5d", interval="15m")
+        if h.empty: return None
+        h['RSI'] = rsi(h['Close'])
+        h['MACD'], h['MACD_S'], h['MACD_H'] = macd(h['Close'])
+        h['BB_U'], h['BB_O'], h['BB_A'] = bb(h['Close'])
         return h
-    except:
-        return None
+    except: return None
 
-piyasa = is_market_hours()
-if piyasa:
-    st_autorefresh(interval=60000, key="refresh")
+pk = piyasa_acik()
+if pk:
+    st_autorefresh(interval=60000, key="r")
 
-st.title("BIST Swing/Intraday Trend & Hacim Sikismasi Patlama Terminali")
-st.caption("Son Guncelleme (TRT): " + trt_now().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli | 20+ Teknik Gosterge")
+st.title("BIST Swing/Intraday Trend & Hacim Sikismasi Terminali")
+st.caption("Son Guncelleme (TRT): " + trt().strftime('%Y-%m-%d %H:%M:%S') + " | 15Dk Gecikmeli | 20+ Gosterge")
 
-if piyasa:
-    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri akisi 09:40-18:30 arasi her 60 saniyede bir</div>', unsafe_allow_html=True)
+if pk:
+    st.markdown('<div class="market-open"><b>PIYASA ACIK</b> - Otomatik veri 09:40-18:30 arasi 60 sn</div>', unsafe_allow_html=True)
 else:
-    if trt_now().weekday() >= 5:
+    if trt().weekday() >= 5:
         st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Hafta sonu.</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Seans saatleri (09:40-18:30) disinda.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="market-closed"><b>PIYASA KAPALI</b> - Seans disi (09:40-18:30).</div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
@@ -351,62 +255,131 @@ with c1:
             f = bh['Close'].iloc[-1]
             d = ((f - bh['Open'].iloc[-1]) / bh['Open'].iloc[-1]) * 100
             st.metric("BIST 100", str(round(f, 2)), "%" + str(round(d, 2)))
-        else:
-            st.metric("BIST 100", "Bekleniyor", "Notr")
-    except:
-        st.metric("BIST 100", "Hata", "Notr")
-with c2:
-    st.metric("VIOP Denge", "Denge", "Notr")
-with c3:
-    st.metric("Taranan Hisse", "300", "Ilk 300")
-with c4:
-    st.metric("Veri Cekme", str(st.session_state.fetch_count), "Son: " + st.session_state.last_fetch_time)
+        else: st.metric("BIST 100", "Bekleniyor", "Notr")
+    except: st.metric("BIST 100", "Hata", "Notr")
+with c2: st.metric("VIOP Denge", "Denge", "Notr")
+with c3: st.metric("Taranan", "300", "Ilk 300")
+with c4: st.metric("Cekim", str(st.session_state.fetch_count), "Son: " + st.session_state.last_fetch)
 
-t1, t2, t3, t4, t5, t6 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "VIOP Denge", "KAP Haberleri", "Kapanis"])
+t1, t2, t3, t4 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "KAP+VIOP"])
 
 with t1:
-    st.subheader("Gelismis Nicel Trend Matrisi (20+ Gosterge)")
-    cf1, cf2, cf3, cf4 = st.columns([2, 2, 2, 2])
-    with cf1:
-        sk = st.checkbox("Sadece Islam'a Uygun", value=True)
-    with cf2:
-        st.checkbox("Erken Sikisma", value=False)
-    with cf3:
-        st.checkbox("Yuksek Guvenli", value=False)
-    with cf4:
-        mb = st.button("Manuel Veri Cek", use_container_width=True, type="primary")
+    st.subheader("Nicel Trend Matrisi (20+ Gosterge)")
+    cf1, cf2, cf3 = st.columns([3, 2, 2])
+    with cf1: sk = st.checkbox("Sadece Islam'a Uygun", value=True)
+    with cf2: mb = st.button("Manuel Cek", use_container_width=True, type="primary")
+    with cf3: st.write("")
     if mb:
         st.cache_data.clear()
-        st.session_state.manual_trigger = True
+        st.session_state.manual = True
         st.session_state.fetch_count += 1
-        st.session_state.last_fetch_time = trt_now().strftime("%H:%M:%S")
+        st.session_state.last_fetch = trt().strftime("%H:%M:%S")
         st.rerun()
-    with st.spinner("Gercek BIST verileri ve gostergeler hesaplaniyor..."):
-        tk = TUM_HISSELER.split(",")
-        ks = set(KATILIM.split(","))
-        rw = fetch_all(tuple(tk))
+    with st.spinner("Yukleniyor..."):
+        tks = HISSELER.split(",")
+        kset = set((k + ".IS") for k in KATILIM.split(","))
+        rw = fetch(tuple(tks))
         if rw is not None and not rw.empty:
-            df = process(rw, tk, ks)
-            if not st.session_state.manual_trigger:
+            df = isle(rw, tks, kset)
+            if not st.session_state.manual:
                 st.session_state.fetch_count += 1
-                st.session_state.last_fetch_time = trt_now().strftime("%H:%M:%S")
-            st.session_state.manual_trigger = False
-        else:
-            df = pd.DataFrame()
+                st.session_state.last_fetch = trt().strftime("%H:%M:%S")
+            st.session_state.manual = False
+        else: df = pd.DataFrame()
     if sk and not df.empty:
-        df = df[df["Katilim Uygun"] == "EVET"]
+        df = df[df["Katilim"] == "EVET"]
     if not df.empty:
         def rt(v):
-            if "YUKSELIS" in str(v):
-                return 'background-color: #1b5e20; color: white; font-weight: bold;'
-            if "DUSUS" in str(v) or "ZAYIF" in str(v):
-                return 'background-color: #b71c1c; color: white; font-weight: bold;'
-            if "BEKLE" in str(v):
-                return 'background-color: #e65100; color: white; font-weight: bold;'
+            if "YUKSELIS" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "DUSUS" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            if "BEKLE" in str(v): return 'background-color:#e65100;color:white;font-weight:bold;'
             return ''
         def rs(v):
-            if "GUCLU AL" in str(v):
-                return 'background-color: #1b5e20; color: white; font-weight: bold;'
-            if "AL" in str(v) and "GUCLU" not in str(v):
-                return 'background-color: #2e7d32; color: white;'
-            if "SAT" in st
+            if "GUCLU AL" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "AL" in str(v): return 'background-color:#2e7d32;color:white;'
+            if "SAT" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;'
+            return 'background-color:#e65100;color:white;'
+        def rk2(v): return 'color:#4CAF50;font-weight:bold;' if v == "EVET" else 'color:#F44336;'
+        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk2, subset=["Katilim"]), use_container_width=True, height=700)
+        st.markdown("---")
+        s1, s2, s3, s4, s5, s6 = st.columns(6)
+        s1.metric("Gosterilen", len(df))
+        s2.metric("Yukselis", len(df[df["Tahmin"].str.contains("YUKSELIS")]))
+        s3.metric("Katilim", len(df[df["Katilim"] == "EVET"]))
+        s4.metric("Ort Guc", str(round(df["Guc"].mean(), 1)))
+        s5.metric("Guclu AL", len(df[df["Sinyal"] == "GUCLU AL"]))
+        s6.metric("SAT", len(df[df["Sinyal"] == "SAT"]))
+    else: st.warning("Veri cekilemedi.")
+
+with t2:
+    st.subheader("Interaktif Mum Grafigi")
+    try:
+        hs = st.selectbox("Hisse", [h for h in HISSELER.split(",")[:100]])
+        h = grafik(hs + ".IS")
+        if h is not None and not h.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=h.index, open=h['Open'], high=h['High'], low=h['Low'], close=h['Close'], name="Fiyat", increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
+            fig.add_trace(go.Scatter(x=h.index, y=h['BB_U'], name="BB Ust", line=dict(color='#9c27b0', width=1, dash='dot')))
+            fig.add_trace(go.Scatter(x=h.index, y=h['BB_A'], name="BB Alt", line=dict(color='#9c27b0', width=1, dash='dot')))
+            fig.add_trace(go.Scatter(x=h.index, y=h['Close'].rolling(20).mean(), name="SMA20", line=dict(color='#FFC107', width=1)))
+            fig.update_layout(title=hs + " - 15 Dakikalik", xaxis_rangeslider_visible=False, template='plotly_dark', height=500, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E')
+            st.plotly_chart(fig, use_container_width=True)
+            cr, cm = st.columns(2)
+            with cr:
+                fr = go.Figure()
+                fr.add_trace(go.Scatter(x=h.index, y=h['RSI'], name="RSI", line=dict(color='#4CAF50')))
+                fr.add_hline(y=70, line_dash="dash", line_color="red")
+                fr.add_hline(y=30, line_dash="dash", line_color="green")
+                fr.update_layout(title="RSI (14)", template='plotly_dark', height=250, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E', showlegend=False)
+                st.plotly_chart(fr, use_container_width=True)
+            with cm:
+                fm = go.Figure()
+                fm.add_trace(go.Bar(x=h.index, y=h['MACD_H'], name="Hist", marker_color='#FFC107'))
+                fm.add_trace(go.Scatter(x=h.index, y=h['MACD'], name="MACD", line=dict(color='#4CAF50')))
+                fm.add_trace(go.Scatter(x=h.index, y=h['MACD_S'], name="Signal", line=dict(color='#F44336')))
+                fm.update_layout(title="MACD", template='plotly_dark', height=250, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E')
+                st.plotly_chart(fm, use_container_width=True)
+        else: st.warning("Grafik alinamadi.")
+    except Exception as e: st.error("Hata: " + str(e))
+
+with t3:
+    st.subheader("ATR Bazli Risk Yonetimi")
+    try:
+        tks = HISSELER.split(",")
+        kset = set((k + ".IS") for k in KATILIM.split(","))
+        rw = fetch(tuple(tks))
+        if rw is not None and not rw.empty:
+            df_r = isle(rw, tks, kset)
+            if not df_r.empty:
+                df_r = df_r[df_r["Katilim"] == "EVET"]
+                def rn(x):
+                    try: return float(x) > 1.5
+                    except: return False
+                rdf = df_r[df_r["R/O"].apply(rn)]
+                st.markdown("**Risk/Odul > 1.5 olan " + str(len(rdf)) + " hisse:**")
+                if not rdf.empty:
+                    st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "R/O", "Risk", "Sinyal", "Guc"]], use_container_width=True, height=500)
+                else: st.info("Uygun risk/odul oraninda hisse yok.")
+                st.markdown("---")
+                st.info("Stop-Loss = Fiyat - (ATR x Carpan) | Hedef = Fiyat + (ATR x Carpan)")
+    except: st.warning("Risk analizi yapilamadi.")
+
+with t4:
+    st.subheader("KAP Haberleri")
+    st.warning("KAP entegrasyonu yakinda eklenecek.")
+    st.write("**[14:18:40] ASELS** - Yeni Siparis Anlasmasi (Pozitif)")
+    st.write("**[14:15:20] TUPRS** - Uretim Verileri (Notr)")
+    st.markdown("---")
+    st.subheader("VIOP Denge")
+    v1, v2, v3 = st.columns(3)
+    v1.metric("VIOP 30", "11.450", "%0.45")
+    v2.metric("Spot", "11.420", "%0.40")
+    v3.metric("Fark", "+30", "Pozitif")
+
+st.markdown("---")
+b1, b2 = st.columns(2)
+with b1:
+    st.markdown('<div class="counter-box"><h4>Veri Cekme</h4><p><b>Toplam:</b> ' + str(st.session_state.fetch_count) + '</p><p><b>Son:</b> ' + st.session_state.last_fetch + '</p><p><b>Hisse:</b> 300</p></div>', unsafe_allow_html=True)
+with b2:
+    dm = "ACIK" if pk else "KAPALI"
+    st.markdown('<div class="counter-box"><h4>Sistem</h4><p><b>Yenileme:</b> 60 sn</p><p><b>Gecikme:</b> 15 dk</p><p><b>TRT:</b> ' + trt().strftime('%H:%M:%S') + '</p><p><b>Piyasa:</b> ' + dm + '</p></div>', unsafe_allow_html=
