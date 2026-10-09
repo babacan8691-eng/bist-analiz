@@ -58,21 +58,33 @@ def analiz_et(hisse, veri, katilim_kumesi):
     if len(gecmis) < 30:
         return None
 
-    son_fiyat = gecmis['Close'].iloc[-1]
-    gun_basi = gecmis['Close'].iloc[-min(25, len(gecmis))]
+    son_fiyat = float(gecmis['Close'].iloc[-1])
+    gun_basi = float(gecmis['Close'].iloc[-min(25, len(gecmis))])
     gunluk_degisim = ((son_fiyat - gun_basi) / gun_basi) * 100 if gun_basi > 0 else 0
 
-    sma20 = gecmis['Close'].rolling(20).mean().iloc[-1]
-    sma50 = gecmis['Close'].rolling(50).mean().iloc[-1]
+    sma20 = float(gecmis['Close'].rolling(20).mean().iloc[-1])
+    sma50_deger = gecmis['Close'].rolling(50).mean().iloc[-1]
+    sma50 = float(sma50_deger) if not pd.isna(sma50_deger) else sma20
+
     rsi_seri = hesapla_rsi(gecmis['Close'])
-    rsi = rsi_seri.iloc[-1] if not pd.isna(rsi_seri.iloc[-1]) else 50
+    rsi_deger = rsi_seri.iloc[-1]
+    rsi = float(rsi_deger) if not pd.isna(rsi_deger) else 50.0
+
     macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
-    macd_hist = macd_h.iloc[-1] if not pd.isna(macd_h.iloc[-1]) else 0
+    macd_hist_deger = macd_h.iloc[-1]
+    macd_hist = float(macd_hist_deger) if not pd.isna(macd_hist_deger) else 0.0
+
     stoch_k, stoch_d = hesapla_stochastic(gecmis['High'], gecmis['Low'], gecmis['Close'])
-    stoch_deger = stoch_k.iloc[-1] if not pd.isna(stoch_k.iloc[-1]) else 50
-    atr = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close']).iloc[-1]
-    hacim_ort = gecmis['Volume'].rolling(20).mean().iloc[-1]
-    hacim_orani = gecmis['Volume'].iloc[-1] / hacim_ort if hacim_ort > 0 else 1
+    stoch_deger_raw = stoch_k.iloc[-1]
+    stoch_deger = float(stoch_deger_raw) if not pd.isna(stoch_deger_raw) else 50.0
+
+    atr_deger = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close']).iloc[-1]
+    atr = float(atr_deger) if not pd.isna(atr_deger) else 0.0
+
+    hacim_ort_deger = gecmis['Volume'].rolling(20).mean().iloc[-1]
+    hacim_ort = float(hacim_ort_deger) if not pd.isna(hacim_ort_deger) else 0.0
+    hacim_orani = float(gecmis['Volume'].iloc[-1]) / hacim_ort if hacim_ort > 0 else 1.0
+
     obv = hesapla_obv(gecmis['Close'], gecmis['Volume'])
     obv_trend = obv.iloc[-1] > obv.iloc[-5] if len(obv) >= 5 else False
 
@@ -81,7 +93,7 @@ def analiz_et(hisse, veri, katilim_kumesi):
     if son_fiyat > sma20:
         skor += 10
         yorumlar.append("SMA20 ustu")
-    if not pd.isna(sma50) and son_fiyat > sma50:
+    if son_fiyat > sma50:
         skor += 5
     if gunluk_degisim > 0:
         skor += 8
@@ -122,7 +134,7 @@ def analiz_et(hisse, veri, katilim_kumesi):
         sinyal = "BEKLE"
         tahmin = "BEKLE"
 
-    if not pd.isna(atr) and atr > 0:
+    if atr > 0:
         stop_loss = round(son_fiyat - atr * 2, 2)
         hedef = round(son_fiyat + atr * 3, 2)
         risk_odul = round((hedef - son_fiyat) / (son_fiyat - stop_loss), 2) if (son_fiyat - stop_loss) > 0 else 0
@@ -134,19 +146,19 @@ def analiz_et(hisse, veri, katilim_kumesi):
     return {
         "Hisse": hisse,
         "Katilim": "EVET" if (hisse + ".IS") in katilim_kumesi else "HAYIR",
-        "Guc": round(skor, 2),
+        "Guc": round(float(skor), 1),
         "Sinyal": sinyal,
         "Yorum": " | ".join(yorumlar) if yorumlar else "Notr",
-        "RSI": round(rsi, 1),
-        "MACD_H": round(macd_hist, 3) if not pd.isna(macd_hist) else 0,
-        "Stoch": round(stoch_deger, 1),
+        "RSI": f"{rsi:.1f}",
+        "MACD": f"{macd_hist:.3f}",
+        "Stokastik": f"{stoch_deger:.1f}",
         "Trend": "Yukselis" if gunluk_degisim > 0 else "Dusus",
         "Getiri": "%" + str(round(gunluk_degisim, 2)),
         "Hacim": str(round(hacim_orani, 2)) + "x",
         "Fiyat": str(round(son_fiyat, 2)) + " TL",
         "StopLoss": str(stop_loss) + " TL",
         "Hedef": str(hedef) + " TL",
-        "RiskOdul": risk_odul,
+        "RiskOdul": f"{risk_odul:.2f}",
         "Tahmin": tahmin
     }
 
@@ -205,8 +217,8 @@ bist_degisim = "0"
 try:
     bv = bist_endeks_verisi()
     if bv is not None and not bv.empty:
-        bf = bv['Close'].iloc[-1]
-        bd = ((bf - bv['Open'].iloc[-1]) / bv['Open'].iloc[-1]) * 100
+        bf = float(bv['Close'].iloc[-1])
+        bd = ((bf - float(bv['Open'].iloc[-1])) / float(bv['Open'].iloc[-1])) * 100
         bist_deger = str(round(bf, 2))
         bist_degisim = "%" + str(round(bd, 2))
 except Exception:
