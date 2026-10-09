@@ -676,10 +676,10 @@ with tab2:
     df_gunluk = df_tarama[
         df_tarama["Katılım Uygun"].str.contains("EVET")
     ].copy()
+    if df_gunluk.empty:
+      df_gunluk = df_tarama.copy()
     df_gunluk = df_gunluk.sort_values(
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
     df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-          )
-            
+        col
