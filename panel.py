@@ -611,13 +611,6 @@ tab1, tab2, tab3 = st.tabs([
     "🌙 Seans Kapanışı & Overnight Fırsatları",
 ])
 
-# 3'LÜ SEKME YAPISI
-tab1, tab2, tab3 = st.tabs([
-    "Genel Trend & Sıkışma Terminali",
-    "Katılım Özel Intraday Swing",
-    "🌙 Seans Kapanışı & Overnight Fırsatları",
-])
-
 with tab1:
   st.subheader(
       "📊 Gelişmiş Nicel Trend Matrisi (Hacim & Sıkışma Odaklı Tarama)"
@@ -685,120 +678,8 @@ with tab2:
     ].copy()
     if df_gunluk.empty:
       df_gunluk = df_tarama.copy()
-
     df_gunluk = df_gunluk.sort_values(
         by="_SkorGunluk", ascending=False
     ).reset_index(drop=True)
     df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-
-    st.dataframe(
-        guvenli_styler(df_gunluk),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-
-with tab3:
-  st.subheader(
-      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
-      " Etkilenen Alan)"
-  )
-  st.info(
-      "Seans kapanışına doğru sıkışmasını tamamlayan ve gün sonu hacim patlaması"
-      " yaşayan Katılım hisselerini gösterir. Kararlar net gün sonu verileriyle"
-      " alındığı için gecikmeden etkilenmez."
-  )
-  if not df_tarama.empty:
-    df_overnight = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET", na=False)
-    ].copy()
-    if df_overnight.empty:
-      df_overnight = df_tarama.copy()
-
-    df_overnight = df_overnight.sort_values(
-        by="_SkorOvernight", ascending=False
-    ).reset_index(drop=True)
-    df_overnight = df_overnight.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-
-    st.dataframe(
-        guvenli_styler(df_overnight),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-
-st.markdown("---")
-st.caption(
-    "© 2026 BIST Nicel Trend Terminali | Swing & Sıkışma Optimizasyon Modu Aktif"
-)
-
-
-with tab2:
-  st.subheader(
-      "⚡ Katılım Özel Intraday Trend & Hacim Sıkışması Takip Ekranı"
-  )
-  st.info(
-      "Bu sekme yalnızca BIST içerisindeki Katılım kriterlerine uyan tahtalarda"
-      " orta vadeli hacim genişlemelerini listeler."
-  )
-  if not df_tarama.empty:
-    # Katılım hisselerini güvenli şekilde filtrele
-    df_gunluk = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET", na=False)
-    ].copy()
-    if df_gunluk.empty:
-      df_gunluk = df_tarama.copy()
-
-    df_gunluk = df_gunluk.sort_values(
-        by="_SkorGunluk", ascending=False
-    ).reset_index(drop=True)
-    df_gunluk = df_gunluk.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-
-    st.dataframe(
-        guvenli_styler(df_gunluk),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-   with tab3:
-  st.subheader(
-      "🌙 Seans Kapanışı & Overnight Swing Fırsatları (15Dk Gecikmeden En Az"
-      " Etkilenen Alan)"
-  )
-  st.info(
-      "Seans kapanışına doğru sıkışmasını tamamlayan ve gün sonu hacim patlaması"
-      " yaşayan Katılım hisselerini gösterir. Kararlar net gün sonu verileriyle"
-      " alındığı için gecikmeden etkilenmez."
-  )
-  if not df_tarama.empty:
-    df_overnight = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET", na=False)
-    ].copy()
-    if df_overnight.empty:
-      df_overnight = df_tarama.copy()
-
-    df_overnight = df_overnight.sort_values(
-        by="_SkorOvernight", ascending=False
-    ).reset_index(drop=True)
-    df_overnight = df_overnight.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-
-    st.dataframe(
-        guvenli_styler(df_overnight),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-      
-      
+ 
