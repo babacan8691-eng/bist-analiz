@@ -456,7 +456,7 @@ def hesapla(hs, v, kset):
         "GapYon": bg,
         "Gap%": f"%{tg}",
         "Yorum": yorum_on
-    }. 
+    }
     return ana, onc 
 
 for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', [])]:
