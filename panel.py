@@ -321,9 +321,7 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         "Overnight": os,
         "GapYon": bg,
         "Gap%": f"%{tg}",
-        "Yorum": yorum_on
-    }
-    return ana, onc for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
+        "Yorum": yorum_ }
     if k not in st.session_state:
         st.session_state[k] = v
 
