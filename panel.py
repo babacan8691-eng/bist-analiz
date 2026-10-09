@@ -218,8 +218,7 @@ def rsi(s, p=14):
 
 def atr_f(h, l, c, p=14):
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
-    return tr.rolling(p).mean()
-
+    return tr.rolling(p).mean() 
 
 def tahmin_15(g):
     if len(g) < 20:
@@ -356,9 +355,13 @@ def nlp_duygu(basliklar, hisse):
         return 0.0, 0
     skor = 0
     bulunan = 0
-    for h in basliklar:
-        b = h.lower()
-        if hisse.lower() not in b and hisse not in b:
+    hisse_l = str(hisse).lower()
+    for item in basliklar:
+        if isinstance(item, dict):
+            b = str(item.get("baslik", "")).lower()
+        else:
+            b = str(item).lower()
+        if hisse_l not in b:
             continue
         bulunan += 1
         for k in POZ_KELIMELER:
@@ -479,7 +482,7 @@ def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
         "GAN_VaR": gan,
         "HibritSkor": hb_sk,
         "HibritSeviye": hb_sv
-                }      
+    } 
 
 def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
@@ -658,8 +661,7 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         "Gap%": f"%{tg}",
         "Yorum": yorum_on
     }
-    return ana, onc
-
+    return ana, onc 
 
 for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
     if k not in st.session_state:
@@ -739,7 +741,7 @@ if mb:
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.haber = []
-    st.rerun()    
+    st.rerun() 
 
 t1, t2, t3, t4, t5, t6, t7 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs", "Derin Teknoloji"])
 
@@ -1068,17 +1070,17 @@ with t7:
         st.markdown("---")
         st.markdown("### Derin Teknoloji Ne Anlatiyor?")
         st.markdown("""
-        - **LSTM_Yon**: Agirlikli bellek modeli ile 5 adim sonrasi yon tahmini (% cinsinden)
-        - **LSTM_Guven**: Tahmin guven yuzdesi
-        - **NLP_Skor**: Turkce finansal haber duygu analizi (-5 ile +5 arasi)
-        - **NLP_Haber**: Hisse ile ilgili bulunan haber sayisi
-        - **RL_Q**: Pekistirmeli ogrenme Q-degeri (getiri bazli odul)
-        - **RL_Sharpe**: Sharpe orani (risk ayarli getiri)
-        - **GNN_Manip**: Manipulasyon riski (0-100, yuksek = riskli)
-        - **GAN_VaR**: Sentetik senaryolarda %95 VaR (kayip tahmini)
-        - **HibritSkor**: Tum modellerin birlesik skoru (0-100)
-        - **HibritSeviye**: YUKSEK POZITIF / POZITIF / NOTR / NEGATIF / YUKSEK NEGATIF
+- **LSTM_Yon**: Agirlikli bellek modeli ile 5 adim sonrasi yon tahmini (% cinsinden)
+- **LSTM_Guven**: Tahmin guven yuzdesi
+- **NLP_Skor**: Turkce finansal haber duygu analizi (-5 ile +5 arasi)
+- **NLP_Haber**: Hisse ile ilgili bulunan haber sayisi
+- **RL_Q**: Pekistirmeli ogrenme Q-degeri (getiri bazli odul)
+- **RL_Sharpe**: Sharpe orani (risk ayarli getiri)
+- **GNN_Manip**: Manipulasyon riski (0-100, yuksek = riskli)
+- **GAN_VaR**: Sentetik senaryolarda %95 VaR (kayip tahmini)
+- **HibritSkor**: Tum modellerin birlesik skoru (0-100)
+- **HibritSeviye**: YUKSEK POZITIF / POZITIF / NOTR / NEGATIF / YUKSEK NEGATIF
         """)
 
 st.markdown("---")
-st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")                                                                                                                                                                                                                                                                                                                                                                                                                     
+st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")                                                                   
