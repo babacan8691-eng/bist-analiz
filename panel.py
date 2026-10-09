@@ -51,6 +51,127 @@ def hesapla_obv(close, hacim):
     return (yon * hacim).fillna(0).cumsum()
 
 
+def hesapla_overnight_gap(hisse, veri):
+    """Gece taşıma (overnight) gap stratejisi sinyali."""
+    if veri is None or veri.empty or len(veri) < 30:
+        return None
+
+    gecmis = veri.dropna()
+    if len(gecmis) < 30:
+        return None
+
+    # Son günün kapanış fiyatı (son 15 dk mumu)
+    son_kapanis = float(gecmis['Close'].iloc[-1])
+
+    # Gün içi yüksek/düşük
+    gun_high = float(gecmis['High'].iloc[-min(25, len(gecmis)):].max())
+    gun_low = float(gecmis['Low'].iloc[-min(25, len(gecmis)):].min())
+
+    # Gün içi kapanış pozisyonu (0 = dip, 1 = zirve)
+    if gun_high - gun_low > 0:
+        kapanis_pozisyonu = (son_kapanis - gun_low) / (gun_high - gun_low)
+    else:
+        kapanis_pozisyonu = 0.5
+
+    # Günlük değişim
+    gun_basi = float(gecmis['Close'].iloc[-min(25, len(gecmis))])
+    gunluk_degisim = ((son_kapanis - gun_basi) / gun_basi) * 100 if gun_basi > 0 else 0
+
+    # ATR (volatilite)
+    atr_seri = hesapla_atr(gecmis['High'], gecmis['Low'], gecmis['Close'])
+    atr_deger = float(atr_seri.iloc[-1]) if not pd.isna(atr_seri.iloc[-1]) else 0
+    atr_yuzde = (atr_deger / son_kapanis) * 100 if son_kapanis > 0 else 0
+
+    # Hacim analizi
+    son_hacim = float(gecmis['Volume'].iloc[-1])
+    ort_hacim = float(gecmis['Volume'].rolling(20).mean().iloc[-1])
+    hacim_orani = son_hacim / ort_hacim if ort_hacim > 0 else 1
+
+    # RSI ve MACD
+    rsi_seri = hesapla_rsi(gecmis['Close'])
+    rsi = float(rsi_seri.iloc[-1]) if not pd.isna(rsi_seri.iloc[-1]) else 50
+
+    macd, macd_s, macd_h = hesapla_macd(gecmis['Close'])
+    macd_hist = float(macd_h.iloc[-1]) if not pd.isna(macd_h.iloc[-1]) else 0
+
+    # Overnight gap skoru (0-100)
+    gap_skoru = 50
+    yorumlar = []
+
+    # Kapanış pozisyonu: Günü zirvede kapatmak = güçlü (gap up beklentisi)
+    if kapanis_pozisyonu > 0.75:
+        gap_skoru += 15
+        yorumlar.append("Zirvede kapanis")
+    elif kapanis_pozisyonu < 0.25:
+        gap_skoru -= 10
+        yorumlar.append("Dipte kapanis")
+
+    # Günlük değişim pozitif ve güçlü
+    if gunluk_degisim > 2:
+        gap_skoru += 10
+        yorumlar.append("Guclu gun")
+    elif gunluk_degisim < -2:
+        gap_skoru -= 10
+
+    # Hacim onayı
+    if hacim_orani > 1.5:
+        gap_skoru += 8
+        yorumlar.append("Hacim patlamasi")
+
+    # MACD pozitif
+    if macd_hist > 0:
+        gap_skoru += 7
+        yorumlar.append("MACD+")
+
+    # RSI aşırı alım/satım
+    if rsi > 65:
+        gap_skoru -= 5
+        yorumlar.append("RSI yuksek")
+    elif rsi < 35:
+        gap_skoru += 8
+        yorumlar.append("RSI dusuk")
+
+    gap_skoru = max(0, min(100, gap_skoru))
+
+    # Sinyal
+    if gap_skoru >= 70:
+        overnight_sinyal = "GECE TASI"
+        beklenen_gap = "YUKARI"
+    elif gap_skoru >= 55:
+        overnight_sinyal = "ZAYIF TASI"
+        beklenen_gap = "NOTR"
+    elif gap_skoru < 35:
+        overnight_sinyal = "GECE TASIMA"
+        beklenen_gap = "ASAGI"
+    else:
+        overnight_sinyal = "BEKLE"
+        beklenen_gap = "NOTR"
+
+    # Tahmini gap büyüklüğü (ATR bazlı)
+    tahmini_gap_yuzde = 0
+    if gap_skoru >= 70:
+        tahmini_gap_yuzde = round(atr_yuzde * 0.6, 2)
+    elif gap_skoru >= 55:
+        tahmini_gap_yuzde = round(atr_yuzde * 0.3, 2)
+    elif gap_skoru < 35:
+        tahmini_gap_yuzde = round(-atr_yuzde * 0.5, 2)
+
+    return {
+        "Hisse": hisse,
+        "Kapanis": f"{son_kapanis:.2f} TL",
+        "GunlukGetiri": f"%{gunluk_degisim:.2f}",
+        "KapanisPoz": f"{kapanis_pozisyonu:.2f}",
+        "ATR%": f"{atr_yuzde:.2f}",
+        "HacimOrani": f"{hacim_orani:.2f}x",
+        "RSI": f"{rsi:.1f}",
+        "GapSkoru": round(gap_skoru, 1),
+        "OvernightSinyal": overnight_sinyal,
+        "BeklenenGap": beklenen_gap,
+        "TahminiGap%": f"%{tahmini_gap_yuzde}",
+        "Yorum": " | ".join(yorumlar) if yorumlar else "Notr"
+    }
+
+
 def analiz_et(hisse, veri, katilim_kumesi):
     if veri is None or veri.empty or len(veri) < 30:
         return None
@@ -187,7 +308,7 @@ if piyasa_acik:
     st_autorefresh(interval=60000, key="yenile")
 
 st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli | 20+ Gosterge")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli | 20+ Gosterge | Overnight Gap Modulu Aktif")
 
 if piyasa_acik:
     st.success("PIYASA ACIK - Otomatik yenileme 60 saniyede")
@@ -200,12 +321,17 @@ with st.spinner("Veriler yukleniyor..."):
     ham_veriler = toplu_veri_cek(hisse_listesi)
 
     satirlar = []
+    overnight_satirlar = []
+
     for hisse in hisse_listesi:
         kod = hisse + ".IS"
         if kod in ham_veriler:
             sonuc = analiz_et(hisse, ham_veriler[kod], katilim_kumesi)
             if sonuc:
                 satirlar.append(sonuc)
+            gece = hesapla_overnight_gap(hisse, ham_veriler[kod])
+            if gece:
+                overnight_satirlar.append(gece)
 
     if not st.session_state.manuel:
         st.session_state.sayac += 1
@@ -243,7 +369,7 @@ if manuel_buton:
     st.session_state.son_cekim = turkiye_saati().strftime("%H:%M:%S")
     st.rerun()
 
-tab1, tab2, tab3, tab4 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "KAP & VIOP"])
+tab1, tab2, tab3, tab4 = st.tabs(["Trend Matrisi", "Mum Grafigi", "Risk Analizi", "KAP & VIOP & Overnight"])
 
 with tab1:
     if not satirlar:
@@ -350,37 +476,4 @@ with tab3:
             goster = rdf[["Hisse", "Fiyat", "StopLoss", "Hedef", "RiskOdul", "Sinyal", "Guc", "Yorum"]]
             st.dataframe(goster, use_container_width=True, height=500)
         else:
-            st.info("Uygun risk/odul oraninda hisse yok.")
-        st.markdown("---")
-        st.info("StopLoss = Fiyat - (ATR x 2) | Hedef = Fiyat + (ATR x 3) | Risk/Odul > 1.5 ideal")
-    else:
-        st.warning("Veri yok.")
-
-with tab4:
-    st.subheader("Canli KAP Haberleri")
-    st.info("KAP entegrasyonu yakinda eklenecek.")
-    st.write("**[14:18] ASELS** - Yeni Siparis Anlasmasi (Pozitif)")
-    st.write("**[14:15] TUPRS** - Uretim Verileri (Notr)")
-    st.write("**[13:50] BIMAS** - Yeni Magaza Acilisi (Pozitif)")
-    st.markdown("---")
-    st.subheader("VIOP Denge Analizi")
-    v1, v2, v3 = st.columns(3)
-    v1.metric("VIOP 30", "11.450", "%0.45")
-    v2.metric("Spot Endeks", "11.420", "%0.40")
-    v3.metric("Denge Farki", "+30 Puan", "Pozitif")
-
-st.markdown("---")
-b1, b2 = st.columns(2)
-with b1:
-    st.markdown("**Veri Cekme Istatistikleri**")
-    st.write("Toplam: " + str(st.session_state.sayac))
-    st.write("Son: " + st.session_state.son_cekim)
-    st.write("Hisse: " + str(len(hisse_listesi)))
-with b2:
-    st.markdown("**Sistem Durumu**")
-    st.write("Yenileme: 60 sn")
-    st.write("Gecikme: 15 dakika")
-    st.write("Saat: " + turkiye_saati().strftime('%H:%M:%S'))
-    st.write("Piyasa: " + ("ACIK" if piyasa_acik else "KAPALI"))
-
-st.caption("Bu paneldeki veriler 15 dakika gecikmelidir. Yatirim tavsiyesi degildir.")
+           
