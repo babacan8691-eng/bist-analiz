@@ -684,19 +684,4 @@ with tab3:
       " alındığı için gecikmeden etkilenmez."
   )
   if not df_tarama.empty:
-        df_overnight = df_tarama[
-        df_tarama["Katılım Uygun"].str.contains("EVET")
-    ].copy()
-    df_overnight = df_overnight.sort_values(
-        by="_SkorOvernight", ascending=False
-    ).reset_index(drop=True)
-    df_overnight = df_overnight.drop(
-        columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-    )
-
-    st.dataframe(
-        guvenli_styler(df_overnight), use_container_width=True, hide_index=True
-    )
-  else:
-    st.warning("Veriler yükleniyor...")
-      
+    df_overnight = df_tar
