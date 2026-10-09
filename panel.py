@@ -655,8 +655,7 @@ with tab1:
       ).reset_index(drop=True)
       df_goster = df_goster.drop(
           columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
-      )
-            st.dataframe(guvenli_styler(df_goster), use_container_width=True, hide_index=True)
+      )st.dataframe(guvenli_styler(df_goster), use_container_width=True, hide_index=True)
         
   else:
     st.warning("Veriler yükleniyor...")
