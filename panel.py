@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import random
 from datetime import datetime
-import time
 
 # Sayfa Ayarları (Karanlık Tema ve Geniş Ekran)
 st.set_page_config(page_title="BIST Pro Terminali", layout="wide", initial_sidebar_state="collapsed")
@@ -17,6 +16,17 @@ st.markdown("""
     .stMetric { background-color: #1E1E1E; padding: 10px; border-radius: 5px; }
 </style>
 """, unsafe_allow_html=True)
+
+# --- OTOMATİK YENİLEME (Her 60 Saniye) ---
+# Bu script sayesinde sayfa her 1 dakikada bir otomatik yenilenir ve veriler tazelenir.
+st.markdown(
+    """
+    <script>
+        setTimeout(function(){
+           window.location.reload(1);
+        }, 60000);
+    </script>
+    """, unsafe_allow_html=True)
 
 # --- 1. OTURUM AÇMA (LOGIN) MODÜLÜ ---
 if 'logged_in' not in st.session_state:
@@ -45,12 +55,9 @@ if not st.session_state.logged_in:
     st.stop()
 
 # --- 2. VERİ SİMÜLASYONU (300 HİSSE VE İSLAMİ FİLTRE) ---
-@st.cache_data(ttl=60) # Verileri 60 saniye önbelleğe al (her dakika güncelleme simülasyonu)
+@st.cache_data(ttl=60) # Verileri 60 saniye önbelleğe al
 def get_mock_data():
-    # 300 adet hisse kodu üretelim (Gerçekte burası API'den gelecek)
     hisseler = [f"HISSE{i}.IS" for i in range(1, 301)]
-    
-    # Bilinen bazı BIST hisselerini başa koyalım ki gerçekçi görünsün
     bilinen_hisseler = ["ASELS.IS", "TUPRS.IS", "BIMAS.IS", "FROTO.IS", "KCHOL.IS", "SAHOL.IS", "CCOLA.IS", "HEKTS.IS", "BRISA.IS", "SASA.IS"]
     hisseler = bilinen_hisseler + hisseler[:290]
     
@@ -74,7 +81,7 @@ def get_mock_data():
             
         data.append({
             "Hisse": h,
-            "Katılım Uygun": katilim_uygun, # Yeni sütun
+            "Katılım Uygun": katilim_uygun,
             "Net Güç Skoru": round(net_guc, 2),
             "Sinyal": "GÜÇLÜ TREND" if net_guc > 70 else "BEKLE",
             "Trend Kararı": "Yükseliş Kanalı" if net_guc > 60 else "Yatay Dar Bant",
@@ -97,8 +104,15 @@ def get_mock_data():
         })
     
     df = pd.DataFrame(data)
-    # İslam'a Uygun olanları en üste al
-    df = df.sort_values(by="Katılım Uygun", ascending=False).reset_index(drop=True)
+    
+    # --- SIRALAMA MANTIĞI (EN İYİ ADAY EN ÜSTTE) ---
+    # 1. Öncelik: 15 Dk Sonra Tahmin (Yükseliş > Bekle > Düşüş)
+    df['Tahmin_Agirlik'] = df['15 Dk Sonra Tahmin'].apply(lambda x: 1 if 'YÜKSELİŞ' in x else (2 if 'BEKLE' in x else 3))
+    # 2. Öncelik: Net Güç Skoru (Büyükten küçüğe)
+    df = df.sort_values(by=['Tahmin_Agirlik', 'Net Güç Skoru'], ascending=[True, False])
+    
+    # Geçici sütunu temizle
+    df = df.drop(columns=['Tahmin_Agirlik'])
     return df
 
 # --- 3. ANA PANEL ARAYÜZÜ ---
@@ -118,21 +132,22 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Genel Trend & Sıkışma Matrisi",
 with tab1:
     st.subheader("Gelişmiş Nicel Trend Matrisi (Hacim & Sıkışma Odaklı Tarama)")
     
+    # --- FİLTRELEME VE BUTONLAR ---
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        strateji = st.radio("Strateji Modu:", ["Tüm Hisseler / Nötr", "Yüksek Güvenli Trend", "İslam'a Uygun Öncüler"], horizontal=True)
+        sadece_katilim = st.checkbox("✅ Sadece İslam'a Uygun Hisseleri Göster", value=True)
     with col_f2:
         st.checkbox("🚀 Erken Sıkışma & Hacim Patlaması")
     with col_f3:
-        st.checkbox("Yalnızca İslam'a Uygun (Katılım) Hisseler", value=True)
+        st.checkbox("Yalnızca Yüksek Güvenli Trendler")
 
     df = get_mock_data()
     
     # Filtreleme Mantığı
-    if strateji == "İslam'a Uygun Öncüler":
+    if sadece_katilim:
         df = df[df["Katılım Uygun"] == "EVET"]
     
-    # Tabloyu Göster (Yüksekliği 800 yaparak daha fazla hisse görünmesini sağladık)
+    # Tabloyu Göster
     if not df.empty:
         def color_prediction(val):
             if "YÜKSELİŞ" in str(val):
@@ -143,7 +158,6 @@ with tab1:
                 return 'background-color: #e65100; color: white; font-weight: bold;'
             return ''
 
-        # Katılım Uygun sütununu da renklendirelim
         def color_katilim(val):
             if val == "EVET":
                 return 'color: #4CAF50; font-weight: bold;'
@@ -153,7 +167,7 @@ with tab1:
         
         st.dataframe(styled_df, use_container_width=True, height=800)
     else:
-        st.warning("Gösterilecek hisse verisi bulunamadı.")
+        st.warning("Seçilen filtrelere uygun hisse bulunamadı.")
 
 with tab2:
     st.subheader("VIOP Denge Analizi")
@@ -169,7 +183,6 @@ with tab2:
 with tab3:
     st.subheader("Canlı KAP Haberleri")
     st.warning("Paneldeki hisselerle ilgili KAP bildirimleri burada listelenecek.")
-    # Örnek KAP haberleri
     kap_haberleri = [
         {"Saat": "14:18:40", "Hisse": "ASELS.IS", "Başlık": "Yeni Sipariş Anlaşması İmzalandı", "Etki": "Pozitif"},
         {"Saat": "14:15:20", "Hisse": "TUPRS.IS", "Başlık": "Üretim Verileri Açıklandı", "Etki": "Nötr"},
@@ -182,7 +195,6 @@ with tab3:
 with tab4:
     st.subheader("Tüm Hisseler Görseli")
     st.info("Tüm hisseleri gösteren grafiksel görünüm burada yer alacak.")
-    # Basit bir grafik simülasyonu
     chart_data = pd.DataFrame(
         np.random.randn(20, 3),
         columns=['Hisse A', 'Hisse B', 'Hisse C']
