@@ -38,6 +38,46 @@ def atr_f(h, l, c, p=14):
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
     return tr.rolling(p).mean()
 
+def tahmin_15(g):
+    """15 dk gecikmeli veriden onumuzdeki 15-25 dk yon tahmini."""
+    if len(g) < 20:
+        return "YATAY", 50.0, 0.0
+    son5 = g.iloc[-5:]
+    son10 = g.iloc[-10:]
+    f0 = float(son5['Close'].iloc[0])
+    f1 = float(son5['Close'].iloc[-1])
+    mom = ((f1 - f0) / f0) * 100 if f0 > 0 else 0
+    yh, dh = 0.0, 0.0
+    for i in range(len(son10)):
+        b = son10.iloc[i]
+        if float(b['Close']) > float(b['Open']):
+            yh += float(b['Volume'])
+        else:
+            dh += float(b['Volume'])
+    top = yh + dh
+    hb = ((yh / top) - 0.5) * 100 if top > 0 else 0
+    vw = (g['Volume'] * g['Close']).cumsum() / g['Volume'].cumsum()
+    sf = float(g['Close'].iloc[-1])
+    vwl = float(vw.iloc[-1])
+    vu = ((sf - vwl) / vwl) * 100 if vwl > 0 else 0
+    sb = g.iloc[-1]
+    sh = float(sb['High'])
+    sl = float(sb['Low'])
+    kp = (float(sb['Close']) - sl) / (sh - sl) if (sh - sl) > 0 else 0.5
+    a5 = float((g['High'] - g['Low']).iloc[-5:].mean())
+    a20 = float((g['High'] - g['Low']).iloc[-20:].mean())
+    vr = ((a5 / a20) - 1) * 50 if a20 > 0 else 0
+    s = 50 + mom * 3 + hb * 0.4 + vu * 2 + (kp - 0.5) * 20 + vr * 0.2
+    s = max(0, min(100, s))
+    if s >= 65:
+        yon, gv = "YUKARI", s
+    elif s <= 35:
+        yon, gv = "ASAGI", 100 - s
+    else:
+        yon, gv = "YATAY", 100 - abs(s - 50) * 2
+    bkl = (s - 50) / 10
+    return yon, round(gv, 1), round(bkl, 2)
+
 def hesapla(hs, v, kset):
     if v is None or v.empty or len(v) < 30:
         return None, None
@@ -95,29 +135,22 @@ def hesapla(hs, v, kset):
     else:
         sl, hd, ro = 0, 0, 0
     hz = hs + ".IS"
-    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp}
+    y15, g15, b15 = tahmin_15(g)
+    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}"}
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
     kp = (sf - gl) / (gh - gl) if (gh - gl) > 0 else 0.5
     ay = (a / sf) * 100 if sf > 0 else 0
     gs = 50
-    if kp > 0.75:
-        gs += 15
-    elif kp < 0.25:
-        gs -= 10
-    if gd > 2:
-        gs += 10
-    elif gd < -2:
-        gs -= 10
-    if hr > 1.5:
-        gs += 8
-    if mh > 0:
-        gs += 7
-    if r > 65:
-        gs -= 5
-    elif r < 35:
-        gs += 8
+    if kp > 0.75: gs += 15
+    elif kp < 0.25: gs -= 10
+    if gd > 2: gs += 10
+    elif gd < -2: gs -= 10
+    if hr > 1.5: gs += 8
+    if mh > 0: gs += 7
+    if r > 65: gs -= 5
+    elif r < 35: gs += 8
     gs = max(0, min(100, gs))
     if gs >= 70:
         os, bg, tg = "GECE TASI", "YUKARI", round(ay * 0.6, 2)
@@ -135,7 +168,7 @@ if pk:
     st_autorefresh(interval=60000, key="y")
 
 st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli | 15dk Sonra Tahmin Aktif")
 
 if pk:
     st.success("PIYASA ACIK - Otomatik 60 sn")
@@ -151,10 +184,8 @@ with st.spinner("Veri yukleniyor..."):
         kod = x + ".IS"
         if kod in hv:
             a, o = hesapla(x, hv[kod], ks)
-            if a:
-                sat.append(a)
-            if o:
-                onc.append(o)
+            if a: sat.append(a)
+            if o: onc.append(o)
     if not st.session_state.m:
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
@@ -210,13 +241,26 @@ with t1:
             if "SAT" in str(v) or "ZAYIF" in str(v): return 'background-color:#b71c1c;color:white;'
             return 'background-color:#e65100;color:white;'
         def rk(v): return 'color:#4CAF50;font-weight:bold;' if v == "EVET" else 'color:#F44336;'
-        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]), use_container_width=True, height=600)
+        def r15(v):
+            if "YUKARI" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "ASAGI" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
+            return 'background-color:#e65100;color:white;font-weight:bold;'
+        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]), use_container_width=True, height=600)
         st.markdown("---")
-        o1, o2, o3, o4 = st.columns(4)
-        o1.metric("Gosterilen", len(df))
-        o2.metric("Yukselis", len(df[df["Tahmin"].str.contains("YUKSELIS")]))
-        o3.metric("Guclu AL", len(df[df["Sinyal"] == "GUCLU AL"]))
-        o4.metric("Ort Guc", str(round(df["Guc"].mean(), 1)))
+        st.subheader("15-25 Dakika Sonrasi Yon Dagilimi")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("YUKARI KIRILIM", len(df[df["Tahmin15"] == "YUKARI"]))
+        m2.metric("ASAGI KIRILIM", len(df[df["Tahmin15"] == "ASAGI"]))
+        m3.metric("YATAY", len(df[df["Tahmin15"] == "YATAY"]))
+        gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
+        m4.metric("Ort Guven", f"%{round(gvv, 1) if not pd.isna(gvv) else 0}")
+        st.markdown("---")
+        st.subheader("En Yuksek Guvenli 10 Yon Tahmini")
+        t10 = df.copy()
+        t10['GV'] = pd.to_numeric(t10['Guven15'].str.replace('%', ''), errors='coerce')
+        t10 = t10.sort_values('GV', ascending=False).head(10)
+        st.dataframe(t10[["Hisse", "Tahmin15", "Guven15", "Beklenti15", "Guc", "Sinyal", "Fiyat"]], use_container_width=True)
+        st.caption("Metrik: Momentum + Hacim-Yon Baskisi + VWAP Uzakligi + Kapanis Pozisyonu + Volatilite Rejimi kompozit skoru.")
 
 with t2:
     st.subheader("Mum Grafigi")
