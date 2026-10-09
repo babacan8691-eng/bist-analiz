@@ -684,8 +684,7 @@ with tab3:
       " alındığı için gecikmeden etkilenmez."
   )
   if not df_tarama.empty:
-    # BURAYI DÜZELT: df_tar yerine df_tarama yazmalısın
-    df_overnight = df_tarama[
+        df_overnight = df_tarama[
         df_tarama["Katılım Uygun"].str.contains("EVET")
     ].copy()
     df_overnight = df_overnight.sort_values(
@@ -694,6 +693,7 @@ with tab3:
     df_overnight = df_overnight.drop(
         columns=["_SkorGenel", "_SkorGunluk", "_SkorOvernight"]
     )
+
     st.dataframe(
         guvenli_styler(df_overnight), use_container_width=True, hide_index=True
     )
