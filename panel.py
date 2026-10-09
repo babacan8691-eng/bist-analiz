@@ -325,7 +325,7 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     }
     return ana, onc for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
     if k not in st.session_state:
-        st.session_state[k] = v
+        st.session_state[k] = 
 
 if not st.session_state.g:
     st.title("BIST Pro Giris")
