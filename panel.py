@@ -39,17 +39,16 @@ def atr_f(h, l, c, p=14):
     return tr.rolling(p).mean()
 
 def tahmin_15(g):
-    """15 dk gecikmeli veriden onumuzdeki 15-25 dk yon tahmini."""
     if len(g) < 20:
         return "YATAY", 50.0, 0.0
-    son5 = g.iloc[-5:]
-    son10 = g.iloc[-10:]
-    f0 = float(son5['Close'].iloc[0])
-    f1 = float(son5['Close'].iloc[-1])
+    s5 = g.iloc[-5:]
+    s10 = g.iloc[-10:]
+    f0 = float(s5['Close'].iloc[0])
+    f1 = float(s5['Close'].iloc[-1])
     mom = ((f1 - f0) / f0) * 100 if f0 > 0 else 0
     yh, dh = 0.0, 0.0
-    for i in range(len(son10)):
-        b = son10.iloc[i]
+    for i in range(len(s10)):
+        b = s10.iloc[i]
         if float(b['Close']) > float(b['Open']):
             yh += float(b['Volume'])
         else:
@@ -136,21 +135,38 @@ def hesapla(hs, v, kset):
         sl, hd, ro = 0, 0, 0
     hz = hs + ".IS"
     y15, g15, b15 = tahmin_15(g)
-    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}"}
+    pct20 = g['Close'].pct_change().iloc[-20:].fillna(0).abs()
+    dn20 = (g['Volume'].iloc[-20:] * g['Close'].iloc[-20:]).replace(0, np.nan).fillna(1)
+    amh = float((pct20 / dn20).sum() / 20)
+    lik = max(0, min(100, 100 - amh * 1e8))
+    v5 = float((g['High'] - g['Low']).iloc[-5:].mean())
+    v20 = float((g['High'] - g['Low']).iloc[-20:].mean())
+    vrej = "YUKSEK" if v5 > v20 * 1.3 else ("DUSUK" if v5 < v20 * 0.7 else "NORMAL")
+    obv_s = (np.sign(g['Close'].diff()) * g['Volume']).fillna(0).cumsum()
+    ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
+    ana = {"Hisse": hs, "Katilim": "EVET" if hz in kset else "HAYIR", "Guc": round(sk, 1), "Sinyal": sn, "Yorum": " | ".join(yr) if yr else "Notr", "RSI": f"{r:.1f}", "MACD": f"{mh:.3f}", "Trend": "Yuk" if gd > 0 else "Dus", "Getiri": f"%{gd:.2f}", "Hacim": f"{hr:.2f}x", "Fiyat": f"{sf:.2f} TL", "SL": f"{sl} TL", "Hedef": f"{hd} TL", "RO": f"{ro:.2f}", "Tahmin": tp, "Tahmin15": y15, "Guven15": f"%{g15}", "Beklenti15": f"%{b15}", "Likidite": round(lik, 1), "VolRejim": vrej, "OFI": round(ofi, 2)}
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
     kp = (sf - gl) / (gh - gl) if (gh - gl) > 0 else 0.5
     ay = (a / sf) * 100 if sf > 0 else 0
     gs = 50
-    if kp > 0.75: gs += 15
-    elif kp < 0.25: gs -= 10
-    if gd > 2: gs += 10
-    elif gd < -2: gs -= 10
-    if hr > 1.5: gs += 8
-    if mh > 0: gs += 7
-    if r > 65: gs -= 5
-    elif r < 35: gs += 8
+    if kp > 0.75:
+        gs += 15
+    elif kp < 0.25:
+        gs -= 10
+    if gd > 2:
+        gs += 10
+    elif gd < -2:
+        gs -= 10
+    if hr > 1.5:
+        gs += 8
+    if mh > 0:
+        gs += 7
+    if r > 65:
+        gs -= 5
+    elif r < 35:
+        gs += 8
     gs = max(0, min(100, gs))
     if gs >= 70:
         os, bg, tg = "GECE TASI", "YUKARI", round(ay * 0.6, 2)
@@ -168,10 +184,10 @@ if pk:
     st_autorefresh(interval=60000, key="y")
 
 st.title("BIST Pro Terminali")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 Dakika Gecikmeli | 15dk Sonra Tahmin Aktif")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Pro Analiz Aktif")
 
 if pk:
-    st.success("PIYASA ACIK - Otomatik 60 sn")
+    st.success("PIYASA ACIK")
 else:
     st.warning("PIYASA KAPALI")
 
@@ -184,8 +200,10 @@ with st.spinner("Veri yukleniyor..."):
         kod = x + ".IS"
         if kod in hv:
             a, o = hesapla(x, hv[kod], ks)
-            if a: sat.append(a)
-            if o: onc.append(o)
+            if a:
+                sat.append(a)
+            if o:
+                onc.append(o)
     if not st.session_state.m:
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
@@ -245,7 +263,11 @@ with t1:
             if "YUKARI" in str(v): return 'background-color:#1b5e20;color:white;font-weight:bold;'
             if "ASAGI" in str(v): return 'background-color:#b71c1c;color:white;font-weight:bold;'
             return 'background-color:#e65100;color:white;font-weight:bold;'
-        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]), use_container_width=True, height=600)
+        def rv(v):
+            if "DUSUK" in str(v): return 'color:#4CAF50;font-weight:bold;'
+            if "YUKSEK" in str(v): return 'color:#F44336;font-weight:bold;'
+            return 'color:#FFC107;'
+        st.dataframe(df.style.map(rt, subset=["Tahmin"]).map(rs, subset=["Sinyal"]).map(rk, subset=["Katilim"]).map(r15, subset=["Tahmin15"]).map(rv, subset=["VolRejim"]), use_container_width=True, height=600)
         st.markdown("---")
         st.subheader("15-25 Dakika Sonrasi Yon Dagilimi")
         m1, m2, m3, m4 = st.columns(4)
@@ -255,12 +277,20 @@ with t1:
         gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
         m4.metric("Ort Guven", f"%{round(gvv, 1) if not pd.isna(gvv) else 0}")
         st.markdown("---")
-        st.subheader("En Yuksek Guvenli 10 Yon Tahmini")
-        t10 = df.copy()
-        t10['GV'] = pd.to_numeric(t10['Guven15'].str.replace('%', ''), errors='coerce')
-        t10 = t10.sort_values('GV', ascending=False).head(10)
-        st.dataframe(t10[["Hisse", "Tahmin15", "Guven15", "Beklenti15", "Guc", "Sinyal", "Fiyat"]], use_container_width=True)
-        st.caption("Metrik: Momentum + Hacim-Yon Baskisi + VWAP Uzakligi + Kapanis Pozisyonu + Volatilite Rejimi kompozit skoru.")
+        st.subheader("Pro Analiz - Likidite, Volatilite, OFI")
+        pdf = df.copy()
+        pdf['GV'] = pd.to_numeric(pdf['Guven15'].str.replace('%', ''), errors='coerce')
+        pdf = pdf.sort_values('GV', ascending=False)
+        st.dataframe(pdf[["Hisse", "Fiyat", "Likidite", "VolRejim", "OFI", "Tahmin15", "Guven15"]].head(15), use_container_width=True)
+        st.markdown("---")
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("Likidite En Yuksek 5")
+            st.dataframe(pdf.sort_values("Likidite", ascending=False)[["Hisse", "Likidite", "VolRejim", "OFI"]].head(5), use_container_width=True)
+        with colB:
+            st.subheader("OFI En Yuksek 5")
+            st.dataframe(pdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "Likidite", "Guven15"]].head(5), use_container_width=True)
+        st.caption("Likidite: Amihud (yuksek=iyi) | VolRejim: ATR oranina gore (DUSUK/NORMAL/YUKSEK) | OFI: OBV proxy emir akis (pozitif=alim baskisi)")
 
 with t2:
     st.subheader("Mum Grafigi")
@@ -274,7 +304,7 @@ with t2:
             h['BBA'] = h['Close'].rolling(20).mean() - 2 * h['Close'].rolling(20).std()
             h['RSI'] = rsi(h['Close'])
             f = go.Figure()
-            f.add_trace(go.Candlestick(x=h.index, open=h['Open'], high=h['High'], low=h['Low'], close=h['Close'], increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
+            f.add_trace(go.Candlestick(x=h.index, open=h['Open'], high=h['High'], low=h['Low'], close=h['Close'], name="Fiyat", increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
             f.add_trace(go.Scatter(x=h.index, y=h['BBU'], name="BBU", line=dict(color='#9c27b0', width=1, dash='dot')))
             f.add_trace(go.Scatter(x=h.index, y=h['BBA'], name="BBA", line=dict(color='#9c27b0', width=1, dash='dot')))
             f.add_trace(go.Scatter(x=h.index, y=h['SMA20'], name="SMA20", line=dict(color='#FFC107', width=1)))
