@@ -639,7 +639,7 @@ def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
         "GAN_VaR": gan,
         "HibritSkor": hb_sk,
         "HibritSeviye": hb_sv
-} 
+    } 
 
 def son_bar_zamani_hesapla(g):
     """Son 15dk barin zamanini TRT olarak dondurur + kac dakika gecikmeli oldugunu hesaplar."""
@@ -995,7 +995,7 @@ def performans_hesapla(gecmis_kayitlar):
         "stop_olan": len(stop_olan),
         "en_iyi": round(en_iyi, 2),
         "en_kotu": round(en_kotu, 2)
-} 
+            } 
 
 def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
@@ -2265,4 +2265,4 @@ st.markdown("- **KER Esigi:** " + str(KER_ESIK) + " (dusuruldu 0.55 -> 0.40)")
 st.markdown("- **Marj Hesabi:** 15dk bar ATR x " + str(BAR_15DK_HEDEF_KATSAYI) + " + kalite bonus + momentum bonus")
 st.markdown("- **Gecikme Telafi:** Son 3 bar momentum + kalan marj hesabi + uyari sistemi")
 st.markdown("- **Basari Degerlendirme:** %70+ = Mukemmel | %50-70 = Iyi | %50- = Gelistirme gerekli")
-st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
+st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.") 
