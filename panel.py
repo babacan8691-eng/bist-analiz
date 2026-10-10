@@ -23,6 +23,12 @@ except ImportError:
 TELEGRAM_TOKEN = ""
 TELEGRAM_CHAT = ""
 
+# Performans hedef marjlari
+HEDEF_GUN_ICI_MIN = 2.0
+HEDEF_GUN_ICI_MAX = 3.5
+HEDEF_OVERNIGHT_MIN = 3.0
+HEDEF_OVERNIGHT_MAX = 5.0
+
 st.set_page_config(page_title="BIST Pro", layout="wide")
 
 H = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
@@ -623,6 +629,166 @@ def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
         "HibritSeviye": hb_sv
     } 
 
+def hedef_kontrol(kar_yuzde, tip="gun_ici"):
+    """Hedef kar marji kontrolu."""
+    if tip == "gun_ici":
+        if kar_yuzde >= HEDEF_GUN_ICI_MAX:
+            return "HEDEF ASILDI", "#1b5e20"
+        elif kar_yuzde >= HEDEF_GUN_ICI_MIN:
+            return "HEDEF ARALIGINDA", "#2e7d32"
+        elif kar_yuzde > 0:
+            return "KUCUK KAR", "#66bb6a"
+        elif kar_yuzde == 0:
+            return "BASABAS", "#e65100"
+        else:
+            return "ZARARDA", "#b71c1c"
+    else:
+        if kar_yuzde >= HEDEF_OVERNIGHT_MAX:
+            return "HEDEF ASILDI", "#1b5e20"
+        elif kar_yuzde >= HEDEF_OVERNIGHT_MIN:
+            return "HEDEF ARALIGINDA", "#2e7d32"
+        elif kar_yuzde > 0:
+            return "KUCUK KAR", "#66bb6a"
+        elif kar_yuzde == 0:
+            return "BASABAS", "#e65100"
+        else:
+            return "ZARARDA", "#b71c1c"
+
+
+def sinyal_anlik_kaydet(kdf, tip="gun_ici"):
+    """Sinyalleri kayit altina alir (kapanis, hedef, SL bilgileriyle)."""
+    kayit = []
+    zaman = turkiye_saati().strftime("%Y-%m-%d %H:%M:%S")
+    for _, r in kdf.iterrows():
+        if r['KararSinyal'] in ["GUCLU AL", "AL"]:
+            kayit.append({
+                "zaman": zaman,
+                "Hisse": r['Hisse'],
+                "Sinyal": r['KararSinyal'],
+                "GirisFiyat": r['FiyatRaw'],
+                "Hedef": r['Hedef'],
+                "SL": r['SL'],
+                "RO": r['RORaw'],
+                "KararSkor": r['KararSkor'],
+                "NK_Skor": r['NK_Skor'],
+                "HibritSkor": r['HibritSkor'],
+                "Tip": tip,
+                "Durum": "ACIK",
+                "CikisFiyat": 0.0,
+                "KarYuzde": 0.0,
+                "TutmaSaat": 0.0
+            })
+    return kayit
+
+
+def performans_guncelle(gecmis_kayitlar, guncel_veriler):
+    """Acik pozisyonlari guncel fiyatlarla kontrol edip kapatir."""
+    if not gecmis_kayitlar:
+        return gecmis_kayitlar
+    guncel_zaman = turkiye_saati()
+    for k in gecmis_kayitlar:
+        if k.get("Durum") == "ACIK":
+            hisse = k["Hisse"]
+            if hisse in guncel_veriler:
+                try:
+                    son_fiyat = float(guncel_veriler[hisse]['Close'].iloc[-1])
+                    giris = float(k["GirisFiyat"])
+                    if giris > 0:
+                        kar_y = ((son_fiyat - giris) / giris) * 100
+                        k["KarYuzde"] = round(kar_y, 2)
+                        try:
+                            sl_f = float(str(k["SL"]).replace(" TL", "").strip())
+                            hd_f = float(str(k["Hedef"]).replace(" TL", "").strip())
+                        except Exception:
+                            sl_f = giris * 0.97
+                            hd_f = giris * 1.03
+                        if son_fiyat >= hd_f:
+                            k["Durum"] = "HEDEF"
+                            k["CikisFiyat"] = son_fiyat
+                        elif son_fiyat <= sl_f:
+                            k["Durum"] = "STOP"
+                            k["CikisFiyat"] = son_fiyat
+                        try:
+                            zaman_giris = datetime.strptime(k["zaman"], "%Y-%m-%d %H:%M:%S")
+                            zaman_giris = zaman_giris.replace(tzinfo=timezone(timedelta(hours=3)))
+                            fark = (guncel_zaman - zaman_giris).total_seconds() / 3600
+                            k["TutmaSaat"] = round(fark, 2)
+                        except Exception:
+                            k["TutmaSaat"] = 0
+                except Exception:
+                    continue
+    return gecmis_kayitlar
+
+
+def performans_hesapla(gecmis_kayitlar):
+    """Performans metriklerini hesaplar."""
+    if not gecmis_kayitlar:
+        return {
+            "toplam": 0, "kapali": 0, "acik": 0, "kazanan": 0, "kaybeden": 0,
+            "basari_orani": 0.0, "ort_kar": 0.0, "ort_zarar": 0.0,
+            "toplam_kar": 0.0, "beklenen_getiri": 0.0, "ort_tutma": 0.0,
+            "hedef_asilan": 0, "stop_olan": 0, "en_iyi": 0.0, "en_kotu": 0.0
+        }
+    kapali = [k for k in gecmis_kayitlar if k.get("Durum") in ["HEDEF", "STOP"]]
+    acik = [k for k in gecmis_kayitlar if k.get("Durum") == "ACIK"]
+    kazanan = [k for k in kapali if k.get("KarYuzde", 0) > 0]
+    kaybeden = [k for k in kapali if k.get("KarYuzde", 0) < 0]
+    hedef_asilan = [k for k in kapali if k.get("Durum") == "HEDEF"]
+    stop_olan = [k for k in kapali if k.get("Durum") == "STOP"]
+    basari = (len(kazanan) / len(kapali) * 100) if kapali else 0.0
+    kar_listesi = [k.get("KarYuzde", 0) for k in kapali if k.get("KarYuzde", 0) > 0]
+    zarar_listesi = [k.get("KarYuzde", 0) for k in kapali if k.get("KarYuzde", 0) < 0]
+    ort_kar = np.mean(kar_listesi) if kar_listesi else 0.0
+    ort_zarar = np.mean(zarar_listesi) if zarar_listesi else 0.0
+    toplam_kar = sum([k.get("KarYuzde", 0) for k in kapali])
+    tutma_listesi = [k.get("TutmaSaat", 0) for k in kapali]
+    ort_tutma = np.mean(tutma_listesi) if tutma_listesi else 0.0
+    en_iyi = max([k.get("KarYuzde", 0) for k in kapali]) if kapali else 0.0
+    en_kotu = min([k.get("KarYuzde", 0) for k in kapali]) if kapali else 0.0
+    return {
+        "toplam": len(gecmis_kayitlar),
+        "kapali": len(kapali),
+        "acik": len(acik),
+        "kazanan": len(kazanan),
+        "kaybeden": len(kaybeden),
+        "basari_orani": round(basari, 1),
+        "ort_kar": round(ort_kar, 2),
+        "ort_zarar": round(ort_zarar, 2),
+        "toplam_kar": round(toplam_kar, 2),
+        "beklenen_getiri": round((basari / 100) * ort_kar + (1 - basari / 100) * ort_zarar, 2) if kapali else 0.0,
+        "ort_tutma": round(ort_tutma, 2),
+        "hedef_asilan": len(hedef_asilan),
+        "stop_olan": len(stop_olan),
+        "en_iyi": round(en_iyi, 2),
+        "en_kotu": round(en_kotu, 2)
+    }
+
+
+def hedef_uygun_mu(ro, ker, chop, nk_skor, hibrit):
+    """Hisse hedef marjini karsilayabilir mi?"""
+    puan = 0
+    if ro >= 1.5:
+        puan += 2
+    elif ro >= 1.3:
+        puan += 1
+    if ker >= 0.5:
+        puan += 1
+    if chop <= 45:
+        puan += 1
+    if nk_skor >= 60:
+        puan += 1
+    if hibrit >= 55:
+        puan += 1
+    if puan >= 5:
+        return "GUCLU UYGUN", "#1b5e20"
+    elif puan >= 3:
+        return "UYGUN", "#2e7d32"
+    elif puan >= 2:
+        return "ZAYIF", "#e65100"
+    else:
+        return "UYGUN DEGIL", "#b71c1c"
+
+
 def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
         return None, None
@@ -686,6 +852,10 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         sl = 0
         hd = 0
         ro = 0
+    hedef_yuzde = round(((hd - sf) / sf) * 100, 2) if sf > 0 else 0
+    sl_yuzde = round(((sl - sf) / sf) * 100, 2) if sf > 0 else 0
+    gun_ici_uygun = "EVET" if HEDEF_GUN_ICI_MIN <= hedef_yuzde <= HEDEF_GUN_ICI_MAX + 2 else "HAYIR"
+    overnight_uygun = "EVET" if HEDEF_OVERNIGHT_MIN <= hedef_yuzde <= HEDEF_OVERNIGHT_MAX + 2 else "HAYIR"
     hz = hs + ".IS"
     y15, g15, b15 = tahmin_15(g)
     v5 = float((g['High'] - g['Low']).iloc[-5:].mean())
@@ -695,7 +865,6 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     ofi = float(obv_s.iloc[-1] - obv_s.iloc[-5]) / 1e6 if len(obv_s) >= 5 else 0
     gv_ = garch_vol(g['Close'])
     trend_str = "Yuk" if gd > 0 else "Dus"
-
     ker = kaufman_efficiency_ratio(g['Close'])
     chop = choppiness_index(g['High'], g['Low'], g['Close'])
     parkinson = parkinson_volatility(g['High'], g['Low'])
@@ -704,7 +873,6 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     entropy = shannon_entropy(g['Close'])
     nk_skor = non_klise_skor(ker, chop, parkinson, gk, kyle, entropy)
     nk_kriterler, nk_gecen, nk_seviye = kriter_degerlendir(ker, chop, parkinson, gk, kyle, entropy)
-
     dt = derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi)
     km_skor, km_sinyal, km_renk, km_neden = karar_motoru(sk, r, mh, hr, vrej, ofi, gv_, y15, g15, trend_str, ker, chop, kyle, entropy, nk_skor)
     ht_skor = dt["HibritSkor"]
@@ -718,7 +886,7 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         dt_renk = "#c62828"
     else:
         dt_renk = "#e65100"
-
+    hu_seviye, hu_renk = hedef_uygun_mu(ro, ker, chop, nk_skor, ht_skor)
     ana = {
         "Hisse": hs,
         "Katilim": "EVET" if hz in kset else "HAYIR",
@@ -734,6 +902,12 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         "FiyatRaw": sf,
         "SL": f"{sl} TL",
         "Hedef": f"{hd} TL",
+        "HedefYuzde": hedef_yuzde,
+        "SLYuzde": sl_yuzde,
+        "GunIciUygun": gun_ici_uygun,
+        "OvernightUygun": overnight_uygun,
+        "HedefUygun": hu_seviye,
+        "HedefRenk": hu_renk,
         "RO": f"{ro:.2f}",
         "RORaw": ro,
         "Tahmin": tp,
@@ -768,7 +942,6 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         "HibritSeviye": dt["HibritSeviye"],
         "HibritRenk": dt_renk
     }
-
     s25 = g.iloc[-min(25, len(g)):]
     gh = float(s25['High'].max())
     gl = float(s25['Low'].min())
@@ -856,7 +1029,6 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
 
 
 def en_iyi_firsat_bul(kdf):
-    """Gunun en iyi firsati - KararSinyal bazli (En Iyi 5 ile ayni kriter)."""
     if kdf.empty:
         return None
     uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)]
@@ -891,7 +1063,6 @@ def en_iyi_firsat_bul(kdf):
 
 
 def gecenin_en_iyisi_bul(odf):
-    """Overnight icin gecenin en iyi firsati - GapSkor bazli."""
     if odf.empty:
         return None
     uygun = odf[odf["Overnight"].isin(["GECE TASI", "ZAYIF TASI"])]
@@ -917,7 +1088,7 @@ def gecenin_en_iyisi_bul(odf):
         aciklama = "Zayif kapanis, gap beklentisi belirsiz"
     return {"hisse": en_iyi, "karar": karar, "renk": renk, "aciklama": aciklama} 
 
-for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
+for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-'), ('performans', []), ('son_kayit_zaman', '')]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -939,8 +1110,8 @@ pk = piyasa_acik_mi()
 if pk:
     st_autorefresh(interval=60000, key="y")
 
-st.title("BIST Pro Terminali - Deep Tech + Non-Klise + Overnight")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | 6 Non-Klise Metrik + Deep Tech Aktif")
+st.title("BIST Pro Terminali - Hedef Takip Edition")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | Hedef %" + str(HEDEF_GUN_ICI_MIN) + "-" + str(HEDEF_GUN_ICI_MAX) + " (Gun Ici) | %" + str(HEDEF_OVERNIGHT_MIN) + "-" + str(HEDEF_OVERNIGHT_MAX) + " (Overnight)")
 
 if pk:
     st.success("PIYASA ACIK")
@@ -967,6 +1138,7 @@ with st.spinner("Veri ve derin teknoloji hesaplaniyor..."):
         st.session_state.s += 1
         st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
     st.session_state.m = False
+    st.session_state.performans = performans_guncelle(st.session_state.performans, hv)
 
 bd, bdeg = "-", "0"
 try:
@@ -997,8 +1169,43 @@ if mb:
     st.session_state.haber = []
     st.rerun()
 
+perf = performans_hesapla(st.session_state.performans)
+if perf["toplam"] > 0:
+    st.markdown("---")
+    st.markdown("### 📊 PERFORMANS TAKIP")
+    p1, p2, p3, p4, p5, p6 = st.columns(6)
+    p1.metric("Toplam Sinyal", str(perf["toplam"]))
+    p2.metric("Kapali", str(perf["kapali"]))
+    p3.metric("Acik", str(perf["acik"]))
+    if perf["basari_orani"] >= 70:
+        p4.metric("Basari Orani", f"%{perf['basari_orani']} 🎯")
+    elif perf["basari_orani"] >= 60:
+        p4.metric("Basari Orani", f"%{perf['basari_orani']} ✅")
+    elif perf["basari_orani"] >= 50:
+        p4.metric("Basari Orani", f"%{perf['basari_orani']} ⚠️")
+    else:
+        p4.metric("Basari Orani", f"%{perf['basari_orani']} ❌")
+    p5.metric("Hedef Asilan", str(perf["hedef_asilan"]))
+    p6.metric("Stop Olan", str(perf["stop_olan"]))
+    q1, q2, q3, q4, q5, q6 = st.columns(6)
+    q1.metric("Ort. Kar", f"%{perf['ort_kar']}")
+    q2.metric("Ort. Zarar", f"%{perf['ort_zarar']}")
+    q3.metric("Toplam Kar", f"%{perf['toplam_kar']}")
+    q4.metric("Ort. Tutma", f"{perf['ort_tutma']} saat")
+    q5.metric("En Iyi", f"%{perf['en_iyi']}")
+    q6.metric("En Kotu", f"%{perf['en_kotu']}")
+    if perf["kapali"] >= 5:
+        if perf["basari_orani"] >= 70:
+            st.success("✅ Basari %70+ | Sistem calisiyor, sermaye artirilabilir")
+        elif perf["basari_orani"] >= 50:
+            st.warning("⚠️ Basari %50-70 | Optimizasyon gerekli")
+        else:
+            st.error("❌ Basari %50 alti | Parametreler degistirilmeli")
+    else:
+        st.info("ℹ️ En az 5 kapali islem gerekli (su an: " + str(perf["kapali"]) + ")")
 
-# ==================== GUNUN EN IYI FIRSATI (DUZELTILDI) ====================
+
+# ==================== GUNUN EN IYI FIRSATI ====================
 if sat:
     kdf_ust = pd.DataFrame(sat)
     if sd:
@@ -1016,7 +1223,8 @@ if sat:
             '<h1 style="margin:0; color:white; font-size:42px;">' + str(eh["Hisse"]) + ' &nbsp;&nbsp; <span style="background:rgba(255,255,255,0.2); padding:8px 20px; border-radius:8px;">' + karar_txt + '</span></h1>'
             '<p style="font-size:22px; margin:15px 0 5px 0;"><b>Karar Skoru:</b> ' + str(eh["KararSkor"]) + '/100 &nbsp; | &nbsp; <b>Fiyat:</b> ' + str(eh["Fiyat"]) + '</p>'
             '<p style="font-size:20px; margin:5px 0;"><b>Giris:</b> ' + str(eh["Fiyat"]) + ' &nbsp; <b>Stop-Loss:</b> ' + str(eh["SL"]) + ' &nbsp; <b>Hedef:</b> ' + str(eh["Hedef"]) + ' &nbsp; <b>R/O:</b> ' + str(eh["RO"]) + '</p>'
-            '<p style="font-size:18px; margin:10px 0 0 0;">Kriter Skoru: ' + str(puan) + '/13</p>'
+            '<p style="font-size:20px; margin:5px 0;"><b>Hedef Marj:</b> %' + str(eh["HedefYuzde"]) + ' &nbsp; | &nbsp; <b>SL Marj:</b> %' + str(eh["SLYuzde"]) + ' &nbsp; | &nbsp; <b>Hedef Uygunluk:</b> <span style="background:rgba(255,255,255,0.25); padding:2px 10px; border-radius:5px;">' + str(eh["HedefUygun"]) + '</span></p>'
+            '<p style="font-size:18px; margin:10px 0 0 0;">Kriter Skoru: ' + str(puan) + '/13 &nbsp; | &nbsp; Gun Ici Uygun: ' + str(eh["GunIciUygun"]) + ' &nbsp; | &nbsp; Overnight Uygun: ' + str(eh["OvernightUygun"]) + '</p>'
             '<p style="font-size:16px; margin:5px 0 0 0; font-style:italic;">' + str(eh["KararNeden"]) + '</p>'
             '</div>', unsafe_allow_html=True)
         st.markdown("### 6 Non-Klise Metrik Kontrolu")
@@ -1057,7 +1265,7 @@ if sat:
             else:
                 st.warning("Ent: " + str(eh["Entropy"]) + " X")
             st.caption("Ongorulebilirlik")
-        st.markdown("**Non-Klise Skor:** " + str(eh["NK_Skor"]) + "/100 | **Gecen:** " + str(eh["NK_Gecen"]) + "/6 | **Seviye:** " + str(eh["NK_Seviye"]) + " | **Deep Tech:** " + str(eh["HibritSeviye"]) + " (" + str(eh["HibritSkor"]) + ")")
+        st.markdown("**Non-Klise Skor:** " + str(eh["NK_Skor"]) + "/100 | **Gecen:** " + str(eh["NK_Gecen"]) + "/6 | **Seviye:** " + str(eh["NK_Seviye"]) + " | **Deep Tech:** " + str(eh["HibritSeviye"]) + " (" + str(eh["HibritSkor"]) + ") | **Hedef Uygunluk:** " + str(eh["HedefUygun"]))
 
 
 # ==================== GECENIN EN IYI FIRSATI ====================
@@ -1077,7 +1285,8 @@ if onc:
             '<h1 style="margin:0; color:white; font-size:42px;">' + str(gh["Hisse"]) + ' &nbsp;&nbsp; <span style="background:rgba(255,255,255,0.2); padding:8px 20px; border-radius:8px;">' + karar_g + '</span></h1>'
             '<p style="font-size:22px; margin:15px 0 5px 0;"><b>Gap Skoru:</b> ' + str(gh["GapSkor"]) + '/100 &nbsp; | &nbsp; <b>Kapanis:</b> ' + str(gh["Kapanis"]) + '</p>'
             '<p style="font-size:20px; margin:5px 0;"><b>Beklenen Gap:</b> ' + str(gh["GapYon"]) + ' &nbsp; <b>Tahmini:</b> ' + str(gh["Gap%"]) + ' &nbsp; <b>Kapanis Pozisyonu:</b> ' + str(gh["Yorum"]) + '</p>'
-            '<p style="font-size:16px; margin:10px 0 0 0; font-style:italic;">' + str(gece_sonuc["aciklama"]) + '</p>'
+            '<p style="font-size:18px; margin:10px 0 0 0;"><b>Overnight Hedef:</b> %' + str(HEDEF_OVERNIGHT_MIN) + '-%' + str(HEDEF_OVERNIGHT_MAX) + '</p>'
+            '<p style="font-size:16px; margin:5px 0 0 0; font-style:italic;">' + str(gece_sonuc["aciklama"]) + '</p>'
             '</div>', unsafe_allow_html=True)
         gcol1, gcol2, gcol3, gcol4, gcol5 = st.columns(5)
         with gcol1:
@@ -1090,7 +1299,7 @@ if onc:
             st.metric("KER", str(gh["KER"]))
         with gcol5:
             st.metric("CHOP", str(gh["CHOP"]))
-        st.caption("Strateji: Kapanisa yakin al, ertesi gun acilista gap gercekleşince sat.") 
+        st.caption("Strateji: Kapanisa yakin al, ertesi gun acilista gap gerceklesince sat.") 
 
 st.markdown("---")
 
@@ -1098,7 +1307,7 @@ t1, t2, t3, t4, t5, t6, t7 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnigh
 
 with t1:
     st.subheader("Karar Motoru - Tum Metrikler Birlesik Sinyal")
-    st.caption("9 klasik + 6 non-klise + Derin Teknoloji birlestirilir.")
+    st.caption("9 klasik + 6 non-klise + Derin Teknoloji + Hedef Uygunluk")
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -1117,7 +1326,8 @@ with t1:
                 '<div style="background-color:' + sr + '; padding:20px; border-radius:10px; text-align:center;">'
                 '<h2 style="color:white; margin:0;">' + str(secili_hisse) + ' -> ' + str(secili["KararSinyal"]) + '</h2>'
                 '<p style="color:white; margin:5px 0; font-size:18px;">Skor: ' + str(secili["KararSkor"]) + '/100 | Fiyat: ' + str(secili["Fiyat"]) + '</p>'
-                '<p style="color:white; margin:5px 0;">SL: ' + str(secili["SL"]) + ' | Hedef: ' + str(secili["Hedef"]) + ' | R/O: ' + str(secili["RO"]) + '</p>'
+                '<p style="color:white; margin:5px 0;">SL: ' + str(secili["SL"]) + ' (%' + str(secili["SLYuzde"]) + ') | Hedef: ' + str(secili["Hedef"]) + ' (%' + str(secili["HedefYuzde"]) + ') | R/O: ' + str(secili["RO"]) + '</p>'
+                '<p style="color:white; margin:5px 0;">Hedef Uygunluk: ' + str(secili["HedefUygun"]) + ' | Gun Ici: ' + str(secili["GunIciUygun"]) + ' | Overnight: ' + str(secili["OvernightUygun"]) + '</p>'
                 '<p style="color:white; margin:5px 0;">Non-Klise: ' + str(secili["NK_Seviye"]) + ' (' + str(secili["NK_Skor"]) + ') | Deep: ' + str(secili["HibritSeviye"]) + ' (' + str(secili["HibritSkor"]) + ')</p>'
                 '<p style="color:white; margin:5px 0; font-style:italic;">' + str(secili["KararNeden"]) + '</p>'
                 '</div>', unsafe_allow_html=True)
@@ -1136,9 +1346,9 @@ with t1:
                         '<p style="margin:3px 0; font-size:20px; font-weight:bold;">' + str(r["KararSinyal"]) + '</p>'
                         '<p style="margin:3px 0;">Skor: ' + str(r["KararSkor"]) + '</p>'
                         '<p style="margin:3px 0;">' + str(r["Fiyat"]) + '</p>'
-                        '<p style="margin:3px 0; font-size:12px;">Hedef: ' + str(r["Hedef"]) + '</p>'
-                        '<p style="margin:3px 0; font-size:12px;">R/O: ' + str(r["RO"]) + '</p>'
-                        '<p style="margin:3px 0; font-size:12px;">NK: ' + str(r["NK_Skor"]) + ' | Deep: ' + str(r["HibritSkor"]) + '</p>'
+                        '<p style="margin:3px 0; font-size:12px;">Hedef: ' + str(r["Hedef"]) + ' (%' + str(r["HedefYuzde"]) + ')</p>'
+                        '<p style="margin:3px 0; font-size:12px;">SL: %' + str(r["SLYuzde"]) + ' | R/O: ' + str(r["RO"]) + '</p>'
+                        '<p style="margin:3px 0; font-size:11px;">Hedef Uygun: ' + str(r["HedefUygun"]) + '</p>'
                         '</div>', unsafe_allow_html=True)
         else:
             st.info("Bugun icin kriterlere uyan firsat yok.")
@@ -1197,14 +1407,26 @@ with t1:
             if "SAT" in str(v):
                 return 'background-color:#c62828;color:white;'
             return 'background-color:#e65100;color:white;'
-        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KararNeden", "SL", "Hedef", "RO", "NK_Skor", "NK_Seviye", "HibritSkor"]]
-        st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]), use_container_width=True, height=450)
+        def r_hedef(v):
+            if "GUCLU UYGUN" in str(v):
+                return 'background-color:#1b5e20;color:white;font-weight:bold;'
+            if "UYGUN" in str(v) and "DEGIL" not in str(v):
+                return 'background-color:#2e7d32;color:white;'
+            if "ZAYIF" in str(v):
+                return 'background-color:#e65100;color:white;'
+            return 'background-color:#b71c1c;color:white;'
+        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "HedefYuzde", "SLYuzde", "RO", "HedefUygun", "GunIciUygun", "OvernightUygun", "NK_Skor", "HibritSkor"]]
+        st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]).map(r_hedef, subset=["HedefUygun"]), use_container_width=True, height=450)
         st.markdown("---")
         st.subheader("En Yuksek Karar Skoru 10")
-        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "RO", "NK_Skor", "HibritSkor", "KararNeden"]], use_container_width=True)
+        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "HedefYuzde", "RO", "HedefUygun", "NK_Skor", "HibritSkor"]], use_container_width=True)
         st.markdown("---")
         st.subheader("En Dusuk Karar Skoru 10 (Riskli)")
         st.dataframe(kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KER", "CHOP", "GNN_Manip", "NK_Seviye"]], use_container_width=True)
+        st.markdown("---")
+        st.subheader("Hedef Marj Uygunluk Tablosu")
+        hedef_df = kdf[["Hisse", "Fiyat", "HedefYuzde", "SLYuzde", "HedefUygun", "GunIciUygun", "OvernightUygun", "RORaw", "KararSinyal"]].sort_values("HedefYuzde", ascending=False)
+        st.dataframe(hedef_df.style.map(r_hedef, subset=["HedefUygun"]), use_container_width=True, height=400)
         st.markdown("---")
         st.subheader("6 Non-Klise Metrik Tablosu")
         nk_goster = kdf[["Hisse", "KER", "CHOP", "Parkinson", "GarmanKlass", "Kyle", "Entropy", "NK_Skor", "NK_Seviye", "KararSinyal"]].sort_values("NK_Skor", ascending=False)
@@ -1213,10 +1435,34 @@ with t1:
         colA, colB = st.columns(2)
         with colA:
             st.subheader("En Yuksek OFI 5 (Alici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "NK_Skor"]].head(5), use_container_width=True)
+            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "HedefUygun"]].head(5), use_container_width=True)
         with colB:
             st.subheader("En Dusuk OFI 5 (Satici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "NK_Skor"]].head(5), use_container_width=True)
+            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "HedefUygun"]].head(5), use_container_width=True)
+        if st.session_state.performans:
+            st.markdown("---")
+            st.subheader("F) Performans Gecmisi (Kapali Pozisyonlar)")
+            kapali_kayitlar = [k for k in st.session_state.performans if k.get("Durum") in ["HEDEF", "STOP"]]
+            if kapali_kayitlar:
+                perf_df = pd.DataFrame(kapali_kayitlar)
+                def r_durum(v):
+                    if v == "HEDEF":
+                        return 'background-color:#1b5e20;color:white;font-weight:bold;'
+                    if v == "STOP":
+                        return 'background-color:#b71c1c;color:white;font-weight:bold;'
+                    return 'background-color:#e65100;color:white;'
+                goster_cols = ["zaman", "Hisse", "Sinyal", "GirisFiyat", "CikisFiyat", "KarYuzde", "TutmaSaat", "Durum", "Tip"]
+                st.dataframe(perf_df[goster_cols].style.map(r_durum, subset=["Durum"]), use_container_width=True, height=350)
+            else:
+                st.info("Henuz kapali pozisyon yok. Test islemlerinden sonra gorunecek.")
+        st.markdown("---")
+        if st.button("📝 ACIL Sinyalleri Performans Defterine Kaydet"):
+            yeni_kayit = sinyal_anlik_kaydet(kdf, tip="gun_ici")
+            if yeni_kayit:
+                st.session_state.performans.extend(yeni_kayit)
+                st.success(str(len(yeni_kayit)) + " sinyal kaydedildi!")
+            else:
+                st.warning("Kaydedilecek GUCLU AL veya AL sinyali yok.")
 
 with t2:
     st.subheader("Trend Matrisi")
@@ -1262,7 +1508,7 @@ with t2:
         m2.metric("ASAGI", len(df[df["Tahmin15"] == "ASAGI"]))
         m3.metric("YATAY", len(df[df["Tahmin15"] == "YATAY"]))
         gvv = pd.to_numeric(df['Guven15'].str.replace('%', ''), errors='coerce').mean()
-        m4.metric("Ort Guven", "%" + str(round(gvv, 1) if not pd.isna(gvv) else 0))
+        m4.metric("Ort Guven", "%" + str(round(gvv, 1) if not pd.isna(gvv) else 0)) 
 
 with t3:
     st.subheader("Mum Grafigi")
@@ -1289,7 +1535,7 @@ with t3:
             fr.update_layout(title="RSI", template='plotly_dark', height=220, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E', showlegend=False)
             st.plotly_chart(fr, use_container_width=True)
     except Exception:
-        st.error("Grafik yuklenemedi") 
+        st.error("Grafik yuklenemedi")
 
 with t4:
     st.subheader("ATR Bazli Risk")
@@ -1305,13 +1551,30 @@ with t4:
         rdf = dfr[dfr["RO"].apply(rok)]
         st.markdown("**R/O > 1.5 olan " + str(len(rdf)) + " hisse:**")
         if not rdf.empty:
-            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "RO", "Sinyal", "Guc", "KararSinyal", "NK_Skor", "HibritSkor"]], use_container_width=True, height=500)
+            def r_hedef_r(v):
+                if "GUCLU UYGUN" in str(v):
+                    return 'background-color:#1b5e20;color:white;font-weight:bold;'
+                if "UYGUN" in str(v) and "DEGIL" not in str(v):
+                    return 'background-color:#2e7d32;color:white;'
+                if "ZAYIF" in str(v):
+                    return 'background-color:#e65100;color:white;'
+                return 'background-color:#b71c1c;color:white;'
+            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "HedefYuzde", "SLYuzde", "RO", "Sinyal", "KararSinyal", "HedefUygun", "GunIciUygun", "OvernightUygun", "NK_Skor", "HibritSkor"]].style.map(r_hedef_r, subset=["HedefUygun"]), use_container_width=True, height=500)
+        st.markdown("---")
+        st.subheader("Hedef Marji Uygun Hisseler (%2-5.5)")
+        try:
+            hedef_uygun_df = dfr[(dfr["HedefYuzde"] >= HEDEF_GUN_ICI_MIN) & (dfr["HedefYuzde"] <= HEDEF_OVERNIGHT_MAX + 0.5)]
+            st.markdown("**" + str(len(hedef_uygun_df)) + " hisse hedef marjinda:**")
+            if not hedef_uygun_df.empty:
+                st.dataframe(hedef_uygun_df[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSinyal", "HedefUygun"]].sort_values("HedefYuzde", ascending=False), use_container_width=True, height=400)
+        except Exception:
+            pass
     else:
         st.warning("Veri yok.")
 
 with t5:
     st.subheader("Overnight Gap Stratejisi")
-    st.info("Kapanista al, acilista sat | Gap skoru 6 non-klise metrik ile guclendirildi")
+    st.info("Kapanista al, acilista sat | Hedef marj %" + str(HEDEF_OVERNIGHT_MIN) + "-%" + str(HEDEF_OVERNIGHT_MAX))
     if onc:
         odf = pd.DataFrame(onc)
         if sd:
@@ -1335,8 +1598,18 @@ with t5:
             return 'color:#FFC107;'
         st.dataframe(odf.style.map(ron, subset=["Overnight"]).map(rg, subset=["GapYon"]), use_container_width=True, height=450)
         st.markdown("---")
-        st.subheader("En Guclu 10")
-        st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%", "KER", "CHOP"]], use_container_width=True)
+        st.subheader("Gecenin En Guclu 10")
+        st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%", "KER", "CHOP", "RSI", "Hacim", "VolRejim"]], use_container_width=True)
+        st.markdown("---")
+        st.subheader("Overnight Hedef Marj Uygun 10 (En Az %3)")
+        try:
+            hedef_uygun_onc = odf[odf["GapPctRaw"] >= HEDEF_OVERNIGHT_MIN]
+            if not hedef_uygun_onc.empty:
+                st.dataframe(hedef_uygun_onc.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%", "GapPctRaw", "KER", "CHOP"]], use_container_width=True)
+            else:
+                st.info("Hedef marji karsilayan overnight firsati yok.")
+        except Exception:
+            pass
         st.markdown("---")
         if st.button("GECE TASI Sinyallerini Telegram'a Gonder"):
             mesaj = "<b>BIST Gece Tasi Sinyalleri</b>\n\n"
@@ -1347,8 +1620,40 @@ with t5:
                 st.success("Gonderildi!")
             else:
                 st.warning("Telegram token ayarlanmamis.")
+        st.markdown("---")
+        if st.button("📝 GECE TASI Sinyallerini Performans Defterine Kaydet"):
+            gece_kayit = []
+            for _, r in odf.head(10).iterrows():
+                if r['Overnight'] in ["GECE TASI", "ZAYIF TASI"]:
+                    try:
+                        giris = float(r['KapanisRaw'])
+                        hedef_y = float(str(r['Gap%']).replace('%', '')) if 'Gap%' in r else 0
+                        gece_kayit.append({
+                            "zaman": turkiye_saati().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Hisse": r['Hisse'],
+                            "Sinyal": r['Overnight'],
+                            "GirisFiyat": giris,
+                            "Hedef": str(round(giris * (1 + hedef_y / 100), 2)) + " TL",
+                            "SL": str(round(giris * 0.98, 2)) + " TL",
+                            "RO": 1.5,
+                            "KararSkor": float(r['GapSkor']),
+                            "NK_Skor": 50,
+                            "HibritSkor": 50,
+                            "Tip": "overnight",
+                            "Durum": "ACIK",
+                            "CikisFiyat": 0.0,
+                            "KarYuzde": 0.0,
+                            "TutmaSaat": 0.0
+                        })
+                    except Exception:
+                        continue
+            if gece_kayit:
+                st.session_state.performans.extend(gece_kayit)
+                st.success(str(len(gece_kayit)) + " gece tasi sinyali kaydedildi!")
+            else:
+                st.warning("Kaydedilecek sinyal yok.")
     else:
-        st.warning("Veri yok.")
+        st.warning("Veri yok.") 
 
 with t6:
     st.subheader("Finansal Haberler (Paratic RSS)")
@@ -1422,7 +1727,7 @@ with t7:
         st.markdown("---")
         st.markdown("### Derin Teknoloji Ne Anlatiyor?")
         st.markdown("""
-- **LSTM_Yon**: Agirlikli bellek modeli ile 5 adim sonrasi yon tahmini (% cinsinden)
+- **LSTM_Yon**: Agirlikli bellek modeli ile 5 adim sonrasi yon tahmini (%)
 - **LSTM_Guven**: Tahmin guven yuzdesi
 - **NLP_Skor**: Turkce finansal haber duygu analizi (-5 ile +5 arasi)
 - **NLP_Haber**: Hisse ile ilgili bulunan haber sayisi
@@ -1432,22 +1737,72 @@ with t7:
 - **GAN_VaR**: Sentetik senaryolarda %95 VaR (kayip tahmini)
 - **HibritSkor**: Tum modellerin birlesik skoru (0-100)
 - **HibritSeviye**: YUKSEK POZITIF / POZITIF / NOTR / NEGATIF / YUKSEK NEGATIF
-
-### Non-Klise Metrikler (6 Adet)
-- **KER (Kaufman)**: Trend kalitesi. 0.55+ = guclu trend
-- **CHOP (Choppiness)**: Yataylik. 45- = trend, 62+ = yatay bant
-- **Parkinson Vol**: High/Low bazli volatilite
-- **Garman-Klass Vol**: OHLC tam kullanim
-- **Kyle Lambda**: Likidite olcumu (dusuk = iyi)
-- **Entropy**: Ongorulebilirlik (dusuk = ongorulebilir)
-
-### Overnight Gap Stratejisi
-- **GapSkor 75+**: GECE TASI GUCLU - en yuksek olasilikli gap
-- **GapSkor 60-74**: GECE TASI - orta-yuksek olasilikli gap
-- **GapSkor 50-59**: ZAYIF TASI - belirsiz
-- **GapSkor 35-49**: BEKLE - islem yapma
-- **GapSkor 0-34**: GECE TASIMA - gap asagi
         """)
 
 st.markdown("---")
+st.markdown("## 📈 PERFORMANS DETAY RAPORU")
+perf2 = performans_hesapla(st.session_state.performans)
+if perf2["toplam"] == 0:
+    st.info("Henuz kayitli sinyal yok. Karar sekmesinde 'ACIL Sinyalleri Performans Defterine Kaydet' butonuna basarak baslayin.")
+else:
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("### Genel Durum")
+        st.write("- **Toplam Sinyal:** " + str(perf2["toplam"]))
+        st.write("- **Kapali Pozisyon:** " + str(perf2["kapali"]))
+        st.write("- **Acik Pozisyon:** " + str(perf2["acik"]))
+        st.write("- **Hedef Asilan:** " + str(perf2["hedef_asilan"]))
+        st.write("- **Stop Olan:** " + str(perf2["stop_olan"]))
+    with col_b:
+        st.markdown("### Basari Metrikleri")
+        st.write("- **Basari Orani:** %" + str(perf2["basari_orani"]))
+        st.write("- **Ort. Kar:** %" + str(perf2["ort_kar"]))
+        st.write("- **Ort. Zarar:** %" + str(perf2["ort_zarar"]))
+        st.write("- **Beklenen Getiri:** %" + str(perf2["beklenen_getiri"]))
+        st.write("- **Ort. Tutma:** " + str(perf2["ort_tutma"]) + " saat")
+    with col_c:
+        st.markdown("### En Iyi / En Kotu")
+        st.write("- **En Iyi Islem:** %" + str(perf2["en_iyi"]))
+        st.write("- **En Kotu Islem:** %" + str(perf2["en_kotu"]))
+        st.write("- **Toplam Kar:** %" + str(perf2["toplam_kar"]))
+        st.write("- **Kazanan:** " + str(perf2["kazanan"]))
+        st.write("- **Kaybeden:** " + str(perf2["kaybeden"]))
+    st.markdown("---")
+    if perf2["kapali"] >= 10:
+        if perf2["basari_orani"] >= 70:
+            st.success("🎯 Basari %70+ | Sistem kanitlanmis, sermaye artirilabilir")
+        elif perf2["basari_orani"] >= 50:
+            st.warning("⚠️ Basari %50-70 | Sistem calisiyor, optimizasyon gerekli")
+        else:
+            st.error("❌ Basari %50 alti | Parametreleri degistirmelisiniz")
+    elif perf2["kapali"] >= 5:
+        st.info("ℹ️ Ilk degerlendirme icin 5+ kapali islem var. 10'a tamamlayin.")
+    else:
+        st.info("ℹ️ Degerlendirme icin en az 5 kapali islem gerekli. Su an: " + str(perf2["kapali"]))
+    st.markdown("---")
+    st.subheader("Tum Kayitlar")
+    try:
+        tum_df = pd.DataFrame(st.session_state.performans)
+        if not tum_df.empty:
+            def r_durum2(v):
+                if v == "HEDEF":
+                    return 'background-color:#1b5e20;color:white;font-weight:bold;'
+                if v == "STOP":
+                    return 'background-color:#b71c1c;color:white;font-weight:bold;'
+                if v == "ACIK":
+                    return 'background-color:#e65100;color:white;'
+                return ''
+            st.dataframe(tum_df.style.map(r_durum2, subset=["Durum"]), use_container_width=True, height=400)
+    except Exception:
+        pass
+    if st.button("🗑️ Performans Gecmisini Temizle"):
+        st.session_state.performans = []
+        st.success("Performans gecmisi temizlendi!")
+        st.rerun()
+
+st.markdown("---")
+st.markdown("### Hedef Marj Sistemi")
+st.markdown("- **Gun Ici Hedef:** %" + str(HEDEF_GUN_ICI_MIN) + " - %" + str(HEDEF_GUN_ICI_MAX))
+st.markdown("- **Overnight Hedef:** %" + str(HEDEF_OVERNIGHT_MIN) + " - %" + str(HEDEF_OVERNIGHT_MAX))
+st.markdown("- **Basari Degerlendirme:** %70+ = Mukemmel | %50-70 = Iyi | %50- = Gelistirme gerekli")
 st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
