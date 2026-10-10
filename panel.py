@@ -38,8 +38,7 @@ def piyasa_acik_mi():
     s = turkiye_saati()
     if s.weekday() >= 5:
         return False
-    return time(9, 40) <= s.time() <= time(18, 30)
-
+    return time(9, 40) <= s.time() <= time(18, 30) 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def toplu_veri_cek(hisse_listesi):
@@ -447,7 +446,7 @@ def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, tre
     if entropy > 2.6:
         sk -= 3
     sk = max(0, min(100, sk))
-    if sk >= 78:
+    if sk >= 75:
         sinyal = "GUCLU AL"
         renk = "#1b5e20"
         neden = "Tum metrikler olumlu"
@@ -455,7 +454,7 @@ def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, tre
         sinyal = "AL"
         renk = "#2e7d32"
         neden = "Cogunluk pozitif"
-    elif sk <= 22:
+    elif sk <= 25:
         sinyal = "GUCLU SAT"
         renk = "#b71c1c"
         neden = "Tum metrikler olumsuz"
@@ -622,7 +621,7 @@ def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
         "GAN_VaR": gan,
         "HibritSkor": hb_sk,
         "HibritSeviye": hb_sv
-        } 
+    } 
 
 def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
@@ -857,10 +856,10 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
 
 
 def en_iyi_firsat_bul(kdf):
-    """Gunun en iyi firsatini KararSkoru bazli bulur (En Iyi 5 ile ayni kriter)."""
+    """Gunun en iyi firsati - KararSinyal bazli (En Iyi 5 ile ayni kriter)."""
     if kdf.empty:
         return None
-    uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.5)]
+    uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)]
     if uygun.empty:
         return None
     uygun = uygun.sort_values("KararSkor", ascending=False).reset_index(drop=True)
@@ -886,23 +885,13 @@ def en_iyi_firsat_bul(kdf):
         puan += 1
     if en_iyi['NK_Skor'] >= 60:
         puan += 1
-    if puan >= 12:
-        karar = "GUCLU AL"
-        renk = "#1b5e20"
-    elif puan >= 9:
-        karar = "AL"
-        renk = "#2e7d32"
-    elif puan >= 6:
-        karar = "BEKLE"
-        renk = "#e65100"
-    else:
-        karar = "RISKLI"
-        renk = "#b71c1c"
+    karar = en_iyi["KararSinyal"]
+    renk = en_iyi["KararRenk"]
     return {"hisse": en_iyi, "puan": puan, "karar": karar, "renk": renk}
 
 
 def gecenin_en_iyisi_bul(odf):
-    """Overnight icin gecenin en iyi firsatini bulur (GapSkor bazli)."""
+    """Overnight icin gecenin en iyi firsati - GapSkor bazli."""
     if odf.empty:
         return None
     uygun = odf[odf["Overnight"].isin(["GECE TASI", "ZAYIF TASI"])]
@@ -918,6 +907,10 @@ def gecenin_en_iyisi_bul(odf):
         karar = "GECE TASI"
         renk = "#2e7d32"
         aciklama = "Guclu kapanis, gap beklentisi orta-yuksek"
+    elif en_iyi['GapSkor'] >= 55:
+        karar = "GECE TASI"
+        renk = "#2e7d32"
+        aciklama = "Orta-guclu kapanis, gap beklentisi var"
     else:
         karar = "ZAYIF TASI"
         renk = "#e65100"
@@ -1005,7 +998,7 @@ if mb:
     st.rerun()
 
 
-# ==================== GUNUN EN IYI FIRSATI ====================
+# ==================== GUNUN EN IYI FIRSATI (DUZELTILDI) ====================
 if sat:
     kdf_ust = pd.DataFrame(sat)
     if sd:
@@ -1030,39 +1023,39 @@ if sat:
         nk1, nk2, nk3, nk4, nk5, nk6 = st.columns(6)
         with nk1:
             if eh["KER"] >= 0.55:
-                st.success("KER: " + str(eh["KER"]) + " ✅")
+                st.success("KER: " + str(eh["KER"]) + " OK")
             else:
-                st.warning("KER: " + str(eh["KER"]) + " ⚠️")
+                st.warning("KER: " + str(eh["KER"]) + " X")
             st.caption("Trend kalitesi")
         with nk2:
             if eh["CHOP"] <= 45:
-                st.success("CHOP: " + str(eh["CHOP"]) + " ✅")
+                st.success("CHOP: " + str(eh["CHOP"]) + " OK")
             else:
-                st.warning("CHOP: " + str(eh["CHOP"]) + " ⚠️")
+                st.warning("CHOP: " + str(eh["CHOP"]) + " X")
             st.caption("Yataylik")
         with nk3:
             if 0.1 <= eh["Parkinson"] <= 3.0:
-                st.success("Park: " + str(eh["Parkinson"]) + " ✅")
+                st.success("Park: " + str(eh["Parkinson"]) + " OK")
             else:
-                st.warning("Park: " + str(eh["Parkinson"]) + " ⚠️")
+                st.warning("Park: " + str(eh["Parkinson"]) + " X")
             st.caption("High/Low vol")
         with nk4:
             if 0.1 <= eh["GarmanKlass"] <= 3.5:
-                st.success("G-K: " + str(eh["GarmanKlass"]) + " ✅")
+                st.success("G-K: " + str(eh["GarmanKlass"]) + " OK")
             else:
-                st.warning("G-K: " + str(eh["GarmanKlass"]) + " ⚠️")
+                st.warning("G-K: " + str(eh["GarmanKlass"]) + " X")
             st.caption("OHLC vol")
         with nk5:
             if eh["Kyle"] <= 1.5:
-                st.success("Kyle: " + str(eh["Kyle"]) + " ✅")
+                st.success("Kyle: " + str(eh["Kyle"]) + " OK")
             else:
-                st.warning("Kyle: " + str(eh["Kyle"]) + " ⚠️")
+                st.warning("Kyle: " + str(eh["Kyle"]) + " X")
             st.caption("Likidite")
         with nk6:
             if eh["Entropy"] <= 2.5:
-                st.success("Ent: " + str(eh["Entropy"]) + " ✅")
+                st.success("Ent: " + str(eh["Entropy"]) + " OK")
             else:
-                st.warning("Ent: " + str(eh["Entropy"]) + " ⚠️")
+                st.warning("Ent: " + str(eh["Entropy"]) + " X")
             st.caption("Ongorulebilirlik")
         st.markdown("**Non-Klise Skor:** " + str(eh["NK_Skor"]) + "/100 | **Gecen:** " + str(eh["NK_Gecen"]) + "/6 | **Seviye:** " + str(eh["NK_Seviye"]) + " | **Deep Tech:** " + str(eh["HibritSeviye"]) + " (" + str(eh["HibritSkor"]) + ")")
 
@@ -1130,7 +1123,7 @@ with t1:
                 '</div>', unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("B) Bugunun En Iyi 5 Firsati")
-        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.5)].head(5)
+        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)].head(5)
         if not firsatlar.empty:
             kart_cols = st.columns(min(5, len(firsatlar)))
             for i in range(len(firsatlar)):
@@ -1296,7 +1289,7 @@ with t3:
             fr.update_layout(title="RSI", template='plotly_dark', height=220, paper_bgcolor='#0E1117', plot_bgcolor='#1E1E1E', showlegend=False)
             st.plotly_chart(fr, use_container_width=True)
     except Exception:
-        st.error("Grafik yuklenemedi")
+        st.error("Grafik yuklenemedi") 
 
 with t4:
     st.subheader("ATR Bazli Risk")
@@ -1381,7 +1374,7 @@ with t6:
 
 with t7:
     st.subheader("Derin Teknoloji Analizi")
-    st.caption("LSTM, NLP, Pekiştirmeli Ogrenme, GNN ve GAN modulleri birlesik skoru.")
+    st.caption("LSTM, NLP, Pekistirmeli Ogrenme, GNN ve GAN modulleri birlesik skoru.")
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -1457,4 +1450,4 @@ with t7:
         """)
 
 st.markdown("---")
-st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.") 
+st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
