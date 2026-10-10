@@ -23,13 +23,11 @@ except ImportError:
 TELEGRAM_TOKEN = ""
 TELEGRAM_CHAT = ""
 
-# Hedef kar marjlari (15 dakika gecikmeli veriye gore)
 HEDEF_GUN_ICI_MIN = 2.0
 HEDEF_GUN_ICI_MAX = 3.5
 HEDEF_OVERNIGHT_MIN = 3.0
 HEDEF_OVERNIGHT_MAX = 5.0
 
-# 15 dakikalik bar bazli hedef marj katsayilari
 BAR_15DK_HEDEF_KATSAYI = 1.2
 BAR_15DK_SL_KATSAYI = 0.8
 OVERNIGHT_HEDEF_KATSAYI = 1.8
@@ -633,12 +631,9 @@ def derin_teknoloji_hesapla(hs, g, tum_veriler, haber_listesi):
         "GAN_VaR": gan,
         "HibritSkor": hb_sk,
         "HibritSeviye": hb_sv
-        } 
+    } 
 
 def hedef_marj_15dk_hesapla(g, atr_deger, guc, rsi_d, macd_h, hacim, vol_rej, ker, chop):
-    """15 dakika gecikmeli veriyi baz alarak dinamik hedef marj hesaplar.
-    Son 15dk barin ATR'si + momentum + trend kalitesine gore marj belirlenir.
-    Bu, 15dk sonrasi icin gercekci bir hedef marji verir."""
     sf = float(g['Close'].iloc[-1])
     son_bar = g.iloc[-1]
     son_bar_yuksek = float(son_bar['High'])
@@ -694,7 +689,6 @@ def hedef_marj_15dk_hesapla(g, atr_deger, guc, rsi_d, macd_h, hacim, vol_rej, ke
 
 
 def overnight_marj_15dk_hesapla(g, atr_deger, guc, ker, chop, kp, hr):
-    """15dk bar bazli overnight gap marji hesaplar."""
     sf = float(g['Close'].iloc[-1])
     atr_yuzde = (atr_deger / sf) * 100 if sf > 0 else 0
     taban = atr_yuzde * OVERNIGHT_HEDEF_KATSAYI
@@ -728,7 +722,6 @@ def overnight_marj_15dk_hesapla(g, atr_deger, guc, ker, chop, kp, hr):
 
 
 def marj_uygunluk_belirle(hedef_marj, tip="gun_ici"):
-    """Sadece hedef MARJINA bakar (kaliteye degil). ATAKP tutarsizligini duzeltir."""
     if tip == "gun_ici":
         if HEDEF_GUN_ICI_MIN <= hedef_marj <= HEDEF_GUN_ICI_MAX:
             return "MARJ UYGUN", "#1b5e20"
@@ -748,7 +741,6 @@ def marj_uygunluk_belirle(hedef_marj, tip="gun_ici"):
 
 
 def kalite_uygunluk_belirle(ro, ker, chop, nk_skor, hibrit, gnn):
-    """Kalite kriterlerine gore uygunluk (marjdan bagimsiz)."""
     puan = 0
     if ro >= 1.5:
         puan += 2
@@ -811,7 +803,7 @@ def sinyal_anlik_kaydet(kdf, tip="gun_ici"):
                 "GirisFiyat": r['FiyatRaw'],
                 "Hedef": r['Hedef'],
                 "SL": r['SL'],
-                "HedefMarj": r.get('HedefMarjDinamik', 0),
+                "HedefMarj": r.get('HedefYuzde', 0),
                 "RO": r['RORaw'],
                 "KararSkor": r['KararSkor'],
                 "NK_Skor": r['NK_Skor'],
@@ -903,7 +895,7 @@ def performans_hesapla(gecmis_kayitlar):
         "stop_olan": len(stop_olan),
         "en_iyi": round(en_iyi, 2),
         "en_kotu": round(en_kotu, 2)
-                             } 
+} 
 
 def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     if v is None or v.empty or len(v) < 30:
@@ -1169,7 +1161,7 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
 def en_iyi_firsat_bul(kdf):
     if kdf.empty:
         return None
-    uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)]
+    uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)].copy()
     if uygun.empty:
         return None
     uygun = uygun.sort_values("KararSkor", ascending=False).reset_index(drop=True)
@@ -1205,7 +1197,7 @@ def en_iyi_firsat_bul(kdf):
 def gecenin_en_iyisi_bul(odf):
     if odf.empty:
         return None
-    uygun = odf[odf["Overnight"].isin(["GECE TASI", "ZAYIF TASI"])]
+    uygun = odf[odf["Overnight"].isin(["GECE TASI", "ZAYIF TASI"])].copy()
     if uygun.empty:
         return None
     uygun = uygun.sort_values("GapSkor", ascending=False).reset_index(drop=True)
@@ -1250,7 +1242,7 @@ pk = piyasa_acik_mi()
 if pk:
     st_autorefresh(interval=60000, key="y")
 
-st.title("BIST Pro Terminali - Hedef Takip V2")
+st.title("BIST Pro Terminali - Hedef Takip V3")
 st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | 15dk Bar Bazli Hedef Marj | Gun Ici %" + str(HEDEF_GUN_ICI_MIN) + "-" + str(HEDEF_GUN_ICI_MAX) + " | Overnight %" + str(HEDEF_OVERNIGHT_MIN) + "-" + str(HEDEF_OVERNIGHT_MAX))
 
 if pk:
@@ -1489,7 +1481,7 @@ with t1:
                 '</div>', unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("B) Bugunun En Iyi 5 Firsati")
-        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)].head(5)
+        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.45)].head(5).copy()
         if not firsatlar.empty:
             kart_cols = st.columns(min(5, len(firsatlar)))
             for i in range(len(firsatlar)):
@@ -1519,7 +1511,7 @@ with t1:
                     st.warning("Telegram token ayarlanmamis.")
         with tgl2:
             if st.button("Tum GUCLU AL Sinyallerini Gonder"):
-                guclu_al = kdf[kdf["KararSinyal"] == "GUCLU AL"]
+                guclu_al = kdf[kdf["KararSinyal"] == "GUCLU AL"].copy()
                 if telegram_toplu_gonder(guclu_al, "BIST Guclu AL Sinyalleri"):
                     st.success("Gonderildi!")
                 else:
@@ -1579,38 +1571,46 @@ with t1:
             if "KALITE ORTA" in str(v):
                 return 'background-color:#e65100;color:white;'
             return 'background-color:#b71c1c;color:white;'
-        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "HedefYuzde", "SLYuzde", "RO", "MarjUygun", "KaliteUygun", "GunIciUygun", "OvernightUygun", "NK_Skor", "HibritSkor"]]
+        kdf_goster = kdf[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "HedefYuzde", "SLYuzde", "RO", "MarjUygun", "KaliteUygun", "GunIciUygun", "OvernightUygun", "NK_Skor", "HibritSkor"]].copy()
         st.dataframe(kdf_goster.style.map(rk_sinyal, subset=["KararSinyal"]).map(r_marj, subset=["MarjUygun"]).map(r_kalite, subset=["KaliteUygun"]), use_container_width=True, height=450)
         st.markdown("---")
         st.subheader("En Yuksek Karar Skoru 10")
-        st.dataframe(kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "HedefYuzde", "RO", "MarjUygun", "KaliteUygun", "NK_Skor", "HibritSkor"]], use_container_width=True)
+        top10_df = kdf.head(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "SL", "Hedef", "HedefYuzde", "RO", "MarjUygun", "KaliteUygun", "NK_Skor", "HibritSkor"]].copy()
+        st.dataframe(top10_df, use_container_width=True)
         st.markdown("---")
         st.subheader("En Dusuk Karar Skoru 10 (Riskli)")
-        st.dataframe(kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KER", "CHOP", "GNN_Manip", "NK_Seviye"]], use_container_width=True)
+        bot10_df = kdf.tail(10)[["Hisse", "Fiyat", "KararSkor", "KararSinyal", "KER", "CHOP", "GNN_Manip", "NK_Seviye"]].copy()
+        st.dataframe(bot10_df, use_container_width=True)
         st.markdown("---")
         st.subheader("Marj Uygunluk Tablosu (15dk Bar Bazli)")
-        marj_df = kdf[["Hisse", "Fiyat", "HedefYuzde", "SLYuzde", "MarjUygun", "KaliteUygun", "GunIciUygun", "OvernightUygun", "OvernightHedefMarj", "RO", "KararSinyal"]].sort_values("HedefYuzde", ascending=False)
+        marj_df = kdf[["Hisse", "Fiyat", "HedefYuzde", "SLYuzde", "MarjUygun", "KaliteUygun", "GunIciUygun", "OvernightUygun", "OvernightHedefMarj", "RO", "KararSinyal"]].copy()
+        marj_df = marj_df.sort_values("HedefYuzde", ascending=False).reset_index(drop=True)
         st.dataframe(marj_df.style.map(r_marj, subset=["MarjUygun"]).map(r_kalite, subset=["KaliteUygun"]), use_container_width=True, height=400)
         st.markdown("---")
         st.subheader("Sadece Marj Uygun Hisseler (%2-3.5)")
-        marj_uygun_df = kdf[kdf["MarjUygun"] == "MARJ UYGUN"]
+        marj_uygun_df = kdf[kdf["MarjUygun"] == "MARJ UYGUN"].copy()
         if not marj_uygun_df.empty:
             st.success(str(len(marj_uygun_df)) + " hisse marj uygun")
-            st.dataframe(marj_uygun_df[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSinyal", "KaliteUygun"]].sort_values("KararSkor", ascending=False), use_container_width=True, height=350)
+            marj_uygun_goster = marj_uygun_df[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSkor", "KararSinyal", "KaliteUygun"]].copy()
+            marj_uygun_goster = marj_uygun_goster.sort_values("KararSkor", ascending=False).reset_index(drop=True)
+            st.dataframe(marj_uygun_goster, use_container_width=True, height=350)
         else:
             st.info("Marj uygun hisse yok.")
         st.markdown("---")
         st.subheader("6 Non-Klise Metrik Tablosu")
-        nk_goster = kdf[["Hisse", "KER", "CHOP", "Parkinson", "GarmanKlass", "Kyle", "Entropy", "NK_Skor", "NK_Seviye", "KararSinyal"]].sort_values("NK_Skor", ascending=False)
+        nk_goster = kdf[["Hisse", "KER", "CHOP", "Parkinson", "GarmanKlass", "Kyle", "Entropy", "NK_Skor", "NK_Seviye", "KararSinyal"]].copy()
+        nk_goster = nk_goster.sort_values("NK_Skor", ascending=False).reset_index(drop=True)
         st.dataframe(nk_goster, use_container_width=True, height=400)
         st.markdown("---")
         colA, colB = st.columns(2)
         with colA:
             st.subheader("En Yuksek OFI 5 (Alici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "MarjUygun"]].head(5), use_container_width=True)
+            ofi_top = kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "MarjUygun"]].head(5).copy()
+            st.dataframe(ofi_top, use_container_width=True)
         with colB:
             st.subheader("En Dusuk OFI 5 (Satici Baskisi)")
-            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "MarjUygun"]].head(5), use_container_width=True)
+            ofi_bot = kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "MarjUygun"]].head(5).copy()
+            st.dataframe(ofi_bot, use_container_width=True)
         if st.session_state.performans:
             st.markdown("---")
             st.subheader("F) Performans Gecmisi (Kapali Pozisyonlar)")
@@ -1715,6 +1715,7 @@ with t4:
         dfr = pd.DataFrame(sat)
         if sd:
             dfr = dfr[dfr["Katilim"] == "EVET"]
+        dfr = dfr.copy()
         def r_marj2(v):
             if "MARJ UYGUN" in str(v):
                 return 'background-color:#1b5e20;color:white;font-weight:bold;'
@@ -1732,18 +1733,21 @@ with t4:
                 return 'background-color:#e65100;color:white;'
             return 'background-color:#b71c1c;color:white;'
         st.markdown("### A) Marj Uygun Hisseler (15dk bar bazli %" + str(HEDEF_GUN_ICI_MIN) + "-" + str(HEDEF_GUN_ICI_MAX) + ")")
-        marj_ok = dfr[dfr["MarjUygun"] == "MARJ UYGUN"]
+        marj_ok = dfr[dfr["MarjUygun"] == "MARJ UYGUN"].copy()
         if not marj_ok.empty:
             st.success(str(len(marj_ok)) + " hisse marj uygun")
-            st.dataframe(marj_ok[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSinyal", "KaliteUygun", "NK_Skor"]].sort_values("HedefYuzde", ascending=False), use_container_width=True, height=350)
+            marj_ok_goster = marj_ok[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSinyal", "KaliteUygun", "NK_Skor"]].copy()
+            marj_ok_goster = marj_ok_goster.sort_values("HedefYuzde", ascending=False).reset_index(drop=True)
+            st.dataframe(marj_ok_goster, use_container_width=True, height=350)
         else:
             st.info("Marj uygun hisse yok.")
         st.markdown("---")
         st.markdown("### B) Marj Uygun + Kalite Yuksek")
-        kalite_marj = dfr[(dfr["MarjUygun"] == "MARJ UYGUN") & (dfr["KaliteUygun"] == "KALITE YUKSEK")]
+        kalite_marj = dfr[(dfr["MarjUygun"] == "MARJ UYGUN") & (dfr["KaliteUygun"] == "KALITE YUKSEK")].copy()
         if not kalite_marj.empty:
             st.success(str(len(kalite_marj)) + " hisse marj uygun + kalite yuksek")
-            st.dataframe(kalite_marj[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "RO", "KararSinyal", "NK_Skor", "HibritSkor"]], use_container_width=True, height=350)
+            km_goster = kalite_marj[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "RO", "KararSinyal", "NK_Skor", "HibritSkor"]].copy()
+            st.dataframe(km_goster, use_container_width=True, height=350)
         else:
             st.info("Bu kombinasyonda hisse yok.")
         st.markdown("---")
@@ -1753,11 +1757,22 @@ with t4:
                 return float(x) > 1.5
             except Exception:
                 return False
-        rdf = dfr[dfr["RO"].apply(rok)]
+        rdf = dfr[dfr["RO"].apply(rok)].copy()
         if not rdf.empty:
-            st.dataframe(rdf[["Hisse", "Fiyat", "SL", "Hedef", "HedefYuzde", "RO", "Sinyal", "KararSinyal", "MarjUygun", "KaliteUygun", "NK_Skor", "HibritSkor"]].style.map(r_marj2, subset=["MarjUygun"]).map(r_kalite2, subset=["KaliteUygun"]), use_container_width=True, height=450)
+            rdf_goster = rdf[["Hisse", "Fiyat", "SL", "Hedef", "HedefYuzde", "RO", "Sinyal", "KararSinyal", "MarjUygun", "KaliteUygun", "NK_Skor", "HibritSkor"]].copy()
+            st.dataframe(rdf_goster.style.map(r_marj2, subset=["MarjUygun"]).map(r_kalite2, subset=["KaliteUygun"]), use_container_width=True, height=450)
         else:
             st.info("R/O > 1.5 olan hisse yok.")
+        st.markdown("---")
+        st.markdown("### D) Marj Uygun Hisseler Tablo Ozeti")
+        hedef_uygun_df = dfr[(dfr["HedefYuzde"] >= HEDEF_GUN_ICI_MIN) & (dfr["HedefYuzde"] <= HEDEF_OVERNIGHT_MAX + 0.5)].copy()
+        if not hedef_uygun_df.empty:
+            st.info(str(len(hedef_uygun_df)) + " hisse genis marj araliginda (%" + str(HEDEF_GUN_ICI_MIN) + " - %" + str(HEDEF_OVERNIGHT_MAX) + ")")
+            hu_goster = hedef_uygun_df[["Hisse", "Fiyat", "Hedef", "HedefYuzde", "SL", "SLYuzde", "RO", "KararSinyal", "HedefUygun" if "HedefUygun" in hedef_uygun_df.columns else "MarjUygun"]].copy()
+            hu_goster = hu_goster.sort_values("HedefYuzde", ascending=False).reset_index(drop=True)
+            st.dataframe(hu_goster, use_container_width=True, height=400)
+        else:
+            st.info("Genis marj araliginda hisse yok.")
     else:
         st.warning("Veri yok.")
 
@@ -1768,6 +1783,7 @@ with t5:
         odf = pd.DataFrame(onc)
         if sd:
             odf = odf[odf["Hisse"].apply(lambda x: (x + ".IS") in ks)]
+        odf = odf.copy()
         odf = odf.sort_values(by="GapSkor", ascending=False).reset_index(drop=True)
         def ron(v):
             if "GECE TASI GUCLU" in str(v):
@@ -1797,15 +1813,24 @@ with t5:
         st.dataframe(odf.style.map(ron, subset=["Overnight"]).map(rg, subset=["GapYon"]).map(r_ov_marj, subset=["OvernightMarjUygun"]), use_container_width=True, height=450)
         st.markdown("---")
         st.subheader("Gecenin En Guclu 10")
-        st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "OvernightHedefMarj", "OvernightHedefFiyat", "OvernightSLFiyat", "OvernightRO", "OvernightMarjUygun", "KER", "CHOP"]], use_container_width=True)
+        top10_onc = odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "OvernightHedefMarj", "OvernightHedefFiyat", "OvernightSLFiyat", "OvernightRO", "OvernightMarjUygun", "KER", "CHOP"]].copy()
+        st.dataframe(top10_onc, use_container_width=True)
         st.markdown("---")
         st.subheader("Overnight Marj Uygun (15dk bar bazli %3-5)")
-        ov_uygun = odf[odf["OvernightMarjUygun"] == "OVERNIGHT UYGUN"]
+        ov_uygun = odf[odf["OvernightMarjUygun"] == "OVERNIGHT UYGUN"].copy()
         if not ov_uygun.empty:
             st.success(str(len(ov_uygun)) + " hisse overnight marj uygun")
-            st.dataframe(ov_uygun[["Hisse", "Kapanis", "GapSkor", "Overnight", "OvernightHedefMarj", "OvernightHedefFiyat", "OvernightSLFiyat", "OvernightRO", "KER", "CHOP"]], use_container_width=True, height=350)
+            ov_uygun_goster = ov_uygun[["Hisse", "Kapanis", "GapSkor", "Overnight", "OvernightHedefMarj", "OvernightHedefFiyat", "OvernightSLFiyat", "OvernightRO", "KER", "CHOP"]].copy()
+            st.dataframe(ov_uygun_goster, use_container_width=True, height=350)
         else:
             st.info("Overnight hedef marji uygun hisse yok.")
+        st.markdown("---")
+        st.subheader("Overnight Hedef Marj Dagilimi")
+        ov1, ov2, ov3, ov4 = st.columns(4)
+        ov1.metric("Toplam Sinyal", len(odf))
+        ov2.metric("GECE TASI", len(odf[odf["Overnight"] == "GECE TASI"]))
+        ov3.metric("ZAYIF TASI", len(odf[odf["Overnight"] == "ZAYIF TASI"]))
+        ov4.metric("Marj Uygun", len(ov_uygun))
         st.markdown("---")
         if st.button("GECE TASI Sinyallerini Telegram'a Gonder"):
             mesaj = "<b>BIST Gece Tasi Sinyalleri</b>\n\n"
@@ -1849,7 +1874,7 @@ with t5:
             else:
                 st.warning("Kaydedilecek sinyal yok.")
     else:
-        st.warning("Veri yok.")
+        st.warning("Veri yok.") 
 
 with t6:
     st.subheader("Finansal Haberler (Paratic RSS)")
@@ -1902,24 +1927,31 @@ with t7:
             if "NEGATIF" in str(v):
                 return 'background-color:#c62828;color:white;'
             return 'background-color:#e65100;color:white;'
-        goster = ddf[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "LSTM_Yon", "LSTM_Guven", "NLP_Skor", "NLP_Haber", "RL_Q", "RL_Sharpe", "GNN_Manip", "GAN_VaR", "KararSinyal"]]
+        goster = ddf[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "LSTM_Yon", "LSTM_Guven", "NLP_Skor", "NLP_Haber", "RL_Q", "RL_Sharpe", "GNN_Manip", "GAN_VaR", "KararSinyal"]].copy()
         st.dataframe(goster.style.map(rh, subset=["HibritSeviye"]), use_container_width=True, height=500)
         st.markdown("---")
         colA, colB = st.columns(2)
         with colA:
             st.subheader("LSTM En Yuksek Tahmin 5")
-            st.dataframe(ddf.sort_values("LSTM_Yon", ascending=False)[["Hisse", "LSTM_Yon", "LSTM_Guven", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            lstm_top = ddf.sort_values("LSTM_Yon", ascending=False)[["Hisse", "LSTM_Yon", "LSTM_Guven", "HibritSkor", "Fiyat"]].head(5).copy()
+            st.dataframe(lstm_top, use_container_width=True)
             st.subheader("NLP Haber Skoru En Yuksek 5")
-            st.dataframe(ddf[ddf["NLP_Haber"] > 0].sort_values("NLP_Skor", ascending=False)[["Hisse", "NLP_Skor", "NLP_Haber", "HibritSkor"]].head(5), use_container_width=True)
+            nlp_df = ddf[ddf["NLP_Haber"] > 0].copy()
+            nlp_top = nlp_df.sort_values("NLP_Skor", ascending=False)[["Hisse", "NLP_Skor", "NLP_Haber", "HibritSkor"]].head(5).copy()
+            st.dataframe(nlp_top, use_container_width=True)
             st.subheader("Pekistirmeli Ogrenme En Yuksek 5")
-            st.dataframe(ddf.sort_values("RL_Q", ascending=False)[["Hisse", "RL_Q", "RL_Sharpe", "HibritSkor"]].head(5), use_container_width=True)
+            rl_top = ddf.sort_values("RL_Q", ascending=False)[["Hisse", "RL_Q", "RL_Sharpe", "HibritSkor"]].head(5).copy()
+            st.dataframe(rl_top, use_container_width=True)
         with colB:
             st.subheader("Manipulasyon Riski Yuksek 5")
-            st.dataframe(ddf.sort_values("GNN_Manip", ascending=False)[["Hisse", "GNN_Manip", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            gnn_top = ddf.sort_values("GNN_Manip", ascending=False)[["Hisse", "GNN_Manip", "HibritSkor", "Fiyat"]].head(5).copy()
+            st.dataframe(gnn_top, use_container_width=True)
             st.subheader("GAN Risk En Dusuk 5 (Guvenli)")
-            st.dataframe(ddf.sort_values("GAN_VaR", ascending=True)[["Hisse", "GAN_VaR", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
+            gan_top = ddf.sort_values("GAN_VaR", ascending=True)[["Hisse", "GAN_VaR", "HibritSkor", "Fiyat"]].head(5).copy()
+            st.dataframe(gan_top, use_container_width=True)
             st.subheader("En Yuksek Hibrit Skor 10")
-            st.dataframe(ddf.head(10)[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "KararSinyal"]], use_container_width=True)
+            hibrit_top = ddf.head(10)[["Hisse", "Fiyat", "HibritSkor", "HibritSeviye", "KararSinyal"]].copy()
+            st.dataframe(hibrit_top, use_container_width=True)
         st.markdown("---")
         st.markdown("### Derin Teknoloji Ne Anlatiyor?")
         st.markdown("""
