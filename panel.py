@@ -221,7 +221,6 @@ def atr_f(h, l, c, p=14):
     return tr.rolling(p).mean() 
 
 def kaufman_efficiency_ratio(seri, periyot=20):
-    """KER - Trend kalitesi olcumu. 0-1 arasi. Yuksek = guclu trend."""
     if len(seri) < periyot + 1:
         return 0.0
     s = seri.tail(periyot + 1).values
@@ -234,7 +233,6 @@ def kaufman_efficiency_ratio(seri, periyot=20):
 
 
 def choppiness_index(high, low, close, periyot=14):
-    """CHOP - Yatay bant tespiti. 0-100. 61.8+ = yatay, 38.2- = trend."""
     if len(close) < periyot + 1:
         return 50.0
     tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
@@ -248,7 +246,6 @@ def choppiness_index(high, low, close, periyot=14):
 
 
 def parkinson_volatility(high, low, periyot=20):
-    """Parkinson - High/Low bazli volatilite. Standart sapmadan daha hassas."""
     if len(high) < periyot:
         return 0.0
     h = high.tail(periyot).values
@@ -261,7 +258,6 @@ def parkinson_volatility(high, low, periyot=20):
 
 
 def garman_klass_volatility(open_p, high, low, close, periyot=20):
-    """Garman-Klass - OHLC tam kullanim. Kurumsal standart."""
     if len(close) < periyot:
         return 0.0
     o = open_p.tail(periyot).values
@@ -278,7 +274,6 @@ def garman_klass_volatility(open_p, high, low, close, periyot=20):
 
 
 def kyle_lambda(close, hacim, periyot=20):
-    """Kyle Lambda - Likidite olcumu. Dusuk = iyi likidite."""
     if len(close) < periyot + 1:
         return 0.0
     ret = close.pct_change().tail(periyot).abs().values
@@ -290,7 +285,6 @@ def kyle_lambda(close, hacim, periyot=20):
 
 
 def shannon_entropy(seri, periyot=20, bins=5):
-    """Shannon Entropy - Rastgelelik olcumu. Dusuk = ongorulebilir."""
     if len(seri) < periyot:
         return 0.0
     s = seri.tail(periyot).values
@@ -307,7 +301,6 @@ def shannon_entropy(seri, periyot=20, bins=5):
 
 
 def kriter_degerlendir(ker, chop, parkinson, gk, kyle, entropy):
-    """6 non-k lise kriterin gecilip gecilmedigini kontrol eder."""
     sonuc = []
     ker_ok = ker >= 0.55
     chop_ok = chop <= 45
@@ -336,7 +329,6 @@ def kriter_degerlendir(ker, chop, parkinson, gk, kyle, entropy):
 
 
 def non_klise_skor(ker, chop, parkinson, gk, kyle, entropy):
-    """6 metrigi tek skora donusturur (0-100)."""
     sk = 0
     sk += ker * 25
     sk += (100 - chop) * 0.20
@@ -475,8 +467,7 @@ def karar_motoru(guc, rsi_d, macd_h, hacim, vol_rej, ofi, garch_v, t15, g15, tre
         sinyal = "BEKLE"
         renk = "#e65100"
         neden = "Kararsiz"
-    return round(sk, 1), sinyal, renk, neden
-
+    return round(sk, 1), sinyal, renk, neden 
 
 POZ_KELIMELER = ["yukselis", "artis", "rekor", "kar", "buyume", "guclu", "pozitif", "kazanc", "ihale", "anlasma", "yatirim", "genisleme", "hedef", "basari", "onay", "kabul", "sozlesme", "ortaklik", "siparis", "temettu", "prim"]
 NEG_KELIMELER = ["dusus", "azalis", "zarar", "kriz", "iflas", "kayip", "zayif", "negatif", "risk", "borc", "ceza", "sorusturma", "dava", "konkordato", "temerrut", "iptal", "durdurma", "uyari", "not indirimi", "satis baskisi"]
@@ -741,9 +732,11 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         "Getiri": f"%{gd:.2f}",
         "Hacim": f"{hr:.2f}x",
         "Fiyat": f"{sf:.2f} TL",
+        "FiyatRaw": sf,
         "SL": f"{sl} TL",
         "Hedef": f"{hd} TL",
         "RO": f"{ro:.2f}",
+        "RORaw": ro,
         "Tahmin": tp,
         "Tahmin15": y15,
         "Guven15": f"%{g15}",
@@ -799,15 +792,35 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
         gs -= 5
     elif r < 35:
         gs += 8
+    if ker >= 0.5:
+        gs += 5
+    elif ker < 0.25:
+        gs -= 5
+    if chop <= 45:
+        gs += 4
+    elif chop >= 62:
+        gs -= 4
+    if kyle <= 0.8:
+        gs += 4
+    elif kyle > 2.0:
+        gs -= 4
+    if entropy <= 2.0:
+        gs += 3
+    elif entropy > 2.7:
+        gs -= 3
     gs = max(0, min(100, gs))
-    if gs >= 70:
+    if gs >= 75:
         os = "GECE TASI"
         bg = "YUKARI"
         tg = round(ay * 0.6, 2)
-    elif gs >= 55:
+    elif gs >= 60:
+        os = "GECE TASI"
+        bg = "YUKARI"
+        tg = round(ay * 0.4, 2)
+    elif gs >= 50:
         os = "ZAYIF TASI"
         bg = "NOTR"
-        tg = round(ay * 0.3, 2)
+        tg = round(ay * 0.2, 2)
     elif gs < 35:
         os = "GECE TASIMA"
         bg = "ASAGI"
@@ -825,62 +838,91 @@ def hesapla(hs, v, kset, tum_veriler, haber_listesi):
     onc = {
         "Hisse": hs,
         "Kapanis": f"{sf:.2f} TL",
+        "KapanisRaw": sf,
         "GapSkor": round(gs, 1),
         "Overnight": os,
         "GapYon": bg,
         "Gap%": f"%{tg}",
-        "Yorum": yorum_on
+        "GapPctRaw": tg,
+        "Yorum": yorum_on,
+        "KER": ker,
+        "CHOP": chop,
+        "Kyle": kyle,
+        "Entropy": entropy,
+        "RSI": f"{r:.1f}",
+        "Hacim": f"{hr:.2f}x",
+        "VolRejim": vrej
     }
     return ana, onc
 
 
 def en_iyi_firsat_bul(kdf):
-    """7 kriteri kontrol edip gunun en iyi firsatini bulur."""
+    """Gunun en iyi firsatini KararSkoru bazli bulur (En Iyi 5 ile ayni kriter)."""
     if kdf.empty:
         return None
-    en_iyi = None
-    en_yuksek_puan = -1
-    for _, r in kdf.iterrows():
-        puan = 0
-        if r['KararSkor'] >= 70:
-            puan += 3
-        elif r['KararSkor'] >= 60:
-            puan += 1
-        if r['KER'] >= 0.55:
-            puan += 2
-        if r['CHOP'] <= 45:
-            puan += 2
-        if r['Kyle'] <= 1.5:
-            puan += 1
-        if r['Entropy'] <= 2.5:
-            puan += 1
-        try:
-            if float(r['RO']) >= 1.5:
-                puan += 2
-        except Exception:
-            pass
-        if r['GNN_Manip'] <= 50:
-            puan += 1
-        if r['NK_Skor'] >= 60:
-            puan += 1
-        if puan > en_yuksek_puan:
-            en_yuksek_puan = puan
-            en_iyi = r
-    if en_iyi is None:
+    uygun = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.5)]
+    if uygun.empty:
         return None
-    if en_yuksek_puan >= 12:
+    uygun = uygun.sort_values("KararSkor", ascending=False).reset_index(drop=True)
+    en_iyi = uygun.iloc[0]
+    puan = 0
+    if en_iyi['KararSkor'] >= 75:
+        puan += 4
+    elif en_iyi['KararSkor'] >= 65:
+        puan += 3
+    else:
+        puan += 2
+    if en_iyi['KER'] >= 0.55:
+        puan += 2
+    if en_iyi['CHOP'] <= 45:
+        puan += 2
+    if en_iyi['Kyle'] <= 1.5:
+        puan += 1
+    if en_iyi['Entropy'] <= 2.5:
+        puan += 1
+    if en_iyi['RORaw'] >= 1.5:
+        puan += 2
+    if en_iyi['GNN_Manip'] <= 50:
+        puan += 1
+    if en_iyi['NK_Skor'] >= 60:
+        puan += 1
+    if puan >= 12:
         karar = "GUCLU AL"
         renk = "#1b5e20"
-    elif en_yuksek_puan >= 9:
+    elif puan >= 9:
         karar = "AL"
         renk = "#2e7d32"
-    elif en_yuksek_puan >= 6:
+    elif puan >= 6:
         karar = "BEKLE"
         renk = "#e65100"
     else:
         karar = "RISKLI"
         renk = "#b71c1c"
-    return {"hisse": en_iyi, "puan": en_yuksek_puan, "karar": karar, "renk": renk} 
+    return {"hisse": en_iyi, "puan": puan, "karar": karar, "renk": renk}
+
+
+def gecenin_en_iyisi_bul(odf):
+    """Overnight icin gecenin en iyi firsatini bulur (GapSkor bazli)."""
+    if odf.empty:
+        return None
+    uygun = odf[odf["Overnight"].isin(["GECE TASI", "ZAYIF TASI"])]
+    if uygun.empty:
+        return None
+    uygun = uygun.sort_values("GapSkor", ascending=False).reset_index(drop=True)
+    en_iyi = uygun.iloc[0]
+    if en_iyi['GapSkor'] >= 75:
+        karar = "GECE TASI GUCLU"
+        renk = "#1b5e20"
+        aciklama = "Kapanis zirvede, yarin acilis gap pozitif bekleniyor"
+    elif en_iyi['GapSkor'] >= 65:
+        karar = "GECE TASI"
+        renk = "#2e7d32"
+        aciklama = "Guclu kapanis, gap beklentisi orta-yuksek"
+    else:
+        karar = "ZAYIF TASI"
+        renk = "#e65100"
+        aciklama = "Zayif kapanis, gap beklentisi belirsiz"
+    return {"hisse": en_iyi, "karar": karar, "renk": renk, "aciklama": aciklama} 
 
 for k, v in [('g', False), ('s', 0), ('l', '-'), ('m', False), ('haber', []), ('gecmis', {}), ('son_gonderim', '-')]:
     if k not in st.session_state:
@@ -904,8 +946,8 @@ pk = piyasa_acik_mi()
 if pk:
     st_autorefresh(interval=60000, key="y")
 
-st.title("BIST Pro Terminali - Deep Tech + Non-Klise Metrik")
-st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | 6 Non-Klise Metrik Aktif")
+st.title("BIST Pro Terminali - Deep Tech + Non-Klise + Overnight")
+st.caption("Son: " + turkiye_saati().strftime('%Y-%m-%d %H:%M:%S') + " | 15 dk Gecikmeli | 6 Non-Klise Metrik + Deep Tech Aktif")
 
 if pk:
     st.success("PIYASA ACIK")
@@ -959,8 +1001,9 @@ if mb:
     st.session_state.m = True
     st.session_state.s += 1
     st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
-    st.session_state.haber = [] 
-    st.rerun() 
+    st.session_state.haber = []
+    st.rerun()
+
 
 # ==================== GUNUN EN IYI FIRSATI ====================
 if sat:
@@ -980,7 +1023,7 @@ if sat:
             '<h1 style="margin:0; color:white; font-size:42px;">' + str(eh["Hisse"]) + ' &nbsp;&nbsp; <span style="background:rgba(255,255,255,0.2); padding:8px 20px; border-radius:8px;">' + karar_txt + '</span></h1>'
             '<p style="font-size:22px; margin:15px 0 5px 0;"><b>Karar Skoru:</b> ' + str(eh["KararSkor"]) + '/100 &nbsp; | &nbsp; <b>Fiyat:</b> ' + str(eh["Fiyat"]) + '</p>'
             '<p style="font-size:20px; margin:5px 0;"><b>Giris:</b> ' + str(eh["Fiyat"]) + ' &nbsp; <b>Stop-Loss:</b> ' + str(eh["SL"]) + ' &nbsp; <b>Hedef:</b> ' + str(eh["Hedef"]) + ' &nbsp; <b>R/O:</b> ' + str(eh["RO"]) + '</p>'
-            '<p style="font-size:18px; margin:10px 0 0 0;">7 Kriter Skoru: ' + str(puan) + '/13</p>'
+            '<p style="font-size:18px; margin:10px 0 0 0;">Kriter Skoru: ' + str(puan) + '/13</p>'
             '<p style="font-size:16px; margin:5px 0 0 0; font-style:italic;">' + str(eh["KararNeden"]) + '</p>'
             '</div>', unsafe_allow_html=True)
         st.markdown("### 6 Non-Klise Metrik Kontrolu")
@@ -1021,15 +1064,48 @@ if sat:
             else:
                 st.warning("Ent: " + str(eh["Entropy"]) + " ⚠️")
             st.caption("Ongorulebilirlik")
-        st.markdown("**Non-Klise Skor:** " + str(eh["NK_Skor"]) + "/100 | **Gecen Kriter:** " + str(eh["NK_Gecen"]) + "/6 | **Seviye:** " + str(eh["NK_Seviye"]))
-        st.markdown("---")
+        st.markdown("**Non-Klise Skor:** " + str(eh["NK_Skor"]) + "/100 | **Gecen:** " + str(eh["NK_Gecen"]) + "/6 | **Seviye:** " + str(eh["NK_Seviye"]) + " | **Deep Tech:** " + str(eh["HibritSeviye"]) + " (" + str(eh["HibritSkor"]) + ")")
 
+
+# ==================== GECENIN EN IYI FIRSATI ====================
+if onc:
+    odf_ust = pd.DataFrame(onc)
+    if sd:
+        odf_ust = odf_ust[odf_ust["Hisse"].apply(lambda x: (x + ".IS") in ks)]
+    gece_sonuc = gecenin_en_iyisi_bul(odf_ust)
+    if gece_sonuc is not None:
+        gh = gece_sonuc["hisse"]
+        st.markdown("---")
+        st.markdown("## 🌙 GECENIN EN IYI FIRSATI")
+        kutu_renk_g = gece_sonuc["renk"]
+        karar_g = gece_sonuc["karar"]
+        st.markdown(
+            '<div style="background-color:' + kutu_renk_g + '; padding:25px; border-radius:15px; color:white; margin-bottom:20px;">'
+            '<h1 style="margin:0; color:white; font-size:42px;">' + str(gh["Hisse"]) + ' &nbsp;&nbsp; <span style="background:rgba(255,255,255,0.2); padding:8px 20px; border-radius:8px;">' + karar_g + '</span></h1>'
+            '<p style="font-size:22px; margin:15px 0 5px 0;"><b>Gap Skoru:</b> ' + str(gh["GapSkor"]) + '/100 &nbsp; | &nbsp; <b>Kapanis:</b> ' + str(gh["Kapanis"]) + '</p>'
+            '<p style="font-size:20px; margin:5px 0;"><b>Beklenen Gap:</b> ' + str(gh["GapYon"]) + ' &nbsp; <b>Tahmini:</b> ' + str(gh["Gap%"]) + ' &nbsp; <b>Kapanis Pozisyonu:</b> ' + str(gh["Yorum"]) + '</p>'
+            '<p style="font-size:16px; margin:10px 0 0 0; font-style:italic;">' + str(gece_sonuc["aciklama"]) + '</p>'
+            '</div>', unsafe_allow_html=True)
+        gcol1, gcol2, gcol3, gcol4, gcol5 = st.columns(5)
+        with gcol1:
+            st.metric("RSI", str(gh["RSI"]))
+        with gcol2:
+            st.metric("Hacim", str(gh["Hacim"]))
+        with gcol3:
+            st.metric("Vol Rejim", str(gh["VolRejim"]))
+        with gcol4:
+            st.metric("KER", str(gh["KER"]))
+        with gcol5:
+            st.metric("CHOP", str(gh["CHOP"]))
+        st.caption("Strateji: Kapanisa yakin al, ertesi gun acilista gap gercekleşince sat.") 
+
+st.markdown("---")
 
 t1, t2, t3, t4, t5, t6, t7 = st.tabs(["Karar", "Trend", "Mum", "Risk", "Overnight", "Haber & Pairs", "Derin Teknoloji"])
 
 with t1:
     st.subheader("Karar Motoru - Tum Metrikler Birlesik Sinyal")
-    st.caption("9 klasik metrik + 6 non-klise metrik + Derin Teknoloji birlestirilir.")
+    st.caption("9 klasik + 6 non-klise + Derin Teknoloji birlestirilir.")
     if not sat:
         st.warning("Veri yok.")
     else:
@@ -1054,12 +1130,7 @@ with t1:
                 '</div>', unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("B) Bugunun En Iyi 5 Firsati")
-        def ro_ok(x):
-            try:
-                return float(x) > 1.5
-            except Exception:
-                return False
-        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RO"].apply(ro_ok))].head(5)
+        firsatlar = kdf[(kdf["KararSkor"] >= 60) & (kdf["RORaw"] >= 1.5)].head(5)
         if not firsatlar.empty:
             kart_cols = st.columns(min(5, len(firsatlar)))
             for i in range(len(firsatlar)):
@@ -1144,7 +1215,15 @@ with t1:
         st.markdown("---")
         st.subheader("6 Non-Klise Metrik Tablosu")
         nk_goster = kdf[["Hisse", "KER", "CHOP", "Parkinson", "GarmanKlass", "Kyle", "Entropy", "NK_Skor", "NK_Seviye", "KararSinyal"]].sort_values("NK_Skor", ascending=False)
-        st.dataframe(nk_goster, use_container_width=True, height=400) 
+        st.dataframe(nk_goster, use_container_width=True, height=400)
+        st.markdown("---")
+        colA, colB = st.columns(2)
+        with colA:
+            st.subheader("En Yuksek OFI 5 (Alici Baskisi)")
+            st.dataframe(kdf.sort_values("OFI", ascending=False)[["Hisse", "OFI", "KararSkor", "KararSinyal", "NK_Skor"]].head(5), use_container_width=True)
+        with colB:
+            st.subheader("En Dusuk OFI 5 (Satici Baskisi)")
+            st.dataframe(kdf.sort_values("OFI", ascending=True)[["Hisse", "OFI", "KararSkor", "KararSinyal", "NK_Skor"]].head(5), use_container_width=True)
 
 with t2:
     st.subheader("Trend Matrisi")
@@ -1239,13 +1318,15 @@ with t4:
 
 with t5:
     st.subheader("Overnight Gap Stratejisi")
-    st.info("Kapanista al, acilista sat")
+    st.info("Kapanista al, acilista sat | Gap skoru 6 non-klise metrik ile guclendirildi")
     if onc:
         odf = pd.DataFrame(onc)
         if sd:
             odf = odf[odf["Hisse"].apply(lambda x: (x + ".IS") in ks)]
         odf = odf.sort_values(by="GapSkor", ascending=False).reset_index(drop=True)
         def ron(v):
+            if "GECE TASI GUCLU" in str(v):
+                return 'background-color:#0d3d12;color:white;font-weight:bold;'
             if "GECE TASI" in str(v):
                 return 'background-color:#1b5e20;color:white;font-weight:bold;'
             if "ZAYIF TASI" in str(v):
@@ -1262,7 +1343,7 @@ with t5:
         st.dataframe(odf.style.map(ron, subset=["Overnight"]).map(rg, subset=["GapYon"]), use_container_width=True, height=450)
         st.markdown("---")
         st.subheader("En Guclu 10")
-        st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%"]], use_container_width=True)
+        st.dataframe(odf.head(10)[["Hisse", "Kapanis", "GapSkor", "Overnight", "GapYon", "Gap%", "KER", "CHOP"]], use_container_width=True)
         st.markdown("---")
         if st.button("GECE TASI Sinyallerini Telegram'a Gonder"):
             mesaj = "<b>BIST Gece Tasi Sinyalleri</b>\n\n"
@@ -1336,7 +1417,7 @@ with t7:
             st.dataframe(ddf.sort_values("LSTM_Yon", ascending=False)[["Hisse", "LSTM_Yon", "LSTM_Guven", "HibritSkor", "Fiyat"]].head(5), use_container_width=True)
             st.subheader("NLP Haber Skoru En Yuksek 5")
             st.dataframe(ddf[ddf["NLP_Haber"] > 0].sort_values("NLP_Skor", ascending=False)[["Hisse", "NLP_Skor", "NLP_Haber", "HibritSkor"]].head(5), use_container_width=True)
-            st.subheader("Pekiştirmeli Ogrenme En Yuksek 5")
+            st.subheader("Pekistirmeli Ogrenme En Yuksek 5")
             st.dataframe(ddf.sort_values("RL_Q", ascending=False)[["Hisse", "RL_Q", "RL_Sharpe", "HibritSkor"]].head(5), use_container_width=True)
         with colB:
             st.subheader("Manipulasyon Riski Yuksek 5")
@@ -1366,7 +1447,14 @@ with t7:
 - **Garman-Klass Vol**: OHLC tam kullanim
 - **Kyle Lambda**: Likidite olcumu (dusuk = iyi)
 - **Entropy**: Ongorulebilirlik (dusuk = ongorulebilir)
+
+### Overnight Gap Stratejisi
+- **GapSkor 75+**: GECE TASI GUCLU - en yuksek olasilikli gap
+- **GapSkor 60-74**: GECE TASI - orta-yuksek olasilikli gap
+- **GapSkor 50-59**: ZAYIF TASI - belirsiz
+- **GapSkor 35-49**: BEKLE - islem yapma
+- **GapSkor 0-34**: GECE TASIMA - gap asagi
         """)
 
 st.markdown("---")
-st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.")
+st.caption("15 dk gecikmeli. Yatirim tavsiyesi degildir.") 
