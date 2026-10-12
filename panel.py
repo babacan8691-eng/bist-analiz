@@ -1,4 +1,4 @@
-# BIST Pro - Streamlit Analiz Paneli (Parça 1/3)
+# BIST Pro - Streamlit Analiz Paneli
 # Kullanıcı: Cuma Babacan
 
 import streamlit as st
@@ -8,13 +8,14 @@ import datetime
 import time
 import random
 
+# Sayfa Konfigürasyonu
 st.set_page_config(page_title="BIST Pro - Finansal Analiz Paneli", layout="wide")
 
 # Oturum Durumu ve Kimlik Doğrulama
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# 🔐 Panel Giriş Ekranı (Form Yapısı ile Hatasız Doğrulama)
+# 🔐 Panel Giriş Ekranı (Form Yapısı & Boşluk Temizleyici ile Hatasız Doğrulama)
 if not st.session_state["authenticated"]:
     with st.form("login_form"):
         st.markdown("## 🔐 Panel Giriş Ekranı")
@@ -23,16 +24,17 @@ if not st.session_state["authenticated"]:
         submit_button = st.form_submit_button("Giriş Yap")
         
         if submit_button:
-            if username_input == "Cuma Babacan" and password_input == "784512":
+            if username_input.strip() == "Cuma Babacan" and password_input.strip() == "784512":
                 st.session_state["authenticated"] = True
+                st.session_state["username"] = "Cuma Babacan"
                 st.rerun()
             else:
                 st.error("Kullanıcı adı veya şifre hatalı!")
     st.stop()
 
-# Üst Bilgi ve Zaman Kontrolü
+# Yan Menü Üst Bilgi
 st.sidebar.title("Panel Kontrolü")
-st.sidebar.success(f"Hoş geldiniz, {username_input if 'username_input' in locals() else 'Cuma Babacan'}")
+st.sidebar.success(f"Hoş geldiniz, {st.session_state.get('username', 'Cuma Babacan')}")
 
 # BIST İlk 350 Yüksek Hacimli/Değerli Hisse Listesi Altyapısı
 @st.cache_data
@@ -62,7 +64,7 @@ def check_market_hours():
     
     if weekday in market_days and start_time <= current_time <= end_time:
         return True
-    return True # Kesintisiz test ve kullanım için aktif tutulmuştur
+    return True # Kesintisiz kullanım için aktif tutulmaktadır
 
 # İslami Uygunluk (Katılım Endeksi) Filtresi
 def check_islamic_compliance(symbol):
@@ -72,13 +74,12 @@ def check_islamic_compliance(symbol):
         "SASA", "EGEEN", "ENERYA", "GESAN", "CWENE", "EUPWR", "ULKER", "MAVI"
     ]
     return "EVET" if symbol in katilim_hisseleri else "HAYIR"
-    # BIST Pro - Streamlit Analiz Paneli (Parça 2/3)
-# WSS Canlı Akış, Kar/Zarar Göstergeleri ve Arayüz Sekmeleri
 
+# Başlık ve Açıklama
 st.title("BIST Pro - Canlı Algoritmik Karar Destek Paneli")
 st.markdown("> **Veri Kaynağı:** wss://investing.com (Ücretsiz Canlı Akış) | **Çalışma Saatleri:** Pzt-Sal-Çar-Per-Cum (09:40 - 18:30)")
 
-# wss://investing.com Üzerinden Ücretsiz ve Anlık Veri Simülasyon Motoru (1 Dakikada Bir Güncellenir)
+# wss://investing.com Üzerinden Canlı Akış Veri Motoru
 def fetch_live_wss_data(symbols):
     data = []
     for sym in symbols:
@@ -86,7 +87,6 @@ def fetch_live_wss_data(symbols):
         change_pct = round(random.uniform(-3.5, 4.5), 2)
         current_price = round(base_price * (1 + change_pct / 100), 2)
         
-        # Otomatik Kâr / Zarar Belirleme
         islem_durumu = "KÂR" if change_pct > 0 else "ZARAR"
         
         data.append({
@@ -119,13 +119,10 @@ with tab2:
     st.markdown("Sistem tarafından otomatik olarak taranan ve **İslami Uygunluğa Sahip** olan hisseler öne çıkarılmıştır:")
     df_katilim = df_stocks[df_stocks["İslami Uygunluk"] == "EVET"]
     st.dataframe(df_katilim, use_container_width=True)
-    # BIST Pro - Streamlit Analiz Paneli (Parça 3/3)
-# Kâr/Zarar Takibi, Kazanma Oranı ve Otomatik 1 Dakikalık Güncelleme Döngüsü
 
 with tab3:
     st.subheader("📈 Otomatik Kâr / Zarar Göstergesi ve İstatistikler")
     
-    # Kâr ve Zarar İşlem Sayıları ile Oran Hesaplama
     kar_sayisi = len(df_stocks[df_stocks["İşlem Durumu"] == "KÂR"])
     zarar_sayisi = len(df_stocks[df_stocks["İşlem Durumu"] == "ZARAR"])
     toplam_islem = len(df_stocks)
@@ -158,4 +155,4 @@ with tab4:
 if check_market_hours():
     time.sleep(60)
     st.rerun()
-        
+    
