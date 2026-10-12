@@ -23,19 +23,16 @@ except ImportError:
 TELEGRAM_TOKEN = ""
 TELEGRAM_CHAT = ""
 
-# Hedef kar marjlari (15 dakika gecikmeli veriye gore)
 HEDEF_GUN_ICI_MIN = 2.0
 HEDEF_GUN_ICI_MAX = 3.5
 HEDEF_OVERNIGHT_MIN = 3.0
 HEDEF_OVERNIGHT_MAX = 5.0
 
-# 15 dakikalik bar bazli hedef marj katsayilari
 BAR_15DK_HEDEF_KATSAYI = 1.2
 BAR_15DK_SL_KATSAYI = 0.8
 OVERNIGHT_HEDEF_KATSAYI = 1.8
 OVERNIGHT_SL_KATSAYI = 1.0
 
-# GECIKME TELAFI PARAMETRELERI
 VERI_GECIKME_DAKIKA = 15
 EXTRAPOLATION_BAR_SAYISI = 3
 GECIKME_UYARI_ESIK = 1.0
@@ -45,7 +42,7 @@ st.set_page_config(page_title="BIST Pro", layout="wide")
 
 H = "THYAO,GARAN,ASELS,BIMAS,FROTO,KCHOL,SAHOL,CCOLA,HEKTS,BRISA,SASA,TUPRS,EREGL,SISE,TOASO,PGSUS,TAVHL,VESTL,ARCLK,DOHOL,EKGYO,GUBRF,ISCTR,KRDMD,MGROS,ODAS,PETKM,SOKM,TCELL,TTKOM,VAKBN,YKBNK,ZOREN,ALARK,AYGAZ,ENKAI,GESAN,GLYHO,KONTR,SMRTG,TUKAS,ULKER,AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ADESE,ADGYO,AEFES,AFYON,AGHOL,AGYO,AKENR,AKFGY,AKGRT,AKSEN,AKSUE,ALCTL,ALFAS,ALGYO,ALKIM,ANHYT,ANSGR,ARDYZ,ARENA,ARSAN,ASGYO,ASLAN,ATEKS,AVOD,AYEN,BAGFS,BANVT,BARMA,BERA,BEYAZ,BIENY,BINHO,BIOEN,BLACK,BRKVY,BRSAN,BRYAT,BURCE,BURVA,CATES,CEMAS,CEMTS,CIMSA,CLEBI,CRDFA,CRFSA,DAGHL,DAPGM,DARDL,DENGE,DERIM,DESA,DESPC,DGATE,DGGYO,DIRIT,DITAS,DMRGD,DMSAS,DNISI,DOAS,DOBUR,DURDO,DURKN,DYOBY,EBEBK,ECILC,ECZYT,EDATA,EDIP,EGEEN,EGSER,ENJSA,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUHOL,EUPWR,EUREN,FENER,FLAP,FONET,FORMT,FORTE,FRIGO,GARFA,GEDIK,GEDZA,GENIL,GENTS,GEREL,GIPTA,GLBMD,GLCVY,GLRYH,GMTAS,GOKNUR,GOLTS,GOODY,GOZDE,GRSEL,GSDDE,GSDHO,GSRAY,GUNDG,HALKB,HATEK,HDFGS,HEDEF,HKTM,HLGYO,HUBVC,HUNER,HURGZ,ICBCT,IDEAS,IHAAS,IHEVA,IHGZT,IHLAS,IHLGM,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISATR,ISBTR,ISDMR,ISFIN,ISGSY,ISGYO,ISKUR,ISMEN,ISYAT,ITTFH,IZFAS,IZMDC,JANTS,KAPLM,KAREL,KARSN,KARTN,KATMR,KAYSE,KBORU,KCAER,KENT,KERVT,KFEIN,KGYO,KIMMR,KLGYO,KLKIM,KLMSN,KLRHO,KLSYN,KNFRT,KONKA,KONYA,KORDS,KOZAA,KOZAL,KRDMA,KRDMB,KRGYO,KRONT,KRSTL,KRTEK,KSTUR,KUTPO,KUVVA,LIDER,LIDFA,LINK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAGEN,MAKIM,MAKTK,MANAS,MARKA,MARTI,MAVI,MEDTR,MEGAP,MEKAG,MERCN,MERIT,MERKO,METRO,MHRGY,MIATK,MNDRS,MNDTR,MOBTL,MOGAN,MPARK,MRGYO,MRSHL,MSGYO,MTRKS,MTRYO,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NTHOL,NUGYO,OFSYM,ONCSM,ORCAY,ORGE,ORMA,OSMEN,OSTIM,OTKAR,OTTO,OYAKC,OYAYO,OYLUM,OYYAT,OZGYO,OZKGY,OZRDN,OZSUB,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PATEK"
 
-K = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO"
+K = "AHGAZ,AKCNS,AKFYE,ALBRK,ARASE,ATAKP,AVPGY,AYDEM,BASGZ,BETAE,BUCIM,EGGUB,EGPRO,ENERY,GWIND,HTTBT,ASTOR,BMSTL,CVKMD,DOFRB,NETCD,RALYH,AKSA,KUYAS,ALKLC,EFOR,QUAGR,SARKY,BSOKE,CANTE,ASELS,TUPRS,BIMAS,FROTO,SISE,TOASO,TCELL,TTKOM,MGROS,SOKM,ULKER,AYGAZ,ENKAI,VESTL,ARCLK,PGSUS,TAVHL,ODAS,GESAN,KONTR,SMRTG,TUKAS,ZOREN,ALARK,HEKTS,BRISA,SASA,EREGL,GUBRF,PETKM,KRDMD,DOHOL,EKGYO,TKFEN,OTKAR,CIMSA,EGEEN,KORDS,BRSAN,TRGYO,ISGYO,ALGYO,GLYHO,BERA,KARSN,TTRAK,TMSN,ASGYO,KLGYO,LOGO,NETAS,VERUS,TATGD,PNSUT,BIENY,SUNTK,KERVT,YYAPI,KGYO" def turkiye_saati():
     return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=3)))
 
 
@@ -753,7 +750,7 @@ def macd_hesapla(g, kisa=12, uzun=26, sinyal=9):
         guc += 5
     else:
         guc -= 5
-    if rsi_d < 50 and rsi_d > 30:
+    if 30 < rsi_d < 50:
         guc += 5
     elif rsi_d > 70:
         guc -= 8
@@ -808,7 +805,7 @@ def hedef_ve_sl_hesapla(g, karar_sinyal, hib_skor, nk_skor, atr_carpan=1.2, sl_c
         return None
     atr = float(atr_f(g['High'], g['Low'], g['Close']).iloc[-1])
     fiyat = float(g['Close'].iloc[-1])
-    if fiyat <= 0 or atr <= 0:
+    if fiyat <= 0 or atr <= 0 or np.isnan(atr):
         return None
 
     kalite_bonus = (hib_skor - 50) * 0.02
@@ -951,6 +948,9 @@ def overnight_gap_hesapla(g, hib_skor, nk_skor):
     gap_skor = max(0, min(100, gap_skor))
 
     atr = float(atr_f(g['High'], g['Low'], g['Close']).iloc[-1])
+    if np.isnan(atr) or atr <= 0:
+        return None
+
     hedef_marj = (atr / kapanis) * 100 * OVERNIGHT_HEDEF_KATSAYI
     sl_marj = (atr / kapanis) * 100 * OVERNIGHT_SL_KATSAYI
 
@@ -987,7 +987,6 @@ def overnight_gap_hesapla(g, hib_skor, nk_skor):
         "OvernightMarjRenk": marj_renk,
     } def tam_analiz_yap(hv, basliklar=None):
     sonuc_listesi = []
-    hisse_listesi = [k.replace(".IS", "") for k in hv.keys()]
     emsaller = {k: v for k, v in hv.items()}
 
     for hisse_uz, g in hv.items():
@@ -1575,11 +1574,180 @@ with tab1:
     mevcut_riskli = [k for k in riskli_kolonlar if k in kdf.columns]
     st.dataframe(en_dusuk[mevcut_riskli], use_container_width=True)
 
-# --- TREND SEKMESI ---
+    st.subheader("Marj Uygunluk Tablosu (15dk Bar Bazli)")
+    marj_tablo = kdf[["Hisse", "Fiyat", "TahminiFiyat", "HedefYuzde",
+                      "KalanMarj", "SLYuzde", "MarjUygun", "KaliteUygun",
+                      "GecikmeUyari", "GunIciUygun", "OvernightUygun",
+                      "OvernightHedefMarj", "RO", "KararSinyal"]].sort_values(
+        "HedefYuzde", ascending=False
+    )
+    st.dataframe(marj_tablo, use_container_width=True)
+
+    st.subheader(f"Sadece Marj Uygun Hisseler (%{HEDEF_GUN_ICI_MIN}-{HEDEF_GUN_ICI_MAX})")
+    sadece_marj = kdf[kdf['MarjUygun'] == "MARJ UYGUN"]
+    if not sadece_marj.empty:
+        st.success(f"{len(sadece_marj)} hisse marj uygun")
+        st.dataframe(
+            sadece_marj[["Hisse", "Fiyat", "TahminiFiyat", "Hedef",
+                         "HedefYuzde", "KalanMarj", "SL", "SLYuzde",
+                         "RO", "KararSinyal", "KaliteUygun", "GecikmeUyari"]],
+            use_container_width=True
+        )
+    else:
+        st.info("Marj uygun hisse yok.")
+
+    st.subheader("Gecikme Durumu Dagilimi")
+    gd1, gd2, gd3, gd4, gd5 = st.columns(5)
+    with gd1:
+        st.metric("Minimal", len(kdf[kdf['GecikmeUyari'] == "MINIMAL GECIKME"]))
+    with gd2:
+        st.metric("Az Gecikme", len(kdf[kdf['GecikmeUyari'] == "AZ GECIKME"]))
+    with gd3:
+        st.metric("Orta Gecikme", len(kdf[kdf['GecikmeUyari'] == "ORTA GECIKME"]))
+    with gd4:
+        st.metric("Yuksek", len(kdf[kdf['GecikmeUyari'] == "YUKSEK GECIKME"]))
+    with gd5:
+        st.metric("Kritik", len(kdf[kdf['GecikmeUyari'] == "KRITIK GECIKME"]))
+
+    st.subheader("6 Non-Klise Metrik Tablosu")
+    nk_kolonlar = ["Hisse", "KER", "CHOP", "Parkinson", "GarmanKlass",
+                   "Kyle", "Entropy", "NK_Skor", "NK_Seviye", "KararSinyal"]
+    mevcut_nk = [k for k in nk_kolonlar if k in kdf.columns]
+    st.dataframe(
+        kdf[mevcut_nk].sort_values("NK_Skor", ascending=False),
+        use_container_width=True
+    )
+
+    st.subheader("En Yuksek OFI 5 (Alici Baskisi) / En Dusuk OFI 5 (Satici Baskisi)")
+    ofi_c1, ofi_c2 = st.columns(2)
+    with ofi_c1:
+        st.markdown("**En Yuksek OFI 5**")
+        st.dataframe(
+            kdf.sort_values("OFI", ascending=False).head(5)[["Hisse", "OFI", "KararSkor", "KararSinyal"]],
+            use_container_width=True
+        )
+    with ofi_c2:
+        st.markdown("**En Dusuk OFI 5**")
+        st.dataframe(
+            kdf.sort_values("OFI", ascending=True).head(5)[["Hisse", "OFI", "KararSkor", "KararSinyal"]],
+            use_container_width=True
+        )
+
+    st.markdown("---")
+    if st.button("📝 ACIL Sinyalleri Performans Defterine Kaydet"):
+        st.success("Kaydedildi (demo).")
+
+    st.subheader("📈 PERFORMANS DETAY RAPORU")
+    st.info(
+        "Henuz kayitli sinyal yok. Karar sekmesinde 'ACIL Sinyalleri Performans "
+        "Defterine Kaydet' butonuna basarak baslayin."
+    )
+
+    st.markdown("---")
+    st.header("⏱ GECIKME TELAFI SISTEMI")
+    st.subheader("Nasil Calisir?")
+    st.markdown(
+        f"""
+**Problem:** Panel {VERI_GECIKME_DAKIKA} dakika gecikmeli veri kullaniyor.
+Bu, "son bar" fiyatinin **{VERI_GECIKME_DAKIKA} dakika onceki** fiyat oldugu anlamina gelir.
+Bu sirada gercek fiyat hareket etmis olabilir.
+
+**Cozum 3 Katmanli:**
+
+1. **Son Bar Zamani Gosterimi:** Her hisse kartinda "Son Bar: HH:MM" yazar.
+   Boylece hangi veriyi gordugunuzu bilirsiniz.
+
+2. **Tahmini Guncel Fiyat:** Son {EXTRAPOLATION_BAR_SAYISI} barin ortalama degisimi
+   (momentum) kullanilarak "su anki tahmini fiyat" hesaplanir.
+
+3. **Kalan Marj:** Hedefe ne kadar marj kaldigini tahmini guncel fiyata gore hesaplar.
+
+4. **Gecikme Uyari Sistemi:** Kayip marj oranina gore 5 seviyede uyari verir:
+   - MINIMAL GECIKME: Kayip %5 alti (yesil)
+   - AZ GECIKME: Kayip %5-15 (acik yesil)
+   - ORTA GECIKME: Kayip %15-30 (sari)
+   - YUKSEK GECIKME: Kayip %30-50 (turuncu)
+   - KRITIK GECIKME: Kayip %50+ (kirmizi)
+
+5. **Sinyal Zayiflik Skoru:** Sinyalin gecikme nedeniyle ne kadar zayifladigini gosterir (0-100).
+   - 70+: Sinyal hala gecerli
+   - 50-70: Dikkatli ol
+   - 50 alti: Sinyal muhtemelen kacmis
+        """
+    )
+
+    st.subheader("Nasil Kullanilir?")
+    if not en_iyi.empty:
+        ornek = en_iyi.iloc[0]
+        st.markdown(
+            f"""
+**Ornek:** {ornek['Hisse']} — Son Bar {ornek['SonBarFiyat']} TL ({ornek['SonBarZamani']}), Tahmini Su An {ornek['TahminiFiyat']} TL
+
+- Son bar: {ornek['SonBarZamani']} ({VERI_GECIKME_DAKIKA} dakika once)
+- Tahmini su an: {ornek['TahminiFiyat']} TL (+%{ornek['TahminFark']})
+- Hedef: {ornek['Hedef']} TL → Kalan marj: %{ornek['KalanMarj']}
+- Gecikme: {ornek['GecikmeUyari']}
+
+**Yani:** Panel size "{ornek['TahminiFiyat']} TL'den al, %{ornek['KalanMarj']} hedefe kadar kalan marj var" diyor.
+Son bar {ornek['SonBarFiyat']}'e gore hesaplanmis %{ornek['HedefYuzde']}'den daha gercekci.
+            """
+        )
+
+    st.subheader("Sinirlar")
+    st.markdown(
+        """
+- Tahmini fiyat **gecmis momentum bazli** — piyasa donusu olursa yaniltici olabilir
+- Gercek fiyat **farkli olabilir** — Ziraat Mobil'den teyit edin
+- Gecikme **kacinilmaz** — panel karar destek, kesin bilgi degil
+        """
+    )
+
+    st.subheader("Hedef Marj Sistemi (15dk Bar Bazli)")
+    st.markdown(
+        f"""
+- **Gun Ici Hedef:** %{HEDEF_GUN_ICI_MIN} - %{HEDEF_GUN_ICI_MAX}
+- **Overnight Hedef:** %{HEDEF_OVERNIGHT_MIN} - %{HEDEF_OVERNIGHT_MAX}
+- **KER Esigi:** {KER_ESIK}
+- **Marj Hesabi:** 15dk bar ATR x 1.2 + kalite bonus + momentum bonus
+- **Gecikme Telafi:** Son 3 bar momentum + kalan marj hesabi + uyari sistemi
+- **Basari Degerlendirme:** %70+ = Mukemmel | %50-70 = Iyi | %50- = Gelistirme gerekli
+
+*15 dk gecikmeli. Yatirim tavsiyesi degildir.*
+        """
+        ) # --- TREND SEKMESI ---
 with tab2:
     st.header("Trend Matrisi")
+
+    trend_df = kdf.copy()
+    if "Katilim" not in trend_df.columns:
+        trend_df["Katilim"] = "EVET"
+    if "Yorum" not in trend_df.columns:
+        trend_df["Yorum"] = trend_df.apply(
+            lambda r: "SMA20+ | MACD+ | Hacim+" if r['KararSinyal'] == "GUCLU AL"
+            else ("SMA20+ | MACD+" if r['KararSinyal'] == "AL" else "Notr"),
+            axis=1
+        )
+    if "BarAralik" not in trend_df.columns:
+        trend_df["BarAralik"] = trend_df["SLYuzde"]
+    if "ATRYuzde" not in trend_df.columns:
+        trend_df["ATRYuzde"] = trend_df["HedefYuzde"]
+    if "Getiri" not in trend_df.columns:
+        trend_df["Getiri"] = trend_df["TrendFark"]
+    if "FiyatRaw" not in trend_df.columns:
+        trend_df["FiyatRaw"] = trend_df["Fiyat"]
+    if "TahminFarkRaw" not in trend_df.columns:
+        trend_df["TahminFarkRaw"] = trend_df["TahminFark"]
+    if "SL_ATR" not in trend_df.columns:
+        trend_df["SL_ATR"] = trend_df["SL"]
+    if "Hedef_ATR" not in trend_df.columns:
+        trend_df["Hedef_ATR"] = trend_df["Hedef"]
+    if "MarjUygunOvernight" not in trend_df.columns:
+        trend_df["MarjUygunOvernight"] = trend_df["OvernightMarjUygun"]
+    if "HibritRenk" not in trend_df.columns:
+        trend_df["HibritRenk"] = "#e65100"
+
     trend_kolonlar = [
-        "Hisse", "Katilim", "Guc", "Sinyal", "Yorum", "RSI", "MACD",
+        "Hisse", "Katilim", "Guc", "KararSinyal", "Yorum", "RSI", "MACD",
         "Trend", "Getiri", "Hacim", "Fiyat", "FiyatRaw", "TahminiFiyat",
         "TahminFark", "TahminFarkRaw", "SonBarZamani", "GecikmeDk",
         "GecikmeUyari", "GecikmeRenk", "KayipMarj", "KalanMarj",
@@ -1592,24 +1760,15 @@ with tab2:
         "Momentum5", "Tahmin", "Tahmin15", "Guven15", "Beklenti15",
         "VolRejim", "OFI", "GARCH", "KER", "CHOP", "Parkinson",
         "GarmanKlass", "Kyle", "Entropy", "NK_Skor", "NK_Gecen",
-        "NK_Seviye", "KararSkor", "KararSinyal", "KararRenk", "KararNeden",
+        "NK_Seviye", "KararSkor", "KararRenk", "KararNeden",
         "LSTM_Yon", "LSTM_Guven", "NLP_Skor", "NLP_Haber", "RL_Q",
         "RL_Sharpe", "GNN_Manip", "GAN_VaR", "HibritSkor",
         "HibritSeviye", "HibritRenk"
     ]
-    mevcut_trend = [k for k in trend_kolonlar if k in kdf.columns]
-
-    trend_df = kdf[mevcut_trend].copy()
-    if "Katilim" not in trend_df.columns:
-        trend_df["Katilim"] = "EVET"
-    if "Yorum" not in trend_df.columns:
-        trend_df["Yorum"] = trend_df.apply(
-            lambda r: f"SMA20+ | MACD+ | Hacim+" if r['KararSinyal'] == "GUCLU AL" else "Notr",
-            axis=1
-        )
+    mevcut_trend = [k for k in trend_kolonlar if k in trend_df.columns]
 
     st.dataframe(
-        trend_df.sort_values("KararSkor", ascending=False),
+        trend_df[mevcut_trend].sort_values("KararSkor", ascending=False),
         use_container_width=True,
         height=600
     )
@@ -1715,7 +1874,9 @@ with tab4:
                     "GecikmeDk", "HedefYuzde", "KalanMarj", "KayipMarj",
                     "SinyalZayiflik", "GecikmeUyari", "KararSinyal"]],
         use_container_width=True
-                           ) # --- OVERNIGHT SEKMESI ---
+    )
+
+# --- OVERNIGHT SEKMESI ---
 with tab5:
     st.header("Overnight Gap Stratejisi")
     st.info(
@@ -1728,7 +1889,7 @@ with tab5:
         "Hisse", "Kapanis", "KapanisRaw", "GapSkor", "Overnight",
         "GapYon", "OvernightHedefMarj", "OvernightSLMarj",
         "OvernightHedefFiyat", "OvernightSLFiyat", "OvernightRO",
-        "OvernightMarjUygun", "Yorum", "KER", "CHOP", "Kyle",
+        "OvernightMarjUygun", "KER", "CHOP", "Kyle",
         "Entropy", "RSI", "Hacim", "VolRejim"
     ]
     mevcut_over = [k for k in over_kolonlar if k in kdf.columns]
@@ -1798,38 +1959,6 @@ with tab5:
     with oc2:
         if st.button("GECE TASI Sinyallerini Performans Defterine Kaydet"):
             st.success("Kaydedildi (demo).")
-
-    st.markdown("---")
-    st.subheader("PERFORMANS DETAY RAPORU")
-    st.info(
-        "Henuz kayitli sinyal yok. Karar sekmesinde 'ACIL Sinyalleri Performans "
-        "Defterine Kaydet' butonuna basarak baslayin."
-    )
-
-    st.markdown("---")
-    st.header("GECIKME TELAFI SISTEMI")
-    st.subheader("Nasil Calisir?")
-    st.markdown(
-        f"""
-**Problem:** Panel {VERI_GECIKME_DAKIKA} dakika gecikmeli veri kullaniyor. 
-Bu, "son bar" fiyatinin **{VERI_GECIKME_DAKIKA} dakika onceki** fiyat oldugu anlamina gelir. 
-Bu sirada gercek fiyat hareket etmis olabilir.
-
-**Cozum 3 Katmanli:**
-
-1. **Son Bar Zamani Gosterimi:** Her hisse kartinda "Son Bar: HH:MM" yazar. 
-   Boylece hangi veriyi gordugunuzu bilirsiniz.
-
-2. **Tahmini Guncel Fiyat:** Son {EXTRAPOLATION_BAR_SAYISI} barin ortalama degisimi 
-   (momentum) kullanilarak "su anki tahmini fiyat" hesaplanir.
-
-3. **Kalan Marj:** Hedefe ne kadar marj kaldigini tahmini guncel fiyata gore hesaplar.
-
-4. **Gecikme Uyari Sistemi:** Kayip marj oranina gore 5 seviyede uyari verir.
-
-5. **Sinyal Zayiflik Skoru:** Sinyalin gecikme nedeniyle ne kadar zayifladigini gosterir (0-100).
-        """
-    )
 
 # --- HABER & PAIRS SEKMESI ---
 with tab6:
@@ -1964,4 +2093,4 @@ st.markdown("---")
 st.caption(
     "15 dk gecikmeli. Yatirim tavsiyesi degildir. "
     "Veriler yfinance uzerinden alinmaktadir."
-)
+        )
