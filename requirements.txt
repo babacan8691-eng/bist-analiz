@@ -4,6 +4,9 @@ plotly
 streamlit-autorefresh
 arch
 statsmodels
+pandas
+numpy
+requests
 kap_sdk
 evdsts
 tefasmak
