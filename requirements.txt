@@ -1,6 +1,10 @@
-streamlit
-pandas
-numpy
 yfinance
-streamlit-autorefresh
+streamlit
 plotly
+streamlit-autorefresh
+arch
+statsmodels
+kap_sdk
+evdsts
+tefasmak
+burkut
