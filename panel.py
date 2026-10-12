@@ -1377,8 +1377,7 @@ st.markdown(
 with st.spinner("Veri ve derin teknoloji hesaplaniyor..."):
     hl = H.split(",")
     ks = set(x + ".IS" for x in K.split(","))
-    # st.spinner kaldırıldı, doğrudan try-except ile korumaya alındı
-try:
+    try:
     hl = H.split(",")
     ks = set(x + ".IS" for x in K.split(","))
     hv = toplu_veri_cek(hl)
@@ -1397,12 +1396,7 @@ try:
 except Exception as e:
     st.error(f"Veri yükleme hatası: {e}")
     sat, onc = [], []
-    
-    st.session_state.performans = performans_guncelle(st.session_state.performans, hv)
 
-bd, bdeg = "-", "0"
-try:
-    bv = bist_endeks_verisi()
     if bv is not None and not bv.empty:
         bf = float(bv['Close'].iloc[-1])
         bd = f"{bf:.2f}"
