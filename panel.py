@@ -1377,6 +1377,10 @@ st.markdown(
 with st.spinner("Veri ve derin teknoloji hesaplaniyor..."):
     hl = H.split(",")
     ks = set(x + ".IS" for x in K.split(","))
+    # st.spinner kaldırıldı, doğrudan try-except ile korumaya alındı
+try:
+    hl = H.split(",")
+    ks = set(x + ".IS" for x in K.split(","))
     hv = toplu_veri_cek(hl)
     if not st.session_state.haber:
         st.session_state.haber = haber_cek()
@@ -1390,10 +1394,10 @@ with st.spinner("Veri ve derin teknoloji hesaplaniyor..."):
                 sat.append(a)
             if o:
                 onc.append(o)
-    if not st.session_state.m:
-        st.session_state.s += 1
-        st.session_state.l = turkiye_saati().strftime("%H:%M:%S")
-    st.session_state.m = False
+except Exception as e:
+    st.error(f"Veri yükleme hatası: {e}")
+    sat, onc = [], []
+    
     st.session_state.performans = performans_guncelle(st.session_state.performans, hv)
 
 bd, bdeg = "-", "0"
