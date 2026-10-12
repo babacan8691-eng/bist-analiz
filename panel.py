@@ -15,7 +15,7 @@ st.set_page_config(page_title="BIST Pro - Finansal Analiz Paneli", layout="wide"
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# 🔐 Panel Giriş Ekranı (Form Yapısı & Boşluk Temizleyici ile Hatasız Doğrulama)
+# 🔐 Panel Giriş Ekranı (Form Yapısı & Boşluk Temizleyici)
 if not st.session_state["authenticated"]:
     with st.form("login_form"):
         st.markdown("## 🔐 Panel Giriş Ekranı")
@@ -101,12 +101,22 @@ def fetch_live_wss_data(symbols):
     return pd.DataFrame(data)
 
 df_stocks = fetch_live_wss_data(symbols)
+now_str = datetime.datetime.now().strftime("%H:%M:%S")
+
+# Anlık Çekilen Veri ve Zaman Bilgisi Göstergesi (Canlı Üst Panel)
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("⏱️ Son Güncelleme", now_str)
+m2.metric("📊 Dakikada Çekilen Veri Adedi", f"{len(df_stocks)} Hisse/Dk")
+m3.metric("📡 Canlı Veri Bağlantısı", "wss://investing.com")
+m4.metric("🔄 Otomatik Yenileme", "60 Saniye")
+
+st.markdown("---")
 
 # Arayüz Sekmeleri
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Canlı Piyasalar & İlk 350", "⚖️ İslami Uygunluk (Katılım)", "💰 Kâr / Zarar Göstergesi", "⏱️ WSS Otomasyon"])
 
 with tab1:
-    st.subheader("BIST İlk 350 - Yüksek Hacimli ve Değerli Hisseler")
+    st.subheader(f"BIST İlk 350 - Yüksek Hacimli Hisseler (Çekilen Veri: {len(df_stocks)} Adet)")
     search_query = st.text_input("Hisse Ara (Örn: THYAO)", "")
     if search_query:
         filtered_df = df_stocks[df_stocks["Hisse"].str.contains(search_query.upper())]
@@ -116,8 +126,8 @@ with tab1:
 
 with tab2:
     st.subheader("🌙 İslami Uygunluk Göstergesi ve Taraması")
-    st.markdown("Sistem tarafından otomatik olarak taranan ve **İslami Uygunluğa Sahip** olan hisseler öne çıkarılmıştır:")
     df_katilim = df_stocks[df_stocks["İslami Uygunluk"] == "EVET"]
+    st.markdown(f"Toplam **{len(df_stocks)}** adet taranan hisseden **{len(df_katilim)}** tanesi **İslami Uygunluğa (Katılım Endeksi)** sahiptir:")
     st.dataframe(df_katilim, use_container_width=True)
 
 with tab3:
@@ -129,7 +139,7 @@ with tab3:
     win_rate = round((kar_sayisi / toplam_islem) * 100, 1) if toplam_islem > 0 else 0
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Toplam Taranan Hisse", f"{toplam_islem}")
+    col1.metric("Dakikalık Çekilen Veri Adedi", f"{toplam_islem}")
     col2.metric("Kârdaki İşlemler", f"{kar_sayisi}", delta=f"%{round((kar_sayisi/toplam_islem)*100, 1)}")
     col3.metric("Zarardaki İşlemler", f"{zarar_sayisi}", delta=f"-%{round((zarar_sayisi/toplam_islem)*100, 1)}", delta_color="inverse")
     col4.metric("Kâr / Zarar Oranı (Win Rate)", f"%{win_rate}")
@@ -147,7 +157,7 @@ with tab4:
     market_active = check_market_hours()
     if market_active:
         st.success("🟢 Pazar Durumu: AKTİF (Pzt-Sal-Çar-Per-Cum | 09:40 - 18:30)")
-        st.info("🔄 Veriler her 1 dakikada bir `wss://investing.com` üzerinden otomatik olarak güncellenmektedir.")
+        st.info(f"🔄 Son Güncelleme: **{now_str}** | Her 1 dakikada bir **{len(df_stocks)}** adet hisse verisi `wss://investing.com` üzerinden çekilmektedir.")
     else:
         st.warning("🔴 Pazar Durumu: KAPALI (Piyasa çalışma saatleri dışındasınız)")
 
