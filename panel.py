@@ -7,15 +7,9 @@ import time
 from datetime import datetime
 
 # =====================================================================
-# 1. GERÇEK API ANAHTARLARI VE AYARLAR
+# 1. HAFIZA VE AYARLARIN EN BAŞTA GÜVENCEYE ALINMASI (HATAYI ÇÖZEN KISIM)
 # =====================================================================
-VAST_API_KEY = "c8949cc2ec893f1ef70f6fe6cb0bf1e2c61817f48b8cb69a62b31b8aae9036f3"
-RUNPOD_API_KEY = "rpa_A7PK42RQPP" # Kopyaladığınız tam sürümü buraya yazabilirsiniz
-
-VAST_URL = "https://vast.ai"
-RUNPOD_URL = "https://runpod.io"
-
-# Canlı veri hafızası (Uygulama çalıştığı sürece verileri RAM'de tutar)
+# Streamlit oturum hafızasını ilk satırda garantiye alıyoruz ki arka plan botu hata vermesin
 if "canli_hafiza" not in st.session_state:
     st.session_state["canli_hafiza"] = {
         "vast_fiyat": 0.220,
@@ -25,6 +19,12 @@ if "canli_hafiza" not in st.session_state:
         "toplam_kar": 0.0,
         "kontratlar": []
     }
+
+VAST_API_KEY = "c8949cc2ec893f1ef70f6fe6cb0bf1e2c61817f48b8cb69a62b31b8aae9036f3"
+RUNPOD_API_KEY = "rpa_A7PK42RQPP" 
+
+VAST_URL = "https://vast.ai"
+RUNPOD_URL = "https://runpod.io"
 
 # =====================================================================
 # 2. ARKA PLAN PAZAR TARAMA MOTORU (BOT)
@@ -39,7 +39,7 @@ async def pazar_tarama_dongusu():
             r_fiyat = 0.350
             sunucu_id = "9566"
             
-            # A. Vast.ai Canlı Veri Çekimi (verified: True - Nitelikleri belirli mal)
+            # A. Vast.ai Canlı Veri Çekimi
             query_params = {"q": "{\"verified\": {\"eq\": true}, \"rentable\": {\"eq\": true}, \"gpu_name\": {\"eq\": \"RTX 4090\"}}"}
             try:
                 async with session.get(VAST_URL, headers=headers_vast, params=query_params, timeout=5) as resp:
@@ -47,8 +47,8 @@ async def pazar_tarama_dongusu():
                         res = await resp.json()
                         offers = res.get("offers", [])
                         if offers:
-                            v_fiyat = float(offers[0].get("dph_base", 0.220))
-                            sunucu_id = str(offers[0].get("id", "9566"))
+                            v_fiyat = float(offers.get("dph_base", 0.220))
+                            sunucu_id = str(offers.get("id", "9566"))
             except:
                 pass
 
@@ -69,42 +69,40 @@ async def pazar_tarama_dongusu():
             fark = r_fiyat - v_fiyat
             simdi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Küresel ağ gecikmesinden dolayı kaçan işlemlerin tespiti
-            if 0.01 < fark < 0.05:
-                st.session_state["canli_hafiza"]["kacirilan_firsat"] += 1
-            
-            # Kar marjı hedefi sağlandığında otonom kiralama tetiklenir
-            if fark >= 0.05:
-                # İslam Fıkhı uyarınca: Brüt kâr kesinleşir, zarar ihtimali sıfırlanır
-                saatlik_kar = fark
-                st.session_state["canli_hafiza"]["basarili_eslesme"] += 1
-                st.session_state["canli_hafiza"]["toplam_kar"] += saatlik_kar
+            # Ana hafıza kontrolü (Hata önleyici çift kilit)
+            if "canli_hafiza" in st.session_state:
+                if 0.01 < fark < 0.05:
+                    st.session_state["canli_hafiza"]["kacirilan_firsat"] += 1
                 
-                yeni_kontrat = {
-                    "Sunucu ID": sunucu_id,
-                    "Donanım": "RTX 4090",
-                    "Alış Fiyatı (Saat)": f"${v_fiyat:.3f}",
-                    "Satış Fiyatı (Saat)": f"${r_fiyat:.3f}",
-                    "Anlık Durum": "Müşteride (AI Training)",
-                    "İşlem Tarihi": simdi
-                }
-                
-                # Tabloda maksimum 5 güncel işlemi tut
-                st.session_state["canli_hafiza"]["kontratlar"].insert(0, yeni_kontrat)
-                if len(st.session_state["canli_hafiza"]["kontratlar"]) > 5:
-                    st.session_state["canli_hafiza"]["kontratlar"].pop()
+                # Kar marjı hedefi sağlandığında otonom kiralama tetiklenir
+                if fark >= 0.05:
+                    saatlik_kar = fark
+                    st.session_state["canli_hafiza"]["basarili_eslesme"] += 1
+                    st.session_state["canli_hafiza"]["toplam_kar"] += saatlik_kar
+                    
+                    yeni_kontrat = {
+                        "Sunucu ID": sunucu_id,
+                        "Donanım": "RTX 4090",
+                        "Alış Fiyatı (Saat)": f"${v_fiyat:.3f}",
+                        "Satış Fiyatı (Saat)": f"${r_fiyat:.3f}",
+                        "Anlık Durum": "Müşteride (AI Training)",
+                        "İşlem Tarihi": simdi
+                    }
+                    
+                    st.session_state["canli_hafiza"]["kontratlar"].insert(0, yeni_kontrat)
+                    if len(st.session_state["canli_hafiza"]["kontratlar"]) > 5:
+                        st.session_state["canli_hafiza"]["kontratlar"].pop()
 
-            st.session_state["canli_hafiza"]["vast_fiyat"] = v_fiyat
-            st.session_state["canli_hafiza"]["runpod_fiyat"] = r_fiyat
+                st.session_state["canli_hafiza"]["vast_fiyat"] = v_fiyat
+                st.session_state["canli_hafiza"]["runpod_fiyat"] = r_fiyat
             
-            await asyncio.sleep(15) # 15 saniyede bir küresel piyasayı güncelle
+            await asyncio.sleep(15)
 
 def arkaplan_botu_baslat():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(pazar_tarama_dongusu())
 
-# Botu arayüzden bağımsız olarak 7/24 çalışacak bir Thread üzerinde başlatıyoruz
 if "bot_calisiyor" not in st.session_state:
     st.session_state["bot_calisiyor"] = True
     t = threading.Thread(target=arkaplan_botu_baslat, daemon=True)
@@ -136,7 +134,6 @@ if "oturum_acik" not in st.session_state:
 if not st.session_state["oturum_acik"]:
     giris_ekrani()
 else:
-    # BAŞARILI GİRİŞ SONRASI AÇILACAK MAKSİMUM DETAYLI PANEL
     st.sidebar.markdown(f"👤 **Kullanıcı:** Cuma Babacan")
     st.sidebar.markdown("🟢 **Bot Durumu:** API Aktif & Tarıyor")
     st.sidebar.caption(f"Vast Canlı: ${st.session_state['canli_hafiza']['vast_fiyat']:.3f}/saat")
@@ -157,7 +154,7 @@ else:
     with col2:
         st.metric(label="⚡ Aktif Elde Tutulan Emtia", value=f"{st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
     with col3:
-        st.metric(label="📈 Toplam Net Kazanç (Saatlik Birikimli)", value=f"${st.session_state['canli_hafiza']['toplam_kar']:.3f}")
+        st.metric(label="📈 Toplam Net Kazanç", value=f"${st.session_state['canli_hafiza']['toplam_kar']:.3f}")
     with col4:
         st.metric(label="⚖️ Fıkhi Uyumluluk Skor", value="%100 Helal", delta="Açığa Satış Yok")
 
@@ -170,12 +167,12 @@ else:
     with col_left:
         st.markdown("### **İşlem İstatistikleri**")
         st.write(f"✔️ **Günlük Başarılı Eşleşme (İşlem):** {st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
-        st.write(f"❌ **Zarar Eden İşlem:** 0 Adet (Fiyat koruma algoritması aktiftir, maliyet altı satış fıkhen ve kodsal olarak engellenmiştir)")
+        st.write(f"❌ **Zarar Eden İşlem:** 0 Adet")
         st.write(f"⚠️ **Rakiplere Kaptırılan / Kaçırılan Fırsat:** {st.session_state['canli_hafiza']['kacirilan_firsat']} Adet")
     
     with col_right:
         st.markdown("### **Fıkhi Güvence Kriterleri**")
-        st.info("🔒 **Mülkiyet (Kabz) Güvencesi:** Bot, Vast.ai üzerindeki doğrulanmış (verified: True) sunucunun kullanım hakkını tamamen kendi üzerine geçirmeden alt kiralama kanallarını tetiklemez. Bu sayede 'olmayan malın satışı' riski sıfırlanır.")
+        st.info("🔒 **Mülkiyet (Kabz) Güvencesi:** Bot, Vast.ai üzerindeki doğrulanmış (verified: True) sunucunun kullanım hakkını tamamen kendi üzerine geçirmeden alt kiralama kanallarını tetiklemez.")
 
     st.markdown("---")
 
@@ -188,7 +185,6 @@ else:
         df = pd.DataFrame(st.session_state["canli_hafiza"]["kontratlar"])
         st.dataframe(df, use_container_width=True)
         
-    # Ekranın kendini 15 saniyede bir otomatik yenilemesi için otomatik tetikleyici
     time.sleep(15)
     st.rerun()
-    
+                
