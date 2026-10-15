@@ -73,21 +73,21 @@ async def profesyonel_5_li_motor(kar_esigi):
             res_v, res_r, res_s, res_g, res_m = await asyncio.gather(task_v, task_r, task_s, task_g, task_m)
             
             v_fiyat = 0.220; sunucu_id = "Vast_956"; v_lat = 45
-            if res_v and res_v[0] and res_v[0].get("offers"):
-                v_fiyat = float(res_v[0]["offers"].get("dph_base", 0.220))
-                sunucu_id = f"Vast_{res_v[0]['offers'].get('id')}"
-                v_lat = res_v[1]
+            if res_v and res_v.get("offers"):
+                v_fiyat = float(res_v["offers"].get("dph_base", 0.220))
+                sunucu_id = f"Vast_{res_v['offers'].get('id')}"
+                v_lat = res_v
 
             r_fiyat = 0.350; r_lat = 45
-            if res_r and res_r[0] and res_r[0].get("data"):
-                r_lat = res_r[1]
-                for g in res_r[0]["data"].get("gpuTypes", []):
+            if res_r and res_r.get("data"):
+                r_lat = res_r
+                for g in res_r["data"].get("gpuTypes", []):
                     if "4090" in g.get("displayName", ""):
                         r_fiyat = float(g.get("lowestPrice", 0.350))
 
-            s_fiyat = 0.240; s_lat = 45
-            g_fiyat = 0.260; g_lat = 45
-            m_fiyat = 0.250; m_lat = 45
+            s_fiyat = 0.280; s_lat = 45
+            g_fiyat = 0.310; g_lat = 45
+            m_fiyat = 0.290; m_lat = 45
 
             ort_latency = int((v_lat + r_lat + s_lat + g_lat + m_lat) / 5)
             
@@ -137,7 +137,7 @@ def arkaplan_botu_tetikle(kar_esigi):
     loop.run_until_complete(profesyonel_5_li_motor(kar_esigi))
 
 # =====================================================================
-# 3. ARAYÜZ KATMANI (GİRİNTİLERİ TAMAMEN DÜZELTİLMİŞ KISIM)
+# 3. YERLEŞİMİ MOBİL UYUMLU OLARAK DÜZELTİLEN ARAYÜZ KATMANI
 # =====================================================================
 st.set_page_config(page_title="5-Way Pro GPU Arbitraj Kontrol Merkezi", layout="wide")
 
@@ -159,6 +159,7 @@ if "oturum_acik" not in st.session_state:
 if not st.session_state["oturum_acik"]:
     giris_ekrani()
 else:
+    # SOL MENÜ PARAMETRELERİ (SÜRGÜ)
     st.sidebar.markdown(f"👤 **Yönetici:** Cuma Babacan")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🛠️ Çoklu Havuz Filtre Parametreleri")
@@ -174,30 +175,25 @@ else:
         t = threading.Thread(target=arkaplan_botu_tetikle, args=(kar_esigi,), daemon=True)
         t.start()
 
-    st.title("⚡ 5-Way Pro Otonom Bulut ve Altyapı Arbitraj Motoru")
-    st.caption("Gerçek Zamanlı Pazar Fiyat Göstergeleriyle Güçlendirilmiş İslami Altyapı")
+    # ANA PANEL BAŞLIĞI
+    st.title("⚡ Pro Otonom Altyapı Arbitraj Motoru")
+    st.caption("Çoklu Thread ve Asenkron Paralel Yapı ile Güçlendirilmiş İslami Altyapı")
     st.markdown("---")
 
-    st.subheader("🌐 Canlı Küresel RTX 4090 Pazar Fiyatları ($/Saatlik)")
-    f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
-    
-    # Tüm with bloklarının girintileri 4 boşluk kuralına göre eşitlendi
-    with f_col1:
-        st.info(f"🟢 Vast.ai:\n### ${st.session_state['canli_hafiza']['vast_fiyat']:.3f}")
-    with f_col2:
-        st.info(f"🔵 RunPod:\n### ${st.session_state['canli_hafiza']['runpod_fiyat']:.3f}")
-    with f_col3:
-        st.info(f"🟣 Shadeform:\n### ${st.session_state['canli_hafiza']['shadeform_fiyat']:.3f}")
-    with f_col4:
-        st.info(f"🟠 GPU.ai:\n### ${st.session_state['canli_hafiza']['gpuai_fiyat']:.3f}")
-    with f_col5:
-        st.info(f"🟡 Massed Comp:\n### ${st.session_state['canli_hafiza']['massed_fiyat']:.3f}")
+    # MOBİLDE TAŞMAYI ENGELLEYEN YENİ AÇILIR-KAPANIR FİYAT LİSTESİ (EXPANDER)
+    with st.expander("🌐 Canlı Küresel RTX 4090 Pazar Fiyat Endeksi (Görmek İçin Tıklayın)", expanded=False):
+        st.write(f"🟢 **Vast.ai:** `${st.session_state['canli_hafiza']['vast_fiyat']:.3f} / saat`")
+        st.write(f"🔵 **RunPod:** `${st.session_state['canli_hafiza']['runpod_fiyat']:.3f} / saat`")
+        st.write(f"🟣 **Shadeform:** `${st.session_state['canli_hafiza']['shadeform_fiyat']:.3f} / saat`")
+        st.write(f"🟠 **GPU.ai:** `${st.session_state['canli_hafiza']['gpuai_fiyat']:.3f} / saat`")
+        st.write(f"🟡 **Massed Compute:** `${st.session_state['canli_hafiza']['massed_fiyat']:.3f} / saat`")
 
     st.markdown("---")
 
+    # ÜST METRİK KARTLARI (ESKİ OKUNAKLI DÜZENE GERİ DÖNDÜ)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(label="💰 Toplam Sermaye Gücü", value="$500.00")
+        st.metric(label="💰 Toplam Sermaye", value="$500.00")
     with col2:
         st.metric(label="⚡ Aktif Yakalanan Emtia", value=f"{st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
     with col3:
@@ -207,9 +203,9 @@ else:
 
     st.markdown("---")
 
+    # CANLI OPERASYON VE GECİKME ANALİTİĞİ
     st.subheader("📊 5 Havuzlu Ağ Operasyonu ve Gecikme Analitiği")
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.markdown("### **Gelişmiş İşlem İstatistikleri**")
-                    
+    
