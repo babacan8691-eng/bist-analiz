@@ -35,7 +35,7 @@ GPUAI_URL = "https://gpu.ai"
 MASSED_URL = "https://massedcompute.com"
 
 # =====================================================================
-# 2. 5 HAVUZU AYNY ANDA TARAYAN ASENKRON PARALEL MOTOR
+# 2. 5 HAVUZU AYNI ANDA TARAYAN ASENKRON PARALEL MOTOR
 # =====================================================================
 async def havuz_tara_async(session, url, headers, params=None, json_data=None, method="GET"):
     start_time = time.time()
@@ -72,11 +72,10 @@ async def profesyonel_5_li_motor(kar_esigi):
             
             res_v, res_r, res_s, res_g, res_m = await asyncio.gather(task_v, task_r, task_s, task_g, task_m)
             
-            # Gerçek Zamanlı Pazar Fiyat Analizleri
             v_fiyat = 0.220; sunucu_id = "Vast_956"; v_lat = 45
             if res_v and res_v[0] and res_v[0].get("offers"):
-                v_fiyat = float(res_v[0]["offers"][0].get("dph_base", 0.220))
-                sunucu_id = f"Vast_{res_v[0]['offers'][0].get('id')}"
+                v_fiyat = float(res_v[0]["offers"].get("dph_base", 0.220))
+                sunucu_id = f"Vast_{res_v[0]['offers'].get('id')}"
                 v_lat = res_v[1]
 
             r_fiyat = 0.350; r_lat = 45
@@ -86,9 +85,9 @@ async def profesyonel_5_li_motor(kar_esigi):
                     if "4090" in g.get("displayName", ""):
                         r_fiyat = float(g.get("lowestPrice", 0.350))
 
-            s_fiyat = 0.240; s_lat = 45 # Canlı Shadeform RTX 4090 taban fiyatı
-            g_fiyat = 0.260; g_lat = 45 # Canlı GPU.ai RTX 4090 taban fiyatı
-            m_fiyat = 0.250; m_lat = 45 # Canlı Massed Compute RTX 4090 taban fiyatı
+            s_fiyat = 0.240; s_lat = 45
+            g_fiyat = 0.260; g_lat = 45
+            m_fiyat = 0.250; m_lat = 45
 
             ort_latency = int((v_lat + r_lat + s_lat + g_lat + m_lat) / 5)
             
@@ -138,7 +137,7 @@ def arkaplan_botu_tetikle(kar_esigi):
     loop.run_until_complete(profesyonel_5_li_motor(kar_esigi))
 
 # =====================================================================
-# 3. ARAYÜZ KATMANI
+# 3. ARAYÜZ KATMANI (GİRİNTİLERİ TAMAMEN DÜZELTİLMİŞ KISIM)
 # =====================================================================
 st.set_page_config(page_title="5-Way Pro GPU Arbitraj Kontrol Merkezi", layout="wide")
 
@@ -160,7 +159,6 @@ if "oturum_acik" not in st.session_state:
 if not st.session_state["oturum_acik"]:
     giris_ekrani()
 else:
-    # YAN PANEL KONTROLLERİ
     st.sidebar.markdown(f"👤 **Yönetici:** Cuma Babacan")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🛠️ Çoklu Havuz Filtre Parametreleri")
@@ -176,14 +174,14 @@ else:
         t = threading.Thread(target=arkaplan_botu_tetikle, args=(kar_esigi,), daemon=True)
         t.start()
 
-    # ANA PANEL TASARIMI
     st.title("⚡ 5-Way Pro Otonom Bulut ve Altyapı Arbitraj Motoru")
     st.caption("Gerçek Zamanlı Pazar Fiyat Göstergeleriyle Güçlendirilmiş İslami Altyapı")
     st.markdown("---")
 
-    # YENİ EKLENEN CANLI PAZAR FİYAT ENDEKSİ (ORTA ALAN)
     st.subheader("🌐 Canlı Küresel RTX 4090 Pazar Fiyatları ($/Saatlik)")
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
+    
+    # Tüm with bloklarının girintileri 4 boşluk kuralına göre eşitlendi
     with f_col1:
         st.info(f"🟢 Vast.ai:\n### ${st.session_state['canli_hafiza']['vast_fiyat']:.3f}")
     with f_col2:
@@ -197,7 +195,6 @@ else:
 
     st.markdown("---")
 
-    # ÜST METRİK KARTLARI
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric(label="💰 Toplam Sermaye Gücü", value="$500.00")
@@ -206,4 +203,13 @@ else:
     with col3:
         st.metric(label="📈 Toplam Çapraz Getiri", value=f"${st.session_state['canli_hafiza']['toplam_kar']:.3f}")
     with col4:
-            
+        st.metric(label="📶 5'li Ağ Tepki Hızı", value=f"{st.session_state['canli_hafiza']['gecikme_ms']} ms", delta="Optimize Edildi")
+
+    st.markdown("---")
+
+    st.subheader("📊 5 Havuzlu Ağ Operasyonu ve Gecikme Analitiği")
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.markdown("### **Gelişmiş İşlem İstatistikleri**")
+                    
