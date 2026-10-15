@@ -11,3 +11,4 @@ kap_sdk
 evdsts
 tefasmak
 burkut
+aiohttp
