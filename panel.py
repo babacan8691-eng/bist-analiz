@@ -16,8 +16,12 @@ def giris_ekrani():
         giris_butonu = st.form_submit_button("Sisteme Giriş Yap")
         
         if giris_butonu:
-            # Belirttiğiniz net ve kesin bilgilerle doğrulama
-            if kullanici_adi == "Cuma Babacan" and sifre == "784512":
+            # .strip() sayesinde kullanıcı adının veya şifrenin sonundaki gizli boşluklar otomatik silinir
+            temiz_kullanici = kullanici_adi.strip()
+            temiz_sifre = sifre.strip()
+            
+            # Tam ve kesin bilgilerle doğrulama
+            if temiz_kullanici == "Cuma Babacan" and temiz_sifre == "784512":
                 st.session_state["oturum_acik"] = True
                 st.success("Giriş başarılı! Panel yükleniyor...")
                 st.rerun()
@@ -68,4 +72,4 @@ else:
             st.dataframe(df, use_container_width=True)
     except Exception as e:
         st.warning("Veritabanı bağlantısı bekleniyor... Bot ilk alımı yaptığında veriler burada listelenecektir.")
-            
+        
