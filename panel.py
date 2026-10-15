@@ -25,23 +25,23 @@ def paylasimli_hafiza():
         "kontratlar": [],
         "son_guncelleme": "-",
         "log": [],
-        "fiyat_degisti": False,
         "onceki_fark": 0.0
     }
 
 # =====================================================================
-# 2. GERÇEK API ANAHTARLARI VE UÇ NOKTALARI
+# 2. API ANAHTARLARI VE UÇ NOKTALARI (DÜZELTİLDİ)
 # =====================================================================
+# NOT: Bu anahtarlar geçersizdir. Kendi hesabınızdan gerçek anahtarları almalısınız.
 VAST_API_KEY = "ced8383a-469c-45b9-bba9-3b9e56df5d8e.hlsA8AKM50DfQ04OucsLeYSq"
-RUNPOD_API_KEY = "gpuai_live_sBYK4ScqjpyD0MhWjYb37EMZ"
+RUNPOD_API_KEY = "gpuai_live_sBYK4ScqjpyD0MhWjYb37EMZ" # Bu bir RunPod anahtarı DEĞİL!
 X_AUTH_TOKEN = "XltmG2oekC1tofnOsk2oqGF1kCgNNPtx"
 
-# GERÇEK API UÇ NOKTALARI (Doğrulanmış formatlar)
-VAST_URL = "https://console.vast.ai/api/v0/bundles/"
+# DÜZELTİLMİŞ API UÇ NOKTALARI
+VAST_URL = "https://console.vast.ai/api/v0/bundles"  # Sondaki / kaldırıldı
 RUNPOD_URL = "https://api.runpod.io/graphql"
 # Aşağıdaki 3 havuz için API dokümantasyonuna göre URL'leri güncelleyin
-SHADEFORM_URL = "https://api.shadeform.ai/v1/instances/types"
-GPUAI_URL = "https://api.gpu.ai/v1/pricing/rtx4090"
+SHADEFORM_URL = "https://api.shadeform.ai/v1/instances"
+GPUAI_URL = "https://api.gpu.ai/v1/pricing"
 MASSED_URL = "https://api.massedcompute.com/v1/pricing"
 
 # KOMİSYON ORANI (Platformların kestiği tahmini oran)
@@ -94,7 +94,7 @@ async def arbitraj_motoru(kar_esigi, hafiza):
     async with aiohttp.ClientSession() as session:
         while True:
             try:
-                # Vast.ai sorgusu
+                # Vast.ai sorgusu (q parametresi JSON string olarak gönderilir)
                 vast_query = {
                     "q": '{"verified":{"eq":true},"rentable":{"eq":true},"gpu_name":{"eq":"RTX 4090"}}'
                 }
@@ -147,10 +147,8 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                 elif isinstance(res_r, tuple) and "_hata" in (res_r[0] or {}):
                     hafiza["log"].append(f"RunPod: {res_r[0]['_hata']}")
 
-                # ---- DİĞER 3 HAVUZ ----
-                # Bu havuzların gerçek API yanıt formatını bildiğinizde
-                # aşağıdaki parse bloklarını güncelleyin
-                def parse_genel(res, anahtar_listesi, varsayilan_lat=0):
+                # ---- DİĞER 3 HAVUZ (Esnek Ayrıştırma) ----
+                def parse_genel(res, anahtar_listesi):
                     if isinstance(res, tuple) and "_hata" not in (res[0] or {}):
                         try:
                             data = res[0]
@@ -161,7 +159,9 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                                 return float(data), res[1]
                         except Exception:
                             pass
-                    return 0.0, varsayilan_lat
+                    elif isinstance(res, tuple) and "_hata" in (res[0] or {}):
+                        hafiza["log"].append(f"Genel Havuz: {res[0]['_hata']}")
+                    return 0.0, 0
 
                 s_fiyat, s_lat = parse_genel(res_s, ["price", "hourly"])
                 g_fiyat, g_lat = parse_genel(res_g, ["price", "hourly"])
@@ -172,7 +172,6 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                 ort_latency = int(sum(lat_listesi) / len(lat_listesi)) if lat_listesi else 0
 
                 # ---- FİYAT KONTROLÜ ----
-                # Eğer bir havuzdan fiyat çekilemediyse, o havuzu karşılaştırmaya dahil etme
                 gecerli_fiyatlar = {}
                 if v_fiyat > 0: gecerli_fiyatlar["Vast.ai"] = v_fiyat
                 if r_fiyat > 0: gecerli_fiyatlar["RunPod"] = r_fiyat
@@ -182,7 +181,7 @@ async def arbitraj_motoru(kar_esigi, hafiza):
 
                 simdi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                # Hafızayı güncelle (fiyatlar 0 olsa bile göster)
+                # Hafızayı güncelle
                 hafiza["vast_fiyat"] = v_fiyat
                 hafiza["runpod_fiyat"] = r_fiyat
                 hafiza["shadeform_fiyat"] = s_fiyat
@@ -202,18 +201,17 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                     # Komisyon düşüldükten sonraki NET kâr
                     net_kar = brut_fark * (1 - KOMISYON_ORANI)
 
-                    # Fiyat değişim kontrolü (aynı fırsatı tekrar saymasın)
+                    # Fiyat değişim kontrolü
                     fiyat_degisti = abs(brut_fark - hafiza["onceki_fark"]) > 0.0001
                     hafiza["onceki_fark"] = brut_fark
 
-                    # Fırsat kaçırma (fark var ama eşik altında)
+                    # Fırsat kaçırma
                     if 0.005 < net_kar < kar_esigi:
                         hafiza["kacirilan_firsat"] += 1
 
-                    # Başarılı eşleşme (net kâr eşiğin üstünde VE fiyat gerçekten değişti)
+                    # Başarılı eşleşme
                     if net_kar >= kar_esigi and net_kar > 0 and fiyat_degisti:
-                        # Gerçek emir gerçekleşme oranı simülasyonu (%70 başarı)
-                        if random.random() < 0.70:
+                        if random.random() < 0.70: # %70 gerçekleşme simülasyonu
                             hafiza["basarili_eslesme"] += 1
                             hafiza["toplam_kar"] += net_kar
                             hafiza["sanal_bakiye"] += net_kar
@@ -247,13 +245,12 @@ def bot_baslat(kar_esigi, hafiza):
     try:
         loop.run_until_complete(arbitraj_motoru(kar_esigi, hafiza))
     except Exception as e:
-        print(f"Bot çöktü: {e}")
-
-# =====================================================================
-# 6. ARAYÜZ
+        print(f"Bot çöktü: {e}") # =====================================================================
+# 6. STREAMLIT ARAYÜZÜ
 # =====================================================================
 st.set_page_config(page_title="5-Way Pro Arbitraj", layout="wide")
 
+# --- OTURUM AÇMA ---
 if "oturum_acik" not in st.session_state:
     st.session_state["oturum_acik"] = False
 
@@ -270,29 +267,39 @@ if not st.session_state["oturum_acik"]:
 else:
     hafiza = paylasimli_hafiza()
 
+    # --- SOL MENÜ ---
     st.sidebar.markdown("👤 **Yönetici:** Cuma Babacan")
     st.sidebar.markdown("---")
     kar_esigi = st.sidebar.slider(
         "Dinamik Kâr Eşiği ($/saat)",
         min_value=0.000, max_value=0.200, value=0.010, step=0.005
     )
-    st.sidebar.caption(f"Komisyon: %{int(KOMISYON_ORANI*100)} (net kâr hesabına dahil)")
+    st.sidebar.caption(f"Komisyon: %{int(KOMISYON_ORANI*100)} (net kâra dahil)")
+    st.sidebar.markdown("---")
 
-    if st.sidebar.button("Oturumu Kapat"):
+    if st.sidebar.button("🔄 Botu Yeniden Başlat"):
+        # Arka plan thread'ini sıfırla
+        st.session_state["bot_calisiyor"] = False
+        hafiza["log"].append("Bot manuel olarak yeniden başlatıldı.")
+        time.sleep(1)
+        st.rerun()
+
+    if st.sidebar.button("🚪 Oturumu Kapat"):
         st.session_state["oturum_acik"] = False
         st.rerun()
 
-    # Botu bir kere başlat
-    if "bot_calisiyor" not in st.session_state:
+    # --- ARKA PLAN BOTUNU BAŞLAT (SADECE 1 KEZ) ---
+    if "bot_calisiyor" not in st.session_state or st.session_state["bot_calisiyor"] == False:
         st.session_state["bot_calisiyor"] = True
         t = threading.Thread(target=bot_baslat, args=(kar_esigi, hafiza), daemon=True)
         t.start()
 
+    # --- BAŞLIK ---
     st.title("⚡ Pro Otonom Altyapı Arbitraj Motoru")
     st.caption("Paper Trading Modu — Sanal Bakiye ile Test")
     st.markdown("---")
 
-    # CANLI FİYATLAR
+    # --- CANLI FİYATLAR ---
     st.subheader("🌐 Canlı RTX 4090 Pazar Fiyatları")
     def fiyat_goster(emoji, isim, deger):
         if deger > 0:
@@ -305,36 +312,61 @@ else:
     fiyat_goster("🟣", "Shadeform", hafiza["shadeform_fiyat"])
     fiyat_goster("🟠", "GPU.ai", hafiza["gpuai_fiyat"])
     fiyat_goster("🟡", "Massed Compute", hafiza["massed_fiyat"])
-    st.caption(f"Son güncelleme: {hafiza['son_guncelleme']}")
+    st.caption(f"🕐 Son güncelleme: {hafiza['son_guncelleme']}")
     st.markdown("---")
 
-    # METRİKLER
+    # --- HESAP DURUMU ---
     st.subheader("📊 Canlı Hesap Durumu")
-    st.write(f"💰 **Sanal Bakiye:** ${hafiza['sanal_bakiye']:.3f}")
-    st.write(f"⚡ **Başarılı Eşleşme:** {hafiza['basarili_eslesme']} Adet")
-    st.write(f"📈 **Toplam Net Kâr:** ${hafiza['toplam_kar']:.3f}")
-    st.write(f"📶 **Ortalama Gecikme:** {hafiza['gecikme_ms']} ms")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"💰 **Sanal Bakiye:** ${hafiza['sanal_bakiye']:.3f}")
+        st.write(f"⚡ **Başarılı Eşleşme:** {hafiza['basarili_eslesme']} Adet")
+    with col2:
+        st.write(f"📈 **Toplam Net Kâr:** ${hafiza['toplam_kar']:.3f}")
+        st.write(f"📶 **Ortalama Gecikme:** {hafiza['gecikme_ms']} ms")
     st.markdown("---")
 
-    # ANALİTİK
+    # --- OPERASYON VE FIKHİ ANALİZ ---
     st.subheader("📈 Operasyon ve Fıkhî Güvence Analitiği")
-    st.write(f"✔️ **Başarılı Eşleşme:** {hafiza['basarili_eslesme']}")
+    st.write(f"✔️ **Başarılı Eşleşme:** {hafiza['basarili_eslesme']} Adet")
     st.write(f"❌ **Zarar Eden Sözleşme:** 0 (Fiyat Koruma Filtresi Aktif)")
-    st.write(f"⚠️ **Kaçırılan Fırsat:** {hafiza['kacirilan_firsat']}")
+    st.write(f"⚠️ **Kaçırılan Fırsat:** {hafiza['kacirilan_firsat']} Adet")
     st.markdown("---")
 
-    # KONTRATLAR
+    # --- SON İŞLEMLER (KONTRATLAR) ---
     if hafiza["kontratlar"]:
         st.subheader("📋 Son İşlemler")
         for kt in hafiza["kontratlar"]:
-            st.write(f"**{kt['Zaman']}** | {kt['Alış']} → {kt['Satış']} | Net: {kt['Net Kâr']}")
+            st.write(
+                f"**{kt['Zaman']}** | {kt['Alış']} → {kt['Satış']} | "
+                f"Brüt: {kt['Brüt Fark']} | **Net: {kt['Net Kâr']}**"
+            )
+        st.markdown("---")
 
-    # HATA LOGLARI
-    if hafiza["log"]:
-        with st.expander("🔧 API Log / Hatalar"):
-            for log in hafiza["log"][-10:]:
+    # --- API LOG / HATALAR ---
+    with st.expander("🔧 API Log / Hatalar (Son 20 Kayıt)"):
+        if hafiza["log"]:
+            for log in hafiza["log"][-20:]:
                 st.text(log)
+        else:
+            st.text("Henüz hata kaydı yok.")
 
-    # Sayfayı periyodik yenile
+    # --- SORUN GİDERME REHBERİ ---
+    with st.expander("❓ Neden Veri Çekilemiyor? (Sorun Giderme)"):
+        st.markdown("""
+        **Vast.ai: HTTP 404** → API uç noktası yanlış veya API anahtarı geçersiz.  
+        `https://console.vast.ai/api/v0/bundles` adresini kontrol edin.  
+        
+        **RunPod: HTTP 401** → API anahtarı yetkisiz. `gpuai_live_...` ile başlayan anahtar RunPod'a ait değil.  
+        RunPod hesabınızdan yeni bir API anahtarı oluşturun (`https://www.runpod.io/console/user/settings`).
+        
+        **Diğer 3 Havuz (Shadeform, GPU.ai, Massed)** → API uç noktaları doğrulanmadı.  
+        İlgili platformların dokümantasyonundan gerçek API URL'lerini alıp koddaki değişkenleri güncelleyin.
+        
+        **Genel Not** → Paper trading modunda sistemin kâr üretebilmesi için en az 2 havuzdan gerçek zamanlı fiyat gelmesi gerekir.  
+        Şu an hiçbir havuzdan veri gelmediği için kâr $0.000 olarak kalır.
+        """)
+
+    # --- SAYFAYI PERİYODİK YENİLE ---
     time.sleep(2)
     st.rerun()
