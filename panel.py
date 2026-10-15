@@ -14,42 +14,31 @@ import random
 DEMO_MODE = True
 
 # =====================================================================
-# 2. GERÇEK PİYASA PARAMETRELERİ (Uyarı 1 ve 3 için)
+# 2. GERÇEK PİYASA PARAMETRELERİ
 # =====================================================================
-# KOMİSYON ORANLARI (Platform başına gerçekçi değerler)
 PLATFORM_KOMISYON = {
-    "Vast.ai": 0.25,         # Vast.ai sunucu sahibinden %25 keser
-    "RunPod": 0.20,          # RunPod yaklaşık %20
+    "Vast.ai": 0.25,
+    "RunPod": 0.20,
     "Shadeform": 0.15,
     "GPU.ai": 0.18,
     "Massed Compute": 0.15,
 }
 
-# ÖDEME/TRANSFER ÜCRETİ (USD, işlem başına sabit)
-ODEME_TRANSFER_UCRETI = 0.05
-
-# KİRALAMA BAŞLATMA SÜRESİ (saniye) - Bu sürede fiyat değişebilir
-KIRALAMA_BASLATMA_SURESI = 45
-
-# COOLDOWN SÜRESİ (saniye) - Aynı fırsat için tekrar işlem yapmadan bekleme
-COOLDOWN_SURESI = 60
-
-# FIRSAT PENCERESİ (saniye) - Farkın bu süre boyunca devam etmesi gerekir
-FIRSAT_PENCERESI = 15
-
-# MİNİMUM LİKİDİTE (Aynı anda kaç sunucu müsait olmalı)
+ODEME_TRANSFER_UCRETI = 0.05       # İşlem başına sabit transfer ücreti
+KIRALAMA_BASLATMA_SURESI = 45      # saniye
+COOLDOWN_SURESI = 60               # saniye — aynı havuz çifti için bekleme
+FIRSAT_PENCERESI = 15              # saniye — farkın devam etmesi gereken süre
 MIN_LIKIDITE = 2
 
 # =====================================================================
-# 3. FIKHİ FİLTRE PARAMETRELERİ (Uyarı 2 için)
+# 3. FIKHİ FİLTRE PARAMETRELERİ
 # =====================================================================
-# İslami finans kurallarına uygunluk kontrolü
 FIKHI_FILTRE = {
-    "faizsiz_odeme": True,      # Platform faizsiz ödeme kabul ediyor mu?
-    "garar_yok": True,           # Sözleşmede aşırı belirsizlik var mı?
-    "ihtikar_yok": True,         # Stokçuluk/spekülasyon var mı?
-    "meşru_hizmet": True,        # Kiralanan hizmet meşru mu? (GPU kiralama = meşru)
-    "vade_farki_yok": True,      # Vadeli işlem faizi yok mu?
+    "faizsiz_odeme": True,
+    "garar_yok": True,
+    "ihtikar_yok": True,
+    "meşru_hizmet": True,
+    "vade_farki_yok": True,
 }
 
 # =====================================================================
@@ -58,10 +47,10 @@ FIKHI_FILTRE = {
 @st.cache_resource
 def paylasimli_hafiza():
     return {
-        "fiyatlar": {},              # {"Vast.ai": 0.220, ...}
+        "fiyatlar": {},
         "basarili_eslesme": 0,
         "kacirilan_firsat": 0,
-        "reddedilen_firsat": 0,      # Fıkhi filtre reddi
+        "reddedilen_firsat": 0,
         "toplam_kar": 0.0,
         "toplam_komisyon": 0.0,
         "toplam_transfer": 0.0,
@@ -70,19 +59,17 @@ def paylasimli_hafiza():
         "kontratlar": [],
         "son_guncelleme": "-",
         "log": [],
-        "firsat_gecmisi": {},        # {havuz_cifti: son_islem_zamani}
-        "bekleyen_firsatlar": {},    # {havuz_cifti: (fark, ilk_gorulme_zamani)}
+        "firsat_gecmisi": {},
+        "bekleyen_firsatlar": {},
         "demo_aktif": DEMO_MODE,
         "filtre_red_sebepleri": [],
     }
 
 # =====================================================================
-# 5. DEMO VERİ ÜRETİCİ (Gerçekçi Dalgalanma)
+# 5. DEMO VERİ ÜRETİCİ
 # =====================================================================
 def demo_fiyat_uret():
-    """Gerçek piyasa gibi dalgalanan fiyatlar üretir. Farklar saniyeler içinde kapanır."""
     time.sleep(0.05)
-    # Temel fiyatlar
     temel = {
         "Vast.ai": 0.220,
         "RunPod": 0.350,
@@ -90,11 +77,9 @@ def demo_fiyat_uret():
         "GPU.ai": 0.310,
         "Massed Compute": 0.290,
     }
-    # Gerçekçi dalgalanma: her havuz kendi etrafında ±%5 oynar
     fiyatlar = {}
     for havuz, fiyat in temel.items():
         dalgalanma = random.uniform(-0.05, 0.05)
-        # Bazen büyük farklar oluşur (%5 ihtimalle)
         if random.random() < 0.05:
             dalgalanma = random.uniform(-0.15, 0.15)
         fiyatlar[havuz] = round(max(0.150, fiyat * (1 + dalgalanma)), 3)
@@ -104,56 +89,29 @@ def demo_fiyat_uret():
 # 6. FIKHİ FİLTRE FONKSİYONU
 # =====================================================================
 def fikhi_filtre_kontrol(alis_havuz, satis_havuz, brut_fark):
-    """
-    İslami kurallara uygunluk kontrolü yapar.
-    Dönüş: (uygun_mu: bool, red_sebebi: str)
-    """
-    # 1. Faizsiz ödeme kontrolü
     if not FIKHI_FILTRE["faizsiz_odeme"]:
         return False, "Faizsiz ödeme şartı sağlanmıyor"
-    
-    # 2. Garar (belirsizlik) kontrolü - Fark çok küçükse belirsizlik artar
     if brut_fark < 0.01:
         return False, "Garar riski: Fark çok küçük, belirsizlik yüksek"
-    
-    # 3. Aşırı spekülasyon kontrolü - Fark çok büyükse manipülasyon olabilir
     if brut_fark > 0.500:
         return False, "Şüpheli fark: Manipülasyon riski"
-    
-    # 4. Meşru hizmet kontrolü - GPU kiralama meşru bir hizmettir
     if not FIKHI_FILTRE["meşru_hizmet"]:
         return False, "Hizmet meşru değil"
-    
-    # 5. Aynı havuzdan alıp satma yasağı (arbitraj mantığına aykırı)
     if alis_havuz == satis_havuz:
         return False, "Aynı havuzdan alım-satım yapılamaz"
-    
     return True, "Uygun"
 
 # =====================================================================
-# 7. GERÇEKÇİ KÂR HESABI (Komisyon + Transfer + Kiralama Süresi)
+# 7. GERÇEKÇİ KÂR HESABI
 # =====================================================================
 def gercek_kar_hesapla(alis_havuz, satis_havuz, alis_fiyat, satis_fiyat):
-    """
-    Gerçek piyasa maliyetlerini düşerek net kârı hesaplar.
-    """
     brut_fark = satis_fiyat - alis_fiyat
-    
-    # Komisyonlar (her iki platformdan da kesilir)
     komisyon_alis = alis_fiyat * PLATFORM_KOMISYON.get(alis_havuz, 0.20)
     komisyon_satis = satis_fiyat * PLATFORM_KOMISYON.get(satis_havuz, 0.20)
     toplam_komisyon = komisyon_alis + komisyon_satis
-    
-    # Transfer/ödeme ücreti
     toplam_transfer = ODEME_TRANSFER_UCRETI
-    
-    # Kiralama başlatma süresi maliyeti (fiyat bu sürede değişebilir)
-    # Ortalama %2 kayıp varsayımı
     baslatma_maliyeti = alis_fiyat * 0.02
-    
-    # Net kâr
     net_kar = brut_fark - toplam_komisyon - toplam_transfer - baslatma_maliyeti
-    
     return {
         "brut_fark": brut_fark,
         "toplam_komisyon": toplam_komisyon,
@@ -169,7 +127,6 @@ async def havuz_tara(session, url, headers, params=None, json_data=None, method=
     if DEMO_MODE:
         await asyncio.sleep(random.uniform(0.1, 0.3))
         return None, random.randint(30, 80)
-    
     start = time.time()
     try:
         if method == "GET":
@@ -190,13 +147,9 @@ async def havuz_tara(session, url, headers, params=None, json_data=None, method=
         return {"_hata": f"Beklenmeyen: {str(e)[:50]}"}, 0
 
 # =====================================================================
-# 9. ANA ARBITRAJ MOTORU (Gerçek Piyasa Mantığı)
+# 9. ANA ARBITRAJ MOTORU
 # =====================================================================
 async def arbitraj_motoru(kar_esigi, hafiza):
-    headers_vast = {"Accept": "application/json", "Authorization": "Bearer VAST_KEY"}
-    headers_runpod = {"Content-Type": "application/json", "Authorization": "Bearer RUNPOD_KEY"}
-    headers_generic = {"Authorization": "Bearer GENEL_TOKEN", "Accept": "application/json"}
-
     async with aiohttp.ClientSession() as session:
         while True:
             try:
@@ -204,11 +157,10 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                 if DEMO_MODE:
                     hafiza["fiyatlar"] = demo_fiyat_uret()
                     hafiza["gecikme_ms"] = random.randint(30, 80)
-                    if random.random() < 0.2:  # Bazen log spam'ini azalt
+                    if random.random() < 0.2:
                         hafiza["log"].append("Demo: Fiyatlar güncellendi")
                 else:
-                    # Gerçek API çağrıları (API anahtarları girildiğinde çalışır)
-                    pass  # Bu kısım gerçek API anahtarlarıyla doldurulacak
+                    pass
 
                 simdi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 hafiza["son_guncelleme"] = simdi
@@ -225,53 +177,46 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                 satis = fiyatlar[en_pahali]
                 brut_fark = satis - alis
 
-                # --- UYARI 1: GERÇEKÇİ İŞLEM SIKLIĞI (Cooldown) ---
+                # --- COOLDOWN KONTROLÜ ---
                 havuz_cifti = f"{en_ucuz}->{en_pahali}"
                 simdi_dt = datetime.now()
-                
-                # Cooldown kontrolü
+
                 if havuz_cifti in hafiza["firsat_gecmisi"]:
                     son_islem = hafiza["firsat_gecmisi"][havuz_cifti]
                     gecen_sure = (simdi_dt - son_islem).total_seconds()
                     if gecen_sure < COOLDOWN_SURESI:
-                        # Cooldown süresi dolmadı, bu fırsatı atla
                         await asyncio.sleep(5)
                         continue
 
-                # Fırsat penceresi kontrolü (farkın sürekli olması gerekir)
+                # --- FIRSAT PENCERESİ KONTROLÜ ---
                 if havuz_cifti in hafiza["bekleyen_firsatlar"]:
                     ilk_fark, ilk_zaman = hafiza["bekleyen_firsatlar"][havuz_cifti]
                     gecen = (simdi_dt - ilk_zaman).total_seconds()
                     if gecen >= FIRSAT_PENCERESI and abs(brut_fark - ilk_fark) < 0.02:
-                        # Fırsat penceresi doldu ve fark hala benzer -> gerçek fırsat
                         pass
                     else:
-                        # Henüz pencere dolmadı, bekle
                         await asyncio.sleep(5)
                         continue
                 else:
-                    # Yeni fırsat, kaydet ve bekle
                     hafiza["bekleyen_firsatlar"][havuz_cifti] = (brut_fark, simdi_dt)
                     await asyncio.sleep(5)
                     continue
 
-                # --- UYARI 2: FIKHİ FİLTRE ---
+                # --- FIKHİ FİLTRE ---
                 uygun, sebep = fikhi_filtre_kontrol(en_ucuz, en_pahali, brut_fark)
                 if not uygun:
                     hafiza["reddedilen_firsat"] += 1
                     hafiza["filtre_red_sebepleri"].append(f"{simdi} - {sebep}")
                     if len(hafiza["filtre_red_sebepleri"]) > 20:
                         hafiza["filtre_red_sebepleri"].pop(0)
-                    # Reddedilen fırsatı temizle
                     hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
                     await asyncio.sleep(5)
                     continue
 
-                # --- UYARI 3: GERÇEKÇİ KÂR HESABI ---
+                # --- GERÇEKÇİ KÂR HESABI ---
                 kar_detay = gercek_kar_hesapla(en_ucuz, en_pahali, alis, satis)
                 net_kar = kar_detay["net_kar"]
 
-                # Fırsat kaçırma (fark var ama eşik altında)
                 if 0.005 < net_kar < kar_esigi:
                     hafiza["kacirilan_firsat"] += 1
                     hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
@@ -280,7 +225,6 @@ async def arbitraj_motoru(kar_esigi, hafiza):
 
                 # --- BAŞARILI EŞLEŞME ---
                 if net_kar >= kar_esigi and net_kar > 0:
-                    # Gerçek piyasada emir gerçekleşme oranı %60-70
                     if random.random() < 0.65:
                         hafiza["basarili_eslesme"] += 1
                         hafiza["toplam_kar"] += net_kar
@@ -288,7 +232,6 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                         hafiza["toplam_komisyon"] += kar_detay["toplam_komisyon"]
                         hafiza["toplam_transfer"] += kar_detay["toplam_transfer"]
 
-                        # Cooldown'u güncelle
                         hafiza["firsat_gecmisi"][havuz_cifti] = simdi_dt
                         hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
 
@@ -303,7 +246,6 @@ async def arbitraj_motoru(kar_esigi, hafiza):
                         if len(hafiza["kontratlar"]) > 10:
                             hafiza["kontratlar"].pop()
 
-                # Logları sınırla
                 if len(hafiza["log"]) > 20:
                     hafiza["log"] = hafiza["log"][-20:]
 
@@ -358,14 +300,14 @@ else:
         "Dinamik Kâr Eşiği ($/saat)",
         min_value=0.000, max_value=0.200, value=0.030, step=0.005
     )
-    st.sidebar.caption(f"Bu eşiğin altındaki kârlar 'kaçırılan fırsat' sayılır.")
+    st.sidebar.caption("Bu eşiğin altındaki kârlar 'kaçırılan fırsat' sayılır.")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### ⚙️ Gerçek Piyasa Parametreleri")
     st.sidebar.caption(f"⏱️ Cooldown: {COOLDOWN_SURESI} sn")
     st.sidebar.caption(f"🎯 Fırsat Penceresi: {FIRSAT_PENCERESI} sn")
     st.sidebar.caption(f"💳 Transfer Ücreti: ${ODEME_TRANSFER_UCRETI}")
-    st.sidebar.caption(f"📉 Emir Gerçekleşme: ~%65")
+    st.sidebar.caption("📉 Emir Gerçekleşme: ~%65")
 
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Botu Yeniden Başlat"):
@@ -400,7 +342,6 @@ else:
 
     fiyatlar = hafiza.get("fiyatlar", {})
     if fiyatlar:
-        # En ucuz ve en pahalıyı işaretle
         if len(fiyatlar) >= 2:
             en_ucuz = min(fiyatlar, key=fiyatlar.get)
             en_pahali = max(fiyatlar, key=fiyatlar.get)
@@ -463,20 +404,18 @@ else:
     # FIKHİ FİLTRE DETAYLARI
     # =================================================================
     with st.expander("🕌 Fıkhî Filtre Aktif Kuralları"):
-        st.markdown("""
-        Bu sistem, aşağıdaki İslami finans kurallarına göre her fırsatı denetler:
-        
-        | Kural | Açıklama | Durum |
-        |-------|----------|-------|
-        | **Faizsiz Ödeme** | Platform faizsiz ödeme kabul etmeli | ✅ Aktif |
-        | **Garar Yok** | Fark 0.01$'dan küçükse belirsizlik nedeniyle reddedilir | ✅ Aktif |
-        | **İhtikar Yok** | Fark 0.500$'dan büyükse manipülasyon şüphesiyle reddedilir | ✅ Aktif |
-        | **Meşru Hizmet** | GPU kiralama meşru bir hizmettir | ✅ Aktif |
-        | **Vade Farkı Yok** | Vadeli işlem faizi yasaktır | ✅ Aktif |
-        
-        **Reddedilen Fırsatlar** aşağıda listelenir. Bu fırsatlar kârlı olsa bile  
-        İslami kurallara uymadığı için sistem tarafından otomatik olarak elenir.
-        """)
+        st.markdown(
+            "Bu sistem, aşağıdaki İslami finans kurallarına göre her fırsatı denetler:\n\n"
+            "| Kural | Açıklama | Durum |\n"
+            "|-------|----------|-------|\n"
+            "| **Faizsiz Ödeme** | Platform faizsiz ödeme kabul etmeli | ✅ Aktif |\n"
+            "| **Garar Yok** | Fark 0.01$'dan küçükse belirsizlik nedeniyle reddedilir | ✅ Aktif |\n"
+            "| **İhtikar Yok** | Fark 0.500$'dan büyükse manipülasyon şüphesiyle reddedilir | ✅ Aktif |\n"
+            "| **Meşru Hizmet** | GPU kiralama meşru bir hizmettir | ✅ Aktif |\n"
+            "| **Vade Farkı Yok** | Vadeli işlem faizi yasaktır | ✅ Aktif |\n\n"
+            "**Reddedilen Fırsatlar** aşağıda listelenir. Bu fırsatlar kârlı olsa bile "
+            "İslami kurallara uymadığı için sistem tarafından otomatik olarak elenir."
+        )
 
         if hafiza["filtre_red_sebepleri"]:
             st.markdown("**Son Red Sebepleri:**")
@@ -491,7 +430,92 @@ else:
     # GERÇEKÇİ KÂR HESABI AÇIKLAMASI
     # =================================================================
     with st.expander("💡 Net Kâr Nasıl Hesaplanıyor? (Gerçek Maliyetler)"):
-        st.markdown(f"""
-        Panelde görünen "Net Kâr", gerçek piyasa maliyetleri düşülerek hesaplanır:
-        
-        **Formül:**
+        st.markdown(
+            "Panelde görünen **Net Kâr**, gerçek piyasa maliyetleri düşülerek hesaplanır:\n\n"
+            "**Formül:**\n"
+            "```\n"
+            "Net Kâr = Brüt Fark \n"
+            "          - (Alış Komisyonu + Satış Komisyonu)\n"
+            f"          - Transfer Ücreti (${ODEME_TRANSFER_UCRETI})\n"
+            "          - Kiralama Başlatma Maliyeti (%2 kayıp)\n"
+            "```\n\n"
+            "**Platform Komisyon Oranları:**\n"
+            "| Platform | Komisyon |\n"
+            "|----------|----------|\n"
+            "| Vast.ai | %25 |\n"
+            "| RunPod | %20 |\n"
+            "| Shadeform | %15 |\n"
+            "| GPU.ai | %18 |\n"
+            "| Massed Compute | %15 |\n\n"
+            "⚠️ Bu nedenle panelde gördüğünüz **brüt fark** ile **net kâr** arasında ciddi fark olabilir."
+        )
+
+    st.markdown("---")
+
+    # =================================================================
+    # SON GERÇEKLEŞEN İŞLEMLER
+    # =================================================================
+    if hafiza["kontratlar"]:
+        st.subheader("📋 Son Gerçekleşen İşlemler")
+        for kt in hafiza["kontratlar"]:
+            st.markdown(
+                f"**{kt['Zaman']}** | {kt['Alış']} → {kt['Satış']} | "
+                f"Brüt: {kt['Brüt']} | Komisyon: {kt['Komisyon']} | "
+                f"**Net: {kt['Net Kâr']}**"
+            )
+        st.markdown("---")
+
+    # =================================================================
+    # BEKLEYEN FIRSATLAR
+    # =================================================================
+    bekleyen = hafiza.get("bekleyen_firsatlar", {})
+    if bekleyen:
+        with st.expander(f"⏳ Fırsat Penceresinde Bekleyen ({len(bekleyen)} adet)"):
+            st.caption(
+                f"Bu fırsatlar {FIRSAT_PENCERESI} saniyelik pencereyi doldurmayı bekliyor. "
+                "Dolarsa gerçek işlem açılır, dolmazsa elenir."
+            )
+            for cift, (fark, zaman) in bekleyen.items():
+                gecen = (datetime.now() - zaman).total_seconds()
+                st.text(f"⏳ {cift} | Fark: ${fark:.3f} | Geçen: {gecen:.1f} sn")
+
+    # =================================================================
+    # SİSTEM LOGLARI
+    # =================================================================
+    with st.expander("🔧 Sistem Logları ve Hata Kayıtları"):
+        if hafiza["log"]:
+            for log in hafiza["log"][-20:]:
+                st.text(log)
+        else:
+            st.text("Henüz log kaydı yok. Sistem sorunsuz çalışıyor.")
+
+    # =================================================================
+    # SORUN GİDERME (F-STRING HATASI DÜZELTİLDİ)
+    # =================================================================
+    # ⚠️ Koşullu ifade önce bir değişkene atandı — f-string içinde tırnak çakışması önlendi.
+    mevcut_mod_metni = "🧪 DEMO (Sanal Veri)" if DEMO_MODE else "🔴 GERÇEK (Canlı API)"
+
+    with st.expander("❓ Sistem Nasıl Çalışır? (Gerçek Piyasa Mantığı)"):
+        st.markdown(
+            f"**Mevcut Mod:** {mevcut_mod_metni}\n\n"
+            "**Gerçek Piyasa Mantığı Farkları:**\n\n"
+            f"1. **Cooldown ({COOLDOWN_SURESI} sn):** Aynı havuz çifti için 60 saniye boyunca yeni işlem açılmaz.  \n"
+            "   *Neden?* Gerçek piyasada aynı fırsat saniyeler içinde kapanır, tekrar tekrar işlem yapmak imkansızdır.\n\n"
+            f"2. **Fırsat Penceresi ({FIRSAT_PENCERESI} sn):** Bir farkın en az 15 saniye devam etmesi gerekir.  \n"
+            "   *Neden?* Anlık fiyat dalgalanmaları sahte fırsatlar yaratır. Kalıcı farklar gerçek arbitrajdır.\n\n"
+            "3. **Emir Gerçekleşme Oranı (~%65):** Her fırsat yakalanamaz.  \n"
+            "   *Neden?* Gerçek piyasada emirler gecikme, likidite ve rekabet nedeniyle kaçırılır.\n\n"
+            "4. **Komisyon + Transfer + Kiralama Maliyeti:** Brüt fark değil, net kâr önemli.  \n"
+            "   *Neden?* Vast.ai %25, RunPod %20 komisyon alır. Ayrıca transfer ücretleri ve kiralama başlatma süresi maliyeti vardır.\n\n"
+            "5. **Fıkhi Filtre:** Faizsiz, gararsız, meşru hizmet kontrolü yapılır.  \n"
+            "   *Neden?* Kâr helal olmalı. Haram yoldan kazanç İslam'a aykırıdır.\n\n"
+            "**Gerçek Moda Nasıl Geçilir?**  \n"
+            "Kodun en üstündeki `DEMO_MODE = True` satırını `False` yapın.  \n"
+            "Vast.ai ve RunPod hesaplarınızdan aldığınız **gerçek API anahtarlarını** kodda ilgili yerlere yapıştırın."
+        )
+
+    # =================================================================
+    # SAYFAYI PERİYODİK YENİLE
+    # =================================================================
+    time.sleep(3)
+    st.rerun()
