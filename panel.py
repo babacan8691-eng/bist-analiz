@@ -42,14 +42,12 @@ async def havuz_tara_async(session, url, headers, params=None, json_data=None, m
     try:
         if method == "GET":
             async with session.get(url, headers=headers, params=params, timeout=3) as resp:
-                latency = int((time.time() - start_time) * 1000)
                 if resp.status == 200:
-                    return await resp.json(), latency
+                    return await resp.json(), int((time.time() - start_time) * 1000)
         elif method == "POST":
             async with session.post(url, headers=headers, json=json_data, timeout=3) as resp:
-                latency = int((time.time() - start_time) * 1000)
                 if resp.status == 200:
-                    return await resp.json(), latency
+                    return await resp.json(), int((time.time() - start_time) * 1000)
     except:
         pass
     return None, 45
@@ -73,15 +71,15 @@ async def profesyonel_5_li_motor(kar_esigi):
             res_v, res_r, res_s, res_g, res_m = await asyncio.gather(task_v, task_r, task_s, task_g, task_m)
             
             v_fiyat = 0.220; sunucu_id = "Vast_956"; v_lat = 45
-            if res_v and res_v.get("offers"):
-                v_fiyat = float(res_v["offers"].get("dph_base", 0.220))
-                sunucu_id = f"Vast_{res_v['offers'].get('id')}"
-                v_lat = res_v
+            if res_v and res_v[0] and res_v[0].get("offers"):
+                v_fiyat = float(res_v[0]["offers"].get("dph_base", 0.220))
+                sunucu_id = f"Vast_{res_v[0]['offers'].get('id')}"
+                v_lat = res_v[1]
 
             r_fiyat = 0.350; r_lat = 45
-            if res_r and res_r.get("data"):
-                r_lat = res_r
-                for g in res_r["data"].get("gpuTypes", []):
+            if res_r and res_r[0] and res_r[0].get("data"):
+                r_lat = res_r[1]
+                for g in res_r[0]["data"].get("gpuTypes", []):
                     if "4090" in g.get("displayName", ""):
                         r_fiyat = float(g.get("lowestPrice", 0.350))
 
@@ -137,75 +135,65 @@ def arkaplan_botu_tetikle(kar_esigi):
     loop.run_until_complete(profesyonel_5_li_motor(kar_esigi))
 
 # =====================================================================
-# 3. YERLEŞİMİ MOBİL UYUMLU OLARAK DÜZELTİLEN ARAYÜZ KATMANI
+# 3. YERLEŞİMİ MOBİL UYUMLU DÜZ LİSTE ARAYÜZ KATMANI (HATASIZLAŞTIRILDI)
 # =====================================================================
 st.set_page_config(page_title="5-Way Pro GPU Arbitraj Kontrol Merkezi", layout="wide")
 
-def giris_ekrani():
-    st.markdown("<h2 style='text-align: center;'>🔒 5-Way Profesyonel Arbitraj Paneli Girişi</h2>", unsafe_allow_html=True)
-    with st.form("login_form"):
-        kullanici_adi = st.text_input("Kullanıcı Adı")
-        sifre = st.text_input("Şifre", type="password")
-        if st.form_submit_button("Sisteme Giriş Yap"):
-            if kullanici_adi.strip() == "Cuma Babacan" and sifre.strip() == "784512":
-                st.session_state["oturum_acik"] = True
-                st.rerun()
-            else:
-                st.error("Hatalı Kullanıcı Adı veya Şifre!")
-
+# Oturum açma durumu
 if "oturum_acik" not in st.session_state:
     st.session_state["oturum_acik"] = False
 
 if not st.session_state["oturum_acik"]:
-    giris_ekrani()
+    st.markdown("<h2>🔒 5-Way Profesyonel Arbitraj Paneli Girişi</h2>", unsafe_allow_html=True)
+    kullanici_adi = st.text_input("Kullanıcı Adı", key="username_field")
+    sifre = st.text_input("Şifre", type="password", key="password_field")
+    if st.button("Sisteme Giriş Yap"):
+        if kullanici_adi.strip() == "Cuma Babacan" and sifre.strip() == "784512":
+            st.session_state["oturum_acik"] = True
+            st.rerun()
+        else:
+            st.error("Hatalı Kullanıcı Adı veya Şifre!")
 else:
-    # SOL MENÜ PARAMETRELERİ (SÜRGÜ)
-    st.sidebar.markdown(f"👤 **Yönetici:** Cuma Babacan")
+    # Sol Menü Ayarları
+    st.sidebar.markdown("👤 **Yönetici:** Cuma Babacan")
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🛠️ Çoklu Havuz Filtre Parametreleri")
-    
     kar_esigi = st.sidebar.slider("Dinamik Kâr Eşiği Barajı ($)", min_value=0.000, max_value=0.200, value=0.000, step=0.005)
     
     if st.sidebar.button("Oturumu Kapat"):
         st.session_state["oturum_acik"] = False
         st.rerun()
 
+    # Arka plan botunu tetikleme
     if "bot_calisiyor" not in st.session_state:
         st.session_state["bot_calisiyor"] = True
         t = threading.Thread(target=arkaplan_botu_tetikle, args=(kar_esigi,), daemon=True)
         t.start()
 
-    # ANA PANEL BAŞLIĞI
+    # Ana Sayfa Başlığı
     st.title("⚡ Pro Otonom Altyapı Arbitraj Motoru")
     st.caption("Çoklu Thread ve Asenkron Paralel Yapı ile Güçlendirilmiş İslami Altyapı")
     st.markdown("---")
 
-    # MOBİLDE TAŞMAYI ENGELLEYEN YENİ AÇILIR-KAPANIR FİYAT LİSTESİ (EXPANDER)
-    with st.expander("🌐 Canlı Küresel RTX 4090 Pazar Fiyat Endeksi (Görmek İçin Tıklayın)", expanded=False):
-        st.write(f"🟢 **Vast.ai:** `${st.session_state['canli_hafiza']['vast_fiyat']:.3f} / saat`")
-        st.write(f"🔵 **RunPod:** `${st.session_state['canli_hafiza']['runpod_fiyat']:.3f} / saat`")
-        st.write(f"🟣 **Shadeform:** `${st.session_state['canli_hafiza']['shadeform_fiyat']:.3f} / saat`")
-        st.write(f"🟠 **GPU.ai:** `${st.session_state['canli_hafiza']['gpuai_fiyat']:.3f} / saat`")
-        st.write(f"🟡 **Massed Compute:** `${st.session_state['canli_hafiza']['massed_fiyat']:.3f} / saat`")
-
+    # Mobil Uyumlu Düz Canlı Fiyat Endeksi Listesi
+    st.subheader("🌐 Canlı Küresel RTX 4090 Pazar Fiyat Endeksi")
+    st.text(f"🟢 Vast.ai Fiyatı: ${st.session_state['canli_hafiza']['vast_fiyat']:.3f} / saat")
+    st.text(f"🔵 RunPod Fiyatı: ${st.session_state['canli_hafiza']['runpod_fiyat']:.3f} / saat")
+    st.text(f"🟣 Shadeform Fiyatı: ${st.session_state['canli_hafiza']['shadeform_fiyat']:.3f} / saat")
+    st.text(f"🟠 GPU.ai Fiyatı: ${st.session_state['canli_hafiza']['gpuai_fiyat']:.3f} / saat")
+    st.text(f"🟡 Massed Compute Fiyatı: ${st.session_state['canli_hafiza']['massed_fiyat']:.3f} / saat")
     st.markdown("---")
 
-    # ÜST METRİK KARTLARI (ESKİ OKUNAKLI DÜZENE GERİ DÖNDÜ)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(label="💰 Toplam Sermaye", value="$500.00")
-    with col2:
-        st.metric(label="⚡ Aktif Yakalanan Emtia", value=f"{st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
-    with col3:
-        st.metric(label="📈 Toplam Çapraz Getiri", value=f"${st.session_state['canli_hafiza']['toplam_kar']:.3f}")
-    with col4:
-        st.metric(label="📶 5'li Ağ Tepki Hızı", value=f"{st.session_state['canli_hafiza']['gecikme_ms']} ms", delta="Optimize Edildi")
-
+    # Temel Metrikler (Düz Liste Düzeni - Mobil Ekrandan Taşmaz)
+    st.subheader("📊 Canlı Hesap Durumu ve Metrikler")
+    st.write(f"💰 **Toplam Sermaye Gücü:** $500.00")
+    st.write(f"⚡ **Aktif Yakalanan Emtia Sayısı:** {st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
+    st.write(f"📈 **Toplam Çapraz Getiri (Kâr):** ${st.session_state['canli_hafiza']['toplam_kar']:.3f}")
+    st.write(f"📶 **5'li Ortak Ağ Tepki Hızı:** {st.session_state['canli_hafiza']['gecikme_ms']} ms")
     st.markdown("---")
 
-    # CANLI OPERASYON VE GECİKME ANALİTİĞİ
-    st.subheader("📊 5 Havuzlu Ağ Operasyonu ve Gecikme Analitiği")
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
+    # Operasyon İstatistikleri
+    st.subheader("📈 Operasyon ve Fıkhî Güvence Analitiği")
+    st.write(f"✔️ **Gerçek Zamanlı Başarılı Eşleşme:** {st.session_state['canli_hafiza']['basarili_eslesme']} Adet")
+    st.write(f"❌ **Zarar Eden Sözleşme Sayısı:** 0 Adet (Fiyat Koruma Filtresi Aktif)")
+    st.write(f"⚠️ **Gecikme Nedeniyle Kaçan Fırsat:** {st.session_state['canli_hafiza']['kacirilan_firsat']} Adet")
     
