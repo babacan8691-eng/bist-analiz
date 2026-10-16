@@ -12,3 +12,4 @@ evdsts
 tefasmak
 burkut
 aiohttp
+pip install streamlit pandas beautifulsoup4 aiohttp pytrends lxml requests
