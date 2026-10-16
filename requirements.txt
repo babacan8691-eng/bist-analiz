@@ -1,18 +1,3 @@
-yfinance
-streamlit
-plotly
-streamlit-autorefresh
-arch
-statsmodels
-pandas
-numpy
-requests
-kap_sdk
-evdsts
-tefasmak
-burkut
-aiohttp
-pip install streamlit pandas beautifulsoup4 aiohttp pytrends lxml requests
 streamlit==1.28.2
 pandas==2.0.3
 beautifulsoup4==4.12.2
