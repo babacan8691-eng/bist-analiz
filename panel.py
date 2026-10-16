@@ -26,7 +26,7 @@ VERI_DOSYASI = "firsat_verileri.json"
 CACHE_SURESI = 24 * 60 * 60
 
 # =====================================================================
-# 2. 20 SEKTÖR (30'dan düşürüldü)
+# 2. 20 SEKTÖR
 # =====================================================================
 SEKTORLER = [
     {"id": 1,  "isim": "Veteriner Klinikleri",    "kategori": "Sağlık",    "isletme_sayisi": 12000,  "aylik_butce": 1500, "yazilim_sayisi": 3},
@@ -57,41 +57,28 @@ SEKTORLER = [
 @st.cache_resource
 def get_hafiza():
     return {"sektor_verileri": {}, "son_guncelleme": None} # =====================================================================
-# 4. TARAYICI — DEMO MODDA SANAL, GERÇEK MODDA SIMÜLE
+# 4. TARAYICI
 # =====================================================================
 def sektor_tara(sektor):
-    """
-    Bir sektörü tarar. Demo modda sanal veri üretir.
-    Gerçek modda scraping denemesi yapar ama başarısız olursa simüle veri döner.
-    """
-    # Kaynak 1: Google Trends (her zaman simüle)
     google = {
         "talep_puani": random.randint(30, 95),
         "trend": random.choice(["yükseliyor", "sabit", "düşüyor"]),
     }
-    
-    # Kaynak 2: Şikayetvar
     sv_sayi = random.randint(50, 3000)
     sikayetvar = {
         "sikayet_sayisi": sv_sayi,
         "aciliyet_puani": min(100, sv_sayi // 10),
     }
-    
-    # Kaynak 3: Ekşi Sözlük
     eks_sayi = random.randint(10, 500)
     eksisozluk = {
         "baslik_sayisi": eks_sayi,
         "tartisma_puani": min(100, eks_sayi * 2),
     }
-    
-    # Kaynak 4: Donanım Haber
     dh_sayi = random.randint(20, 800)
     donanimhaber = {
         "konu_sayisi": dh_sayi,
         "teknik_soru_puani": min(100, dh_sayi),
     }
-    
-    # Kaynak 5: Sahibinden
     sahibinden = {
         "ilan_sayisi": random.randint(100, 10000),
         "pazar_canliligi": random.randint(30, 95),
@@ -115,7 +102,6 @@ def sektor_tara(sektor):
     }
 
 def tum_sektorleri_tara(hafiza):
-    """20 sektörü sırayla tarar."""
     hafiza["sektor_verileri"] = {}
     for i, sektor in enumerate(SEKTORLER):
         try:
@@ -128,12 +114,11 @@ def tum_sektorleri_tara(hafiza):
     verileri_kaydet(hafiza)
 
 # =====================================================================
-# 5. PUANLAMA MOTORU
+# 5. PUANLAMA
 # =====================================================================
 def sektor_puanla(veri):
     kaynaklar = veri.get("kaynaklar", {})
     
-    # TALEP
     talep_puani = 0
     gt = kaynaklar.get("google_trends", {})
     if "talep_puani" in gt:
@@ -146,22 +131,18 @@ def sektor_puanla(veri):
         talep_puani += dh["teknik_soru_puani"] * 0.2
     talep_puani = min(100, talep_puani)
     
-    # ÖDEME
     isletme = veri.get("isletme_sayisi", 0)
     butce = veri.get("aylik_butce", 0)
     isletme_puan = min(100, (isletme / 100000) * 100)
     butce_puan = min(100, (butce / 3000) * 100)
     odeme_puani = (isletme_puan * 0.4) + (butce_puan * 0.6)
     
-    # ACİLİYET
     sv = kaynaklar.get("sikayetvar", {})
     aciliyet_puani = sv.get("aciliyet_puani", 0)
     
-    # REKABET
     yazilim = veri.get("yazilim_sayisi", 0)
     rekabet_puani = max(0, 100 - (yazilim * 4))
     
-    # TOPLAM
     toplam = (
         talep_puani * 0.35 +
         odeme_puani * 0.30 +
@@ -222,7 +203,7 @@ def kategori_ozeti(sonuclar):
     return ozet
 
 # =====================================================================
-# 6. CACHE / KAYDET / YÜKLE
+# 6. CACHE
 # =====================================================================
 def verileri_kaydet(hafiza):
     try:
@@ -246,10 +227,8 @@ def verileri_yukle(hafiza):
     except:
         pass
     return False # =====================================================================
-# 7. STREAMLIT ARAYÜZÜ
+# 7. ARAYÜZ
 # =====================================================================
-
-# --- OTURUM AÇMA ---
 if "oturum_acik" not in st.session_state:
     st.session_state["oturum_acik"] = False
 
@@ -269,12 +248,9 @@ if not st.session_state["oturum_acik"]:
 
     st.stop()
 
-# --- GİRİŞ YAPILDI ---
 hafiza = get_hafiza()
 
-# =====================================================================
 # SOL MENÜ
-# =====================================================================
 st.sidebar.markdown("👤 **Yönetici:** Cuma Babacan")
 st.sidebar.markdown("---")
 st.sidebar.success("🧪 DEMO MODU")
@@ -310,39 +286,27 @@ st.sidebar.markdown("### ⚖️ Puanlama")
 st.sidebar.caption("Talep: %35 | Ödeme: %30")
 st.sidebar.caption("Aciliyet: %20 | Rekabet: %15")
 
-# =====================================================================
 # VERİ YÜKLE
-# =====================================================================
 if not hafiza["sektor_verileri"]:
     verileri_yukle(hafiza)
 
-# =====================================================================
 # BAŞLIK
-# =====================================================================
 st.title("🎯 Fırsat Madenciliği — 20 Sektör")
 st.caption("Hangi sektör çözüm bekliyor? Hangi sektör ödemeye hazır?")
 st.markdown("---")
 
-# =====================================================================
-# VERİ YOKSA
-# =====================================================================
 if not hafiza["sektor_verileri"]:
     st.info("👈 Sol menüden **▶️ Taramayı Başlat** butonuna tıklayın.")
     st.caption("20 sektör 5-10 saniyede taranır.")
     st.stop()
 
-# =====================================================================
-# SONUÇLARI HESAPLA
-# =====================================================================
 sonuclar = tum_sektorleri_puanla(hafiza)
 
 if not sonuclar:
-    st.warning("Puanlanacak veri yok. Sol menüden tarama başlatın.")
+    st.warning("Puanlanacak veri yok.")
     st.stop()
 
-# =====================================================================
-# ÜST METRİKLER
-# =====================================================================
+# METRİKLER
 toplam = len(sonuclar)
 hazir_sayisi = sum(1 for s in sonuclar if s["odemeye_hazir"])
 en_yuksek = max(s["toplam_puan"] for s in sonuclar)
@@ -357,15 +321,11 @@ col4.metric("📈 Ortalama", f"{ortalama:.1f}")
 st.caption(f"🕐 Son tarama: {hafiza.get('son_guncelleme', '-')}")
 st.markdown("---")
 
-# =====================================================================
-# ÖDEMEYE HAZIR SEKTÖRLER
-# =====================================================================
+# ÖDEMEYE HAZIR
 st.subheader("💰 Ödemeye Hazır Sektörler")
-
 hazir_sektorler = [s for s in sonuclar if s["odemeye_hazir"]]
 
 if hazir_sektorler:
-    st.caption("Bu sektörler 4 kriteri de geçti: talep, ödeme, aciliyet ve düşük rekabet.")
     for s in hazir_sektorler:
         with st.container(border=True):
             col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
@@ -378,23 +338,19 @@ if hazir_sektorler:
                 st.metric("İşletme", f"{s['isletme_sayisi']:,}")
             with col_d:
                 st.metric("Bütçe", f"{s['aylik_butce']} TL")
-
             st.caption(
-                f"📈 Talep: {s['talep_puani']:.0f}/100  |  "
-                f"💵 Ödeme: {s['odeme_puani']:.0f}/100  |  "
-                f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}/100  |  "
-                f"🥊 Rekabet: {s['rekabet_puani']:.0f}/100"
+                f"📈 Talep: {s['talep_puani']:.0f}  |  "
+                f"💵 Ödeme: {s['odeme_puani']:.0f}  |  "
+                f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}  |  "
+                f"🥊 Rekabet: {s['rekabet_puani']:.0f}"
             )
 else:
-    st.info("Şu an 4 kriteri de geçen sektör yok. Aşağıdaki tabloya bakın.")
+    st.info("Şu an 4 kriteri de geçen sektör yok.")
 
 st.markdown("---")
 
-# =====================================================================
-# TÜM SEKTÖRLER TABLOSU
-# =====================================================================
-st.subheader("📋 Tüm Sektörler Sıralaması")
-
+# TABLO
+st.subheader("📋 Tüm Sektörler")
 df_veri = []
 for i, s in enumerate(sonuclar, 1):
     df_veri.append({
@@ -427,13 +383,9 @@ else:
     df_goster = df[df["Fırsat"] >= min_puan]
 
 st.dataframe(df_goster, use_container_width=True, hide_index=True)
-st.caption(f"Toplam {len(df_goster)} sektör.")
-
 st.markdown("---")
 
-# =====================================================================
-# KATEGORİ ÖZETİ
-# =====================================================================
+# KATEGORİ
 st.subheader("📂 Kategori Özeti")
 kat_ozet = kategori_ozeti(sonuclar)
 if kat_ozet:
@@ -443,11 +395,8 @@ if kat_ozet:
 
 st.markdown("---")
 
-# =====================================================================
-# EN İYİ 5 DETAY
-# =====================================================================
+# EN İYİ 5
 st.subheader("🏆 En İyi 5 Sektör")
-
 for i, s in enumerate(sonuclar[:5], 1):
     with st.expander(f"#{i} {s['isim']} — Puan: {s['toplam_puan']:.1f}"):
         col1, col2 = st.columns(2)
@@ -461,11 +410,11 @@ for i, s in enumerate(sonuclar[:5], 1):
             st.markdown(f"**Ödeme:** {s['odeme_puani']:.0f}/100")
             st.markdown(f"**Aciliyet:** {s['aciliyet_puani']:.0f}/100")
             st.markdown(f"**Rekabet:** {s['rekabet_puani']:.0f}/100")
-
+        
         tahmini = s["isletme_sayisi"] * s["aylik_butce"] * 0.001
         st.markdown(f"**Potansiyel Aylık Gelir:** {tahmini:,.0f} TL")
         st.markdown(f"**Mevcut Yazılım Sayısı:** {s['yazilim_sayisi']}")
-
+        
         if s["odemeye_hazir"]:
             st.success("✅ Bu sektör ödemeye hazır")
         else:
@@ -473,9 +422,6 @@ for i, s in enumerate(sonuclar[:5], 1):
 
 st.markdown("---")
 
-# =====================================================================
-# BİLGİ
-# =====================================================================
 with st.expander("❓ Sistem Nasıl Çalışır?"):
     st.markdown(
         "**Bu sistem 20 sektörü 4 kriterde puanlar:**\n\n"
@@ -484,9 +430,5 @@ with st.expander("❓ Sistem Nasıl Çalışır?"):
         "- **Aciliyet (%20):** Şikayetvar şikayetleri\n"
         "- **Rekabet (%15):** Mevcut yazılım sayısı (az = iyi)\n\n"
         "**Ödemeye Hazır Şartları:**\n"
-        "- Toplam ≥ 60, Ödeme ≥ 50, Aciliyet ≥ 40, Rekabet ≥ 40\n\n"
-        "**Kullanım:**\n"
-        "1. Sol menüden **▶️ Taramayı Başlat**\n"
-        "2. Sayfayı **F5** ile yenile\n"
-        "3. Sonuçları incele"
-    )
+        "- Toplam ≥ 60, Ödeme ≥ 50, Aciliyet ≥ 40, Rekabet ≥ 40"
+) 
