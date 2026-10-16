@@ -1,4 +1,18 @@
+# =====================================================================
+# BU DOSYAYI SIFIRDAN OLUŞTURUN. ESKİ KODU TAMAMEN SİLİN.
+# =====================================================================
+
 import streamlit as st
+
+# ⚠️ ÖNEMLİ: st.set_page_config HER ZAMAN İLK STREAMLIT KOMUTU OLMALI
+# Bu dosyada SADECE 1 KEZ çağrılıyor. Başka yerde çağırmayın.
+st.set_page_config(
+    page_title="Fırsat Madenciliği - 30 Sektör",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- DİĞER İMPORTLAR ---
 import asyncio
 import aiohttp
 import threading
@@ -6,67 +20,65 @@ import time
 import json
 import os
 import re
-from datetime import datetime, timedelta
+import random
+from datetime import datetime
 from bs4 import BeautifulSoup
 import pandas as pd
-import random
 
 # =====================================================================
 # 1. AYARLAR
 # =====================================================================
-DEMO_MODE = True
+DEMO_MODE = True  # True: sanal veri | False: gerçek scraping
+
 VERI_DOSYASI = "firsat_verileri.json"
 MANUEL_VERI_DOSYASI = "manuel_veri.json"
-CACHE_SURESI = 24 * 60 * 60
-
-# Rate limits (saniye)
-RATE_LIMITS = {
-    "google_trends": 3.0,
-    "sikayetvar": 2.0,
-    "eksisozluk": 4.0,
-    "donanimhaber": 2.0,
-    "sahibinden": 0.0,
-}
-_kaynak_son_kullanim = {}
+CACHE_SURESI = 24 * 60 * 60  # 24 saat
 
 # =====================================================================
 # 2. 30 SEKTÖR TANIMI
 # =====================================================================
 SEKTORLER = [
-    {"id": 1,  "isim": "Veteriner Klinikleri",    "kategori": "Sağlık",     "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
-    {"id": 2,  "isim": "Diş Hekimleri",           "kategori": "Sağlık",     "isletme_sayisi": 25000, "aylik_butce": 2000, "yazilim_sayisi": 8},
-    {"id": 3,  "isim": "Psikologlar",             "kategori": "Sağlık",     "isletme_sayisi": 15000, "aylik_butce": 800,  "yazilim_sayisi": 4},
-    {"id": 4,  "isim": "Fizyoterapistler",        "kategori": "Sağlık",     "isletme_sayisi": 8000,  "aylik_butce": 900,  "yazilim_sayisi": 2},
-    {"id": 5,  "isim": "Eczaneler",               "kategori": "Sağlık",     "isletme_sayisi": 28000, "aylik_butce": 1200, "yazilim_sayisi": 6},
-    {"id": 6,  "isim": "Optikçiler",              "kategori": "Sağlık",     "isletme_sayisi": 6000,  "aylik_butce": 1000, "yazilim_sayisi": 3},
-    {"id": 7,  "isim": "Avukatlar",               "kategori": "Hukuk",      "isletme_sayisi": 50000, "aylik_butce": 1500, "yazilim_sayisi": 5},
-    {"id": 8,  "isim": "Muhasebeciler",           "kategori": "Muhasebe",   "isletme_sayisi": 40000, "aylik_butce": 1200, "yazilim_sayisi": 7},
-    {"id": 9,  "isim": "Mali Müşavirler",         "kategori": "Muhasebe",   "isletme_sayisi": 30000, "aylik_butce": 1500, "yazilim_sayisi": 6},
-    {"id": 10, "isim": "Kuyumcular",              "kategori": "Perakende",  "isletme_sayisi": 35000, "aylik_butce": 2500, "yazilim_sayisi": 4},
-    {"id": 11, "isim": "Emlakçılar",              "kategori": "Perakende",  "isletme_sayisi": 60000, "aylik_butce": 800,  "yazilim_sayisi": 12},
-    {"id": 12, "isim": "Oto Galeriler",           "kategori": "Perakende",  "isletme_sayisi": 25000, "aylik_butce": 1800, "yazilim_sayisi": 8},
-    {"id": 13, "isim": "Oto Servisleri",          "kategori": "Hizmet",     "isletme_sayisi": 60000, "aylik_butce": 1000, "yazilim_sayisi": 6},
-    {"id": 14, "isim": "Tornacılar",              "kategori": "Sanayi",     "isletme_sayisi": 15000, "aylik_butce": 900,  "yazilim_sayisi": 2},
-    {"id": 15, "isim": "Marangozlar",             "kategori": "Sanayi",     "isletme_sayisi": 20000, "aylik_butce": 800,  "yazilim_sayisi": 2},
-    {"id": 16, "isim": "Restoranlar",             "kategori": "Gıda",       "isletme_sayisi": 200000,"aylik_butce": 1500, "yazilim_sayisi": 25},
-    {"id": 17, "isim": "Kafeler",                 "kategori": "Gıda",       "isletme_sayisi": 80000, "aylik_butce": 800,  "yazilim_sayisi": 20},
-    {"id": 18, "isim": "Pastaneler",              "kategori": "Gıda",       "isletme_sayisi": 30000, "aylik_butce": 1000, "yazilim_sayisi": 5},
-    {"id": 19, "isim": "Kasaplar",                "kategori": "Gıda",       "isletme_sayisi": 40000, "aylik_butce": 700,  "yazilim_sayisi": 3},
-    {"id": 20, "isim": "Manavlar",                "kategori": "Gıda",       "isletme_sayisi": 50000, "aylik_butce": 500,  "yazilim_sayisi": 2},
-    {"id": 21, "isim": "Berberler",               "kategori": "Güzellik",   "isletme_sayisi": 80000, "aylik_butce": 500,  "yazilim_sayisi": 8},
-    {"id": 22, "isim": "Kuaförler",               "kategori": "Güzellik",   "isletme_sayisi": 70000, "aylik_butce": 700,  "yazilim_sayisi": 8},
-    {"id": 23, "isim": "Güzellik Salonları",      "kategori": "Güzellik",   "isletme_sayisi": 40000, "aylik_butce": 1500, "yazilim_sayisi": 10},
-    {"id": 24, "isim": "Spor Salonları",          "kategori": "Spor",       "isletme_sayisi": 10000, "aylik_butce": 2000, "yazilim_sayisi": 7},
-    {"id": 25, "isim": "Düğün Salonları",         "kategori": "Etkinlik",   "isletme_sayisi": 8000,  "aylik_butce": 1800, "yazilim_sayisi": 4},
-    {"id": 26, "isim": "Fotoğrafçılar",           "kategori": "Etkinlik",   "isletme_sayisi": 20000, "aylik_butce": 900,  "yazilim_sayisi": 6},
-    {"id": 27, "isim": "Organizasyon Şirketleri", "kategori": "Etkinlik",   "isletme_sayisi": 5000,  "aylik_butce": 2500, "yazilim_sayisi": 3},
-    {"id": 28, "isim": "Matbaalar",               "kategori": "Sanayi",     "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
-    {"id": 29, "isim": "Çiçekçiler",              "kategori": "Perakende",  "isletme_sayisi": 25000, "aylik_butce": 600,  "yazilim_sayisi": 3},
-    {"id": 30, "isim": "Terziler",                "kategori": "Hizmet",     "isletme_sayisi": 30000, "aylik_butce": 500,  "yazilim_sayisi": 1},
+    # SAĞLIK
+    {"id": 1,  "isim": "Veteriner Klinikleri",    "kategori": "Sağlık",    "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
+    {"id": 2,  "isim": "Diş Hekimleri",           "kategori": "Sağlık",    "isletme_sayisi": 25000, "aylik_butce": 2000, "yazilim_sayisi": 8},
+    {"id": 3,  "isim": "Psikologlar",             "kategori": "Sağlık",    "isletme_sayisi": 15000, "aylik_butce": 800,  "yazilim_sayisi": 4},
+    {"id": 4,  "isim": "Fizyoterapistler",        "kategori": "Sağlık",    "isletme_sayisi": 8000,  "aylik_butce": 900,  "yazilim_sayisi": 2},
+    {"id": 5,  "isim": "Eczaneler",               "kategori": "Sağlık",    "isletme_sayisi": 28000, "aylik_butce": 1200, "yazilim_sayisi": 6},
+    {"id": 6,  "isim": "Optikçiler",              "kategori": "Sağlık",    "isletme_sayisi": 6000,  "aylik_butce": 1000, "yazilim_sayisi": 3},
+    # HUKUK / MUHASEBE
+    {"id": 7,  "isim": "Avukatlar",               "kategori": "Hukuk",     "isletme_sayisi": 50000, "aylik_butce": 1500, "yazilim_sayisi": 5},
+    {"id": 8,  "isim": "Muhasebeciler",           "kategori": "Muhasebe",  "isletme_sayisi": 40000, "aylik_butce": 1200, "yazilim_sayisi": 7},
+    {"id": 9,  "isim": "Mali Müşavirler",         "kategori": "Muhasebe",  "isletme_sayisi": 30000, "aylik_butce": 1500, "yazilim_sayisi": 6},
+    # TİCARET
+    {"id": 10, "isim": "Kuyumcular",              "kategori": "Perakende", "isletme_sayisi": 35000, "aylik_butce": 2500, "yazilim_sayisi": 4},
+    {"id": 11, "isim": "Emlakçılar",              "kategori": "Perakende", "isletme_sayisi": 60000, "aylik_butce": 800,  "yazilim_sayisi": 12},
+    {"id": 12, "isim": "Oto Galeriler",           "kategori": "Perakende", "isletme_sayisi": 25000, "aylik_butce": 1800, "yazilim_sayisi": 8},
+    {"id": 13, "isim": "Oto Servisleri",          "kategori": "Hizmet",    "isletme_sayisi": 60000, "aylik_butce": 1000, "yazilim_sayisi": 6},
+    {"id": 14, "isim": "Tornacılar",              "kategori": "Sanayi",    "isletme_sayisi": 15000, "aylik_butce": 900,  "yazilim_sayisi": 2},
+    {"id": 15, "isim": "Marangozlar",             "kategori": "Sanayi",    "isletme_sayisi": 20000, "aylik_butce": 800,  "yazilim_sayisi": 2},
+    # GIDA
+    {"id": 16, "isim": "Restoranlar",             "kategori": "Gıda",      "isletme_sayisi": 200000,"aylik_butce": 1500, "yazilim_sayisi": 25},
+    {"id": 17, "isim": "Kafeler",                 "kategori": "Gıda",      "isletme_sayisi": 80000, "aylik_butce": 800,  "yazilim_sayisi": 20},
+    {"id": 18, "isim": "Pastaneler",              "kategori": "Gıda",      "isletme_sayisi": 30000, "aylik_butce": 1000, "yazilim_sayisi": 5},
+    {"id": 19, "isim": "Kasaplar",                "kategori": "Gıda",      "isletme_sayisi": 40000, "aylik_butce": 700,  "yazilim_sayisi": 3},
+    {"id": 20, "isim": "Manavlar",                "kategori": "Gıda",      "isletme_sayisi": 50000, "aylik_butce": 500,  "yazilim_sayisi": 2},
+    # GÜZELLİK
+    {"id": 21, "isim": "Berberler",               "kategori": "Güzellik",  "isletme_sayisi": 80000, "aylik_butce": 500,  "yazilim_sayisi": 8},
+    {"id": 22, "isim": "Kuaförler",               "kategori": "Güzellik",  "isletme_sayisi": 70000, "aylik_butce": 700,  "yazilim_sayisi": 8},
+    {"id": 23, "isim": "Güzellik Salonları",      "kategori": "Güzellik",  "isletme_sayisi": 40000, "aylik_butce": 1500, "yazilim_sayisi": 10},
+    {"id": 24, "isim": "Spor Salonları",          "kategori": "Spor",      "isletme_sayisi": 10000, "aylik_butce": 2000, "yazilim_sayisi": 7},
+    # ETKİNLİK
+    {"id": 25, "isim": "Düğün Salonları",         "kategori": "Etkinlik",  "isletme_sayisi": 8000,  "aylik_butce": 1800, "yazilim_sayisi": 4},
+    {"id": 26, "isim": "Fotoğrafçılar",           "kategori": "Etkinlik",  "isletme_sayisi": 20000, "aylik_butce": 900,  "yazilim_sayisi": 6},
+    {"id": 27, "isim": "Organizasyon Şirketleri", "kategori": "Etkinlik",  "isletme_sayisi": 5000,  "aylik_butce": 2500, "yazilim_sayisi": 3},
+    # DİĞER
+    {"id": 28, "isim": "Matbaalar",               "kategori": "Sanayi",    "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
+    {"id": 29, "isim": "Çiçekçiler",              "kategori": "Perakende", "isletme_sayisi": 25000, "aylik_butce": 600,  "yazilim_sayisi": 3},
+    {"id": 30, "isim": "Terziler",                "kategori": "Hizmet",    "isletme_sayisi": 30000, "aylik_butce": 500,  "yazilim_sayisi": 1},
 ]
 
 # =====================================================================
-# 3. HAFIZA
+# 3. PAYLAŞIMLI HAFIZA (THREAD-SAFE)
 # =====================================================================
 @st.cache_resource
 def get_hafiza():
@@ -77,105 +89,427 @@ def get_hafiza():
         "calisiyor": False,
     }
 
-# =====================================================================
-# 4. DEMO VERİ ÜRETİCİ
-# =====================================================================
-def demo_fiyat_uret():
-    time.sleep(0.05)
-    temel = {
-        "Vast.ai": 0.180,
-        "RunPod": 0.420,
-        "Shadeform": 0.280,
-        "GPU.ai": 0.310,
-        "Massed Compute": 0.290,
-    }
-    fiyatlar = {}
-    for havuz, fiyat in temel.items():
-        dalgalanma = random.uniform(-0.08, 0.08)
-        if random.random() < 0.10:
-            dalgalanma = random.uniform(-0.25, 0.25)
-        fiyatlar[havuz] = round(max(0.100, fiyat * (1 + dalgalanma)), 3)
-    return fiyatlar
+@st.cache_resource
+def get_bot_kilidi():
+    """
+    Aynı anda sadece 1 bot çalışsın diye kilit.
+    Bu olmadan her sayfa yenilemesi yeni bir thread açar.
+    """
+    return threading.Lock()
 
 # =====================================================================
-# 5. PUANLAMA MOTORU
+# 4. RATE LIMITING
+# =====================================================================
+RATE_LIMITS = {
+    "google_trends": 3.0,
+    "sikayetvar": 2.0,
+    "eksisozluk": 4.0,
+    "donanimhaber": 2.0,
+    "sahibinden": 0.0,
+}
+
+_kaynak_son_kullanim = {}
+
+async def rate_limit_bekle(kaynak_adi):
+    simdi = time.time()
+    son = _kaynak_son_kullanim.get(kaynak_adi, 0)
+    bekleme = RATE_LIMITS.get(kaynak_adi, 1.0)
+    gecen = simdi - son
+    if gecen < bekleme:
+        await asyncio.sleep(bekleme - gecen)
+    _kaynak_son_kullanim[kaynak_adi] = time.time() # =====================================================================
+# 5. VERİ TOPLAYICI — GOOGLE TRENDS
+# =====================================================================
+async def google_trends_ara(session, sektor_adi):
+    if DEMO_MODE:
+        return {
+            "kaynak": "Google Trends",
+            "talep_puani": random.randint(30, 95),
+            "trend": random.choice(["yükseliyor", "sabit", "düşüyor"]),
+            "arama_hacmi": random.randint(1000, 50000),
+        }
+    
+    def _sync_cagri():
+        try:
+            from pytrends.request import TrendReq
+            pytrends = TrendReq(hl='tr-TR', tz=180, timeout=(10, 25))
+            kelime = sektor_adi.replace("leri", "").replace("lar", "").strip()
+            pytrends.build_payload([kelime], cat=0, timeframe='today 12-m', geo='TR')
+            df = pytrends.interest_over_time()
+            if not df.empty and kelime in df.columns:
+                ortalama = int(df[kelime].mean())
+                son_ay = int(df[kelime].tail(30).mean()) if len(df) >= 30 else ortalama
+                ilk_ay = int(df[kelime].head(30).mean()) if len(df) >= 30 else ortalama
+                if son_ay > ilk_ay * 1.15:
+                    trend = "yükseliyor"
+                elif son_ay < ilk_ay * 0.85:
+                    trend = "düşüyor"
+                else:
+                    trend = "sabit"
+                return {
+                    "kaynak": "Google Trends",
+                    "talep_puani": ortalama,
+                    "trend": trend,
+                    "arama_hacmi": ortalama * 100,
+                }
+        except Exception as e:
+            return {"kaynak": "Google Trends", "hata": str(e)[:80], "talep_puani": 0}
+        return {"kaynak": "Google Trends", "talep_puani": 0}
+    
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _sync_cagri)
+
+# =====================================================================
+# 6. VERİ TOPLAYICI — ŞİKAYETVAR
+# =====================================================================
+async def sikayetvar_ara(session, sektor_adi):
+    if DEMO_MODE:
+        return {
+            "kaynak": "Şikayetvar",
+            "sikayet_sayisi": random.randint(50, 3000),
+            "aciliyet_puani": random.randint(30, 95),
+        }
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept-Language": "tr-TR,tr;q=0.9",
+        "Accept": "text/html,application/xhtml+xml",
+    }
+    
+    try:
+        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
+        url = f"https://www.sikayetvar.com/arama?q={kelime}"
+        
+        async with session.get(url, headers=headers, timeout=20, allow_redirects=True) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                sayi = 0
+                
+                match = re.search(r'(\d[\d.,]*)\s*(?:şikayet|sonuç|kayıt)', html, re.IGNORECASE)
+                if match:
+                    sayi = int(match.group(1).replace(".", "").replace(",", ""))
+                
+                if sayi == 0:
+                    match = re.search(r'"totalCount"\s*:\s*(\d+)', html)
+                    if match:
+                        sayi = int(match.group(1))
+                
+                if sayi == 0:
+                    soup = BeautifulSoup(html, "lxml")
+                    kartlar = soup.find_all("article", class_=re.compile(r"card|complaint", re.I))
+                    sayi = len(kartlar)
+                
+                return {
+                    "kaynak": "Şikayetvar",
+                    "sikayet_sayisi": sayi,
+                    "aciliyet_puani": min(100, sayi // 10),
+                }
+            else:
+                return {"kaynak": "Şikayetvar", "hata": f"HTTP {resp.status}", "aciliyet_puani": 0}
+    except Exception as e:
+        return {"kaynak": "Şikayetvar", "hata": str(e)[:80], "aciliyet_puani": 0}
+
+# =====================================================================
+# 7. VERİ TOPLAYICI — EKŞİ SÖZLÜK
+# =====================================================================
+async def eksisozluk_ara(session, sektor_adi):
+    if DEMO_MODE:
+        return {
+            "kaynak": "Ekşi Sözlük",
+            "baslik_sayisi": random.randint(10, 500),
+            "tartisma_puani": random.randint(20, 90),
+        }
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+        "Accept-Language": "tr-TR,tr;q=0.9",
+    }
+    
+    try:
+        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
+        url = f"https://eksisozluk.com/basliklar/ara?SearchForm.Keywords={kelime}"
+        
+        async with session.get(url, headers=headers, timeout=20) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                soup = BeautifulSoup(html, "lxml")
+                basliklar = soup.find_all("a", class_="content-title")
+                if not basliklar:
+                    basliklar = soup.find_all("li", class_="content")
+                sayi = len(basliklar)
+                return {
+                    "kaynak": "Ekşi Sözlük",
+                    "baslik_sayisi": sayi,
+                    "tartisma_puani": min(100, sayi * 2),
+                }
+            else:
+                return {"kaynak": "Ekşi Sözlük", "hata": f"HTTP {resp.status}", "tartisma_puani": 0}
+    except Exception as e:
+        return {"kaynak": "Ekşi Sözlük", "hata": str(e)[:80], "tartisma_puani": 0}
+
+# =====================================================================
+# 8. VERİ TOPLAYICI — DONANIM HABER
+# =====================================================================
+async def donanimhaber_ara(session, sektor_adi):
+    if DEMO_MODE:
+        return {
+            "kaynak": "Donanım Haber",
+            "konu_sayisi": random.randint(20, 800),
+            "teknik_soru_puani": random.randint(30, 90),
+        }
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+        "Accept-Language": "tr-TR,tr;q=0.9",
+    }
+    
+    try:
+        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
+        url = f"https://forum.donanimhaber.com/arama?q={kelime}"
+        
+        async with session.get(url, headers=headers, timeout=20) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                match = re.search(r'(\d[\d.,]*)\s*(?:sonuç|konu|bulundu)', html, re.IGNORECASE)
+                sayi = 0
+                if match:
+                    sayi = int(match.group(1).replace(".", "").replace(",", ""))
+                if sayi == 0:
+                    soup = BeautifulSoup(html, "lxml")
+                    konular = soup.find_all("a", class_=re.compile(r"topic|thread", re.I))
+                    sayi = len(konular)
+                return {
+                    "kaynak": "Donanım Haber",
+                    "konu_sayisi": sayi,
+                    "teknik_soru_puani": min(100, sayi),
+                }
+            else:
+                return {"kaynak": "Donanım Haber", "hata": f"HTTP {resp.status}", "teknik_soru_puani": 0}
+    except Exception as e:
+        return {"kaynak": "Donanım Haber", "hata": str(e)[:80], "teknik_soru_puani": 0}
+
+# =====================================================================
+# 9. VERİ TOPLAYICI — SAHİBİNDEN (Manuel)
+# =====================================================================
+async def sahibinden_ara(session, sektor_adi):
+    if DEMO_MODE:
+        return {
+            "kaynak": "Sahibinden",
+            "ilan_sayisi": random.randint(100, 10000),
+            "pazar_canliligi": random.randint(30, 95),
+        }
+    return {
+        "kaynak": "Sahibinden",
+        "ilan_sayisi": 0,
+        "pazar_canliligi": 0,
+        "not": "Manuel giriş gerekli",
+    } # =====================================================================
+# 10. TEK SEKTÖRÜ TARA (5 kaynak paralel, hata toleranslı)
+# =====================================================================
+async def sektor_tara(session, sektor):
+    sektor_adi = sektor["isim"]
+    sonuclar = {}
+    
+    async def guvenli_cagri(kaynak_adi, fonksiyon):
+        try:
+            await rate_limit_bekle(kaynak_adi)
+            return await fonksiyon(session, sektor_adi)
+        except Exception as e:
+            return {"kaynak": kaynak_adi, "hata": str(e)[:80]}
+    
+    gorevler = [
+        guvenli_cagri("google_trends", google_trends_ara),
+        guvenli_cagri("sikayetvar", sikayetvar_ara),
+        guvenli_cagri("eksisozluk", eksisozluk_ara),
+        guvenli_cagri("donanimhaber", donanimhaber_ara),
+        guvenli_cagri("sahibinden", sahibinden_ara),
+    ]
+    
+    sonuclar_liste = await asyncio.gather(*gorevler, return_exceptions=True)
+    
+    kaynak_isimleri = ["google_trends", "sikayetvar", "eksisozluk", "donanimhaber", "sahibinden"]
+    for i, isim in enumerate(kaynak_isimleri):
+        sonuc = sonuclar_liste[i]
+        if isinstance(sonuc, Exception):
+            sonuclar[isim] = {"hata": str(sonuc)[:80]}
+        else:
+            sonuclar[isim] = sonuc
+    
+    basarili = sum(1 for v in sonuclar.values() if "hata" not in v)
+    
+    return {
+        "sektor_id": sektor["id"],
+        "isim": sektor_adi,
+        "kategori": sektor["kategori"],
+        "isletme_sayisi": sektor["isletme_sayisi"],
+        "aylik_butce": sektor["aylik_butce"],
+        "yazilim_sayisi": sektor["yazilim_sayisi"],
+        "kaynaklar": sonuclar,
+        "basarili_kaynak": basarili,
+        "tarama_zamani": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+# =====================================================================
+# 11. TÜM SEKTÖRLERİ TARA (sıralı, ara kayıtlı)
+# =====================================================================
+async def tum_sektorleri_tara(hafiza):
+    hafiza["log"].append(f"🔍 Tarama başladı: {len(SEKTORLER)} sektör")
+    
+    basarili = 0
+    basarisiz = 0
+    
+    async with aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=30),
+        connector=aiohttp.TCPConnector(limit=5)
+    ) as session:
+        for i, sektor in enumerate(SEKTORLER):
+            try:
+                hafiza["log"].append(f"⏳ [{i+1}/{len(SEKTORLER)}] {sektor['isim']}")
+                sonuc = await sektor_tara(session, sektor)
+                hafiza["sektor_verileri"][sektor["id"]] = sonuc
+                basarili += 1
+                
+                # Her 5 sektörde bir kaydet
+                if (i + 1) % 5 == 0:
+                    verileri_kaydet(hafiza)
+                    hafiza["log"].append(f"💾 Ara kayıt: {i+1} sektör tamam")
+                
+                await asyncio.sleep(1.5)
+            except Exception as e:
+                basarisiz += 1
+                hafiza["log"].append(f"❌ {sektor['isim']}: {str(e)[:80]}")
+    
+    hafiza["son_guncelleme"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    verileri_kaydet(hafiza)
+    hafiza["log"].append(f"✅ Bitti. Başarılı: {basarili} | Başarısız: {basarisiz}")
+    
+    if len(hafiza["log"]) > 200:
+        hafiza["log"] = hafiza["log"][-200:]
+
+# =====================================================================
+# 12. BOT BAŞLATICI (KİLİTLİ — sadece 1 kez çalışır)
+# =====================================================================
+def bot_baslat(hafiza):
+    """
+    Bu fonksiyon KİLİT kullanır.
+    Aynı anda sadece 1 tane bot çalışabilir.
+    Her sayfa yenilemesinde yeni thread açılmaz.
+    """
+    kilit = get_bot_kilidi()
+    
+    # Kilitli değilse çalıştır
+    if not kilit.acquire(blocking=False):
+        # Başka bir bot zaten çalışıyor
+        return
+    
+    try:
+        if hafiza.get("calisiyor"):
+            return
+        
+        hafiza["calisiyor"] = True
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(tum_sektorleri_tara(hafiza))
+        finally:
+            loop.close()
+    except Exception as e:
+        hafiza["log"].append(f"Bot çöktü: {str(e)[:100]}")
+    finally:
+        hafiza["calisiyor"] = False
+        kilit.release()
+
+# =====================================================================
+# 13. PUANLAMA MOTORU
 # =====================================================================
 def sektor_puanla(veri):
     kaynaklar = veri.get("kaynaklar", {})
     
     # TALEP
-    talep = 0
+    talep_puani = 0
     gt = kaynaklar.get("google_trends", {})
-    if "talep_puani" in gt: talep += gt["talep_puani"] * 0.5
+    if "talep_puani" in gt:
+        talep_puani += gt["talep_puani"] * 0.5
     eks = kaynaklar.get("eksisozluk", {})
-    if "tartisma_puani" in eks: talep += eks["tartisma_puani"] * 0.3
+    if "tartisma_puani" in eks:
+        talep_puani += eks["tartisma_puani"] * 0.3
     dh = kaynaklar.get("donanimhaber", {})
-    if "teknik_soru_puani" in dh: talep += dh["teknik_soru_puani"] * 0.2
-    talep = min(100, talep)
+    if "teknik_soru_puani" in dh:
+        talep_puani += dh["teknik_soru_puani"] * 0.2
+    talep_puani = min(100, talep_puani)
     
     # ÖDEME
     isletme = veri.get("isletme_sayisi", 0)
     butce = veri.get("aylik_butce", 0)
     isletme_puan = min(100, (isletme / 100000) * 100)
     butce_puan = min(100, (butce / 3000) * 100)
-    odeme = (isletme_puan * 0.4) + (butce_puan * 0.6)
+    odeme_puani = (isletme_puan * 0.4) + (butce_puan * 0.6)
     
     # ACİLİYET
     sv = kaynaklar.get("sikayetvar", {})
-    aciliyet = sv.get("aciliyet_puani", 0)
+    aciliyet_puani = sv.get("aciliyet_puani", 0)
     
-    # REKABET
+    # REKABET (düşük yazılım = yüksek puan)
     yazilim = veri.get("yazilim_sayisi", 0)
-    rekabet = max(0, 100 - (yazilim * 4))
+    rekabet_puani = max(0, 100 - (yazilim * 4))
     
     # TOPLAM
-    toplam = talep * 0.35 + odeme * 0.30 + aciliyet * 0.20 + rekabet * 0.15
+    toplam = (
+        talep_puani * 0.35 +
+        odeme_puani * 0.30 +
+        aciliyet_puani * 0.20 +
+        rekabet_puani * 0.15
+    )
     
     return {
-        "talep_puani": round(talep, 1),
-        "odeme_puani": round(odeme, 1),
-        "aciliyet_puani": round(aciliyet, 1),
-        "rekabet_puani": round(rekabet, 1),
+        "talep_puani": round(talep_puani, 1),
+        "odeme_puani": round(odeme_puani, 1),
+        "aciliyet_puani": round(aciliyet_puani, 1),
+        "rekabet_puani": round(rekabet_puani, 1),
         "toplam_puan": round(toplam, 1),
         "trend": gt.get("trend", "bilinmiyor"),
     }
 
-def odemeye_hazir_mi(veri, puanlar):
-    return (puanlar["toplam_puan"] >= 60 and
-            puanlar["odeme_puani"] >= 50 and
-            puanlar["aciliyet_puani"] >= 40 and
-            puanlar["rekabet_puani"] >= 40)
+def odemeye_hazir_mi(sektor_veri, puanlar):
+    return (
+        puanlar["toplam_puan"] >= 60 and
+        puanlar["odeme_puani"] >= 50 and
+        puanlar["aciliyet_puani"] >= 40 and
+        puanlar["rekabet_puani"] >= 40
+    )
 
 def tum_sektorleri_puanla(hafiza):
     sonuclar = []
-    for sid, veri in hafiza.get("sektor_verileri", {}).items():
+    for sektor_id, veri in hafiza.get("sektor_verileri", {}).items():
         try:
             puanlar = sektor_puanla(veri)
-            s = veri.copy()
-            s.update(puanlar)
-            s["odemeye_hazir"] = odemeye_hazir_mi(veri, puanlar)
-            sonuclar.append(s)
+            sektor = veri.copy()
+            sektor.update(puanlar)
+            sektor["odemeye_hazir"] = odemeye_hazir_mi(veri, puanlar)
+            sonuclar.append(sektor)
         except Exception as e:
-            hafiza["log"].append(f"Puanlama hatası: {str(e)[:80]}")
+            hafiza["log"].append(f"Puan hatası ID {sektor_id}: {str(e)[:80]}")
     sonuclar.sort(key=lambda x: x["toplam_puan"], reverse=True)
     return sonuclar
 
 def kategori_ozeti(sonuclar):
-    kat = {}
+    kategoriler = {}
     for s in sonuclar:
-        k = s["kategori"]
-        if k not in kat:
-            kat[k] = {"toplam": 0, "sayi": 0, "isletme": 0}
-        kat[k]["toplam"] += s["toplam_puan"]
-        kat[k]["sayi"] += 1
-        kat[k]["isletme"] += s["isletme_sayisi"]
+        kat = s["kategori"]
+        if kat not in kategoriler:
+            kategoriler[kat] = {"toplam": 0, "sayi": 0, "isletme_toplami": 0}
+        kategoriler[kat]["toplam"] += s["toplam_puan"]
+        kategoriler[kat]["sayi"] += 1
+        kategoriler[kat]["isletme_toplami"] += s["isletme_sayisi"]
+    
     ozet = []
-    for k, v in kat.items():
+    for kat, veri in kategoriler.items():
         ozet.append({
-            "kategori": k,
-            "ortalama_puan": round(v["toplam"] / v["sayi"], 1),
-            "sektor_sayisi": v["sayi"],
-            "toplam_isletme": v["isletme"],
+            "kategori": kat,
+            "ortalama_puan": round(veri["toplam"] / veri["sayi"], 1),
+            "sektor_sayisi": veri["sayi"],
+            "toplam_isletme": veri["isletme_toplami"],
         })
     ozet.sort(key=lambda x: x["ortalama_puan"], reverse=True)
     return ozet
@@ -202,16 +536,8 @@ def rapor_olustur(sonuclar):
     return rapor
 
 # =====================================================================
-# 6. CACHE
+# 14. CACHE / KAYDET / YÜKLE
 # =====================================================================
-def cache_gecerli_mi(hafiza):
-    son = hafiza.get("son_guncelleme")
-    if not son: return False
-    try:
-        son_dt = datetime.strptime(son, "%Y-%m-%d %H:%M:%S")
-        return (datetime.now() - son_dt).total_seconds() < CACHE_SURESI
-    except: return False
-
 def verileri_kaydet(hafiza):
     try:
         veri = {
@@ -231,399 +557,281 @@ def verileri_yukle(hafiza):
                 veri = json.load(f)
             hafiza["sektor_verileri"] = {int(k): v for k, v in veri.get("sektor_verileri", {}).items()}
             hafiza["son_guncelleme"] = veri.get("son_guncelleme")
+            hafiza["log"].append(f"📂 Yüklendi (son: {hafiza['son_guncelleme']})")
             return True
-    except: pass
+    except Exception as e:
+        hafiza["log"].append(f"Yükleme hatası: {str(e)[:80]}")
     return False
 
+def cache_gecerli_mi(hafiza):
+    son = hafiza.get("son_guncelleme")
+    if not son:
+        return False
+    try:
+        son_dt = datetime.strptime(son, "%Y-%m-%d %H:%M:%S")
+        return (datetime.now() - son_dt).total_seconds() < CACHE_SURESI
+    except:
+        return False
+
+# =====================================================================
+# 15. MANUEL VERİ
+# =====================================================================
 def manuel_veri_yukle():
     if os.path.exists(MANUEL_VERI_DOSYASI):
         try:
             with open(MANUEL_VERI_DOSYASI, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except: return {}
+        except:
+            return {}
     return {}
 
 def manuel_veri_kaydet(veri):
-    with open(MANUEL_VERI_DOSYASI, "w", encoding="utf-8") as f:
-        json.dump(veri, f, ensure_ascii=False, indent=2)
+    try:
+        with open(MANUEL_VERI_DOSYASI, "w", encoding="utf-8") as f:
+            json.dump(veri, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Manuel veri kayıt hatası: {e}")
 
 def manuel_veri_uygula(hafiza):
     manuel = manuel_veri_yukle()
-    for sid, veriler in manuel.items():
-        sid_int = int(sid)
-        if sid_int in hafiza["sektor_verileri"]:
-            for kaynak, veri in veriler.items():
-                if kaynak in hafiza["sektor_verileri"][sid_int]["kaynaklar"]:
-                    hafiza["sektor_verileri"][sid_int]["kaynaklar"][kaynak] = veri # =====================================================================
-# 7. SCRAPER — GOOGLE TRENDS
-# =====================================================================
-async def google_trends_ara(session, sektor_adi):
-    if DEMO_MODE:
-        return {"kaynak": "Google Trends", "talep_puani": random.randint(30, 95),
-                "trend": random.choice(["yükseliyor", "sabit", "düşüyor"]),
-                "arama_hacmi": random.randint(1000, 50000)}
-    def _sync():
-        try:
-            from pytrends.request import TrendReq
-            pt = TrendReq(hl='tr-TR', tz=180, timeout=(10, 25))
-            kelime = sektor_adi.replace("leri", "").replace("lar", "").strip()
-            pt.build_payload([kelime], cat=0, timeframe='today 12-m', geo='TR')
-            df = pt.interest_over_time()
-            if not df.empty and kelime in df.columns:
-                ort = int(df[kelime].mean())
-                son = int(df[kelime].tail(30).mean()) if len(df) >= 30 else ort
-                ilk = int(df[kelime].head(30).mean()) if len(df) >= 30 else ort
-                trend = "yükseliyor" if son > ilk * 1.15 else "düşüyor" if son < ilk * 0.85 else "sabit"
-                return {"kaynak": "Google Trends", "talep_puani": ort, "trend": trend,
-                        "arama_hacmi": ort * 100}
-        except Exception as e:
-            return {"kaynak": "Google Trends", "hata": str(e)[:80], "talep_puani": 0}
-        return {"kaynak": "Google Trends", "talep_puani": 0}
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _sync)
-
-# =====================================================================
-# 8. SCRAPER — ŞİKAYETVAR
-# =====================================================================
-async def sikayetvar_ara(session, sektor_adi):
-    if DEMO_MODE:
-        return {"kaynak": "Şikayetvar", "sikayet_sayisi": random.randint(50, 3000),
-                "aciliyet_puani": random.randint(30, 95)}
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-               "Accept-Language": "tr-TR,tr;q=0.9"}
-    try:
-        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
-        url = f"https://www.sikayetvar.com/arama?q={kelime}"
-        async with session.get(url, headers=headers, timeout=20) as resp:
-            if resp.status == 200:
-                html = await resp.text()
-                sayi = 0
-                m = re.search(r'(\d[\d.,]*)\s*(?:şikayet|sonuç|kayıt)', html, re.IGNORECASE)
-                if m: sayi = int(m.group(1).replace(".", "").replace(",", ""))
-                if sayi == 0:
-                    m = re.search(r'"totalCount"\s*:\s*(\d+)', html)
-                    if m: sayi = int(m.group(1))
-                return {"kaynak": "Şikayetvar", "sikayet_sayisi": sayi,
-                        "aciliyet_puani": min(100, sayi // 10)}
-            return {"kaynak": "Şikayetvar", "hata": f"HTTP {resp.status}", "aciliyet_puani": 0}
-    except Exception as e:
-        return {"kaynak": "Şikayetvar", "hata": str(e)[:80], "aciliyet_puani": 0}
-
-# =====================================================================
-# 9. SCRAPER — EKŞİ SÖZLÜK
-# =====================================================================
-async def eksisozluk_ara(session, sektor_adi):
-    if DEMO_MODE:
-        return {"kaynak": "Ekşi Sözlük", "baslik_sayisi": random.randint(10, 500),
-                "tartisma_puani": random.randint(20, 90)}
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-               "Accept-Language": "tr-TR,tr;q=0.9"}
-    try:
-        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
-        url = f"https://eksisozluk.com/basliklar/ara?SearchForm.Keywords={kelime}"
-        async with session.get(url, headers=headers, timeout=20) as resp:
-            if resp.status == 200:
-                html = await resp.text()
-                soup = BeautifulSoup(html, "lxml")
-                basliklar = soup.find_all("a", class_="content-title")
-                sayi = len(basliklar)
-                return {"kaynak": "Ekşi Sözlük", "baslik_sayisi": sayi,
-                        "tartisma_puani": min(100, sayi * 2)}
-            return {"kaynak": "Ekşi Sözlük", "hata": f"HTTP {resp.status}", "tartisma_puani": 0}
-    except Exception as e:
-        return {"kaynak": "Ekşi Sözlük", "hata": str(e)[:80], "tartisma_puani": 0}
-
-# =====================================================================
-# 10. SCRAPER — DONANIM HABER
-# =====================================================================
-async def donanimhaber_ara(session, sektor_adi):
-    if DEMO_MODE:
-        return {"kaynak": "Donanım Haber", "konu_sayisi": random.randint(20, 800),
-                "teknik_soru_puani": random.randint(30, 90)}
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-               "Accept-Language": "tr-TR,tr;q=0.9"}
-    try:
-        kelime = sektor_adi.lower().replace("leri", "").replace("lar", "").strip()
-        url = f"https://forum.donanimhaber.com/arama?q={kelime}"
-        async with session.get(url, headers=headers, timeout=20) as resp:
-            if resp.status == 200:
-                html = await resp.text()
-                sayi = 0
-                m = re.search(r'(\d[\d.,]*)\s*(?:sonuç|konu|bulundu)', html, re.IGNORECASE)
-                if m: sayi = int(m.group(1).replace(".", "").replace(",", ""))
-                return {"kaynak": "Donanım Haber", "konu_sayisi": sayi,
-                        "teknik_soru_puani": min(100, sayi)}
-            return {"kaynak": "Donanım Haber", "hata": f"HTTP {resp.status}", "teknik_soru_puani": 0}
-    except Exception as e:
-        return {"kaynak": "Donanım Haber", "hata": str(e)[:80], "teknik_soru_puani": 0}
-
-# =====================================================================
-# 11. SCRAPER — SAHİBİNDEN (Manuel)
-# =====================================================================
-async def sahibinden_ara(session, sektor_adi):
-    if DEMO_MODE:
-        return {"kaynak": "Sahibinden", "ilan_sayisi": random.randint(100, 10000),
-                "pazar_canliligi": random.randint(30, 95)}
-    return {"kaynak": "Sahibinden", "ilan_sayisi": 0, "pazar_canliligi": 0,
-            "not": "Manuel giriş gerekli"}
-
-# =====================================================================
-# 12. RATE LIMIT
-# =====================================================================
-async def rate_limit_bekle(kaynak_adi):
-    simdi = time.time()
-    son = _kaynak_son_kullanim.get(kaynak_adi, 0)
-    bekleme = RATE_LIMITS.get(kaynak_adi, 1.0)
-    gecen = simdi - son
-    if gecen < bekleme:
-        await asyncio.sleep(bekleme - gecen)
-    _kaynak_son_kullanim[kaynak_adi] = time.time() # =====================================================================
-# 13. TEK SEKTÖR TARAMA
-# =====================================================================
-async def sektor_tara(session, sektor):
-    sektor_adi = sektor["isim"]
-    
-    async def guvenli(kaynak_adi, fonk):
-        try:
-            await rate_limit_bekle(kaynak_adi)
-            return await fonk(session, sektor_adi)
-        except Exception as e:
-            return {"kaynak": kaynak_adi, "hata": str(e)[:80]}
-    
-    gorevler = [
-        guvenli("google_trends", google_trends_ara),
-        guvenli("sikayetvar", sikayetvar_ara),
-        guvenli("eksisozluk", eksisozluk_ara),
-        guvenli("donanimhaber", donanimhaber_ara),
-        guvenli("sahibinden", sahibinden_ara),
-    ]
-    sonuclar_liste = await asyncio.gather(*gorevler, return_exceptions=True)
-    isimler = ["google_trends", "sikayetvar", "eksisozluk", "donanimhaber", "sahibinden"]
-    kaynaklar = {}
-    for i, isim in enumerate(isimler):
-        s = sonuclar_liste[i]
-        kaynaklar[isim] = s if not isinstance(s, Exception) else {"hata": str(s)[:80]}
-    basarili = sum(1 for v in kaynaklar.values() if "hata" not in v)
-    
-    return {
-        "sektor_id": sektor["id"],
-        "isim": sektor_adi,
-        "kategori": sektor["kategori"],
-        "isletme_sayisi": sektor["isletme_sayisi"],
-        "aylik_butce": sektor["aylik_butce"],
-        "yazilim_sayisi": sektor["yazilim_sayisi"],
-        "kaynaklar": kaynaklar,
-        "basarili_kaynak": basarili,
-        "tarama_zamani": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-# =====================================================================
-# 14. TÜM SEKTÖRLERİ TARA
-# =====================================================================
-async def tum_sektorleri_tara(hafiza):
-    hafiza["log"].append(f"🔍 Tarama başladı: {len(SEKTORLER)} sektör")
-    hafiza["log"].append(f"⏱️ Tahmini süre: ~{len(SEKTORLER) * 5 // 60} dakika")
-    
-    async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=30),
-        connector=aiohttp.TCPConnector(limit=5)
-    ) as session:
-        for i, sektor in enumerate(SEKTORLER):
-            try:
-                hafiza["log"].append(f"⏳ [{i+1}/{len(SEKTORLER)}] {sektor['isim']}")
-                sonuc = await sektor_tara(session, sektor)
-                hafiza["sektor_verileri"][sektor["id"]] = sonuc
-                if (i + 1) % 5 == 0:
-                    verileri_kaydet(hafiza)
-                await asyncio.sleep(0.8)
-            except Exception as e:
-                hafiza["log"].append(f"❌ {sektor['isim']}: {str(e)[:80]}")
-    
-    hafiza["son_guncelleme"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    verileri_kaydet(hafiza)
-    hafiza["log"].append(f"✅ Tamamlandı.")
-    if len(hafiza["log"]) > 200:
-        hafiza["log"] = hafiza["log"][-200:]
-
-# =====================================================================
-# 15. BOT BAŞLATICI
-# =====================================================================
-def bot_baslat(hafiza):
-    if hafiza["calisiyor"]: return
-    hafiza["calisiyor"] = True
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(tum_sektorleri_tara(hafiza))
-    except Exception as e:
-        hafiza["log"].append(f"Bot çöktü: {str(e)[:100]}")
-    finally:
-        hafiza["calisiyor"] = False # =====================================================================
+    for sektor_id, veriler in manuel.items():
+        sid = int(sektor_id)
+        if sid in hafiza["sektor_verileri"]:
+            for kaynak, puan in veriler.items():
+                if kaynak in hafiza["sektor_verileri"][sid]["kaynaklar"]:
+                    hafiza["sektor_verileri"][sid]["kaynaklar"][kaynak] = puan # =====================================================================
 # 16. STREAMLIT ARAYÜZÜ
 # =====================================================================
-st.set_page_config(
-    page_title="Fırsat Madenciliği",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
-# OTURUM AÇMA
+# --- OTURUM AÇMA ---
 if "oturum_acik" not in st.session_state:
     st.session_state["oturum_acik"] = False
 
 if not st.session_state["oturum_acik"]:
     st.markdown("<h2>🔒 Fırsat Madenciliği Paneli</h2>", unsafe_allow_html=True)
+    st.caption("30 sektör analizi — hangi sektör ödemeye hazır?")
     k = st.text_input("Kullanıcı Adı", key="u")
     s = st.text_input("Şifre", type="password", key="p")
-    if st.button("Giriş"):
+    if st.button("Sisteme Giriş Yap"):
         if k.strip() == "Cuma Babacan" and s.strip() == "784512":
             st.session_state["oturum_acik"] = True
             st.rerun()
         else:
-            st.error("Hatalı giriş!")
+            st.error("Hatalı Kullanıcı Adı veya Şifre!")
 else:
     hafiza = get_hafiza()
-    
+
+    # =================================================================
     # SOL MENÜ
+    # =================================================================
     st.sidebar.markdown("👤 **Yönetici:** Cuma Babacan")
     st.sidebar.markdown("---")
-    
+
     if DEMO_MODE:
-        st.sidebar.success("🧪 DEMO MODU")
+        st.sidebar.success("🧪 DEMO MODU (Sanal Veri)")
+        st.sidebar.caption("Gerçek veri için DEMO_MODE = False")
     else:
-        st.sidebar.warning("🔴 GERÇEK MOD")
-    
+        st.sidebar.warning("🔴 GERÇEK MOD (Canlı Scraping)")
+        st.sidebar.caption("Tarama 7-10 dk sürer")
+
+    st.sidebar.markdown("### 📊 Sistem Bilgisi")
     st.sidebar.caption(f"Sektör: {len(SEKTORLER)}")
-    st.sidebar.caption(f"Son güncelleme: {hafiza.get('son_guncelleme', '-')}")
+    st.sidebar.caption(f"Kaynak: 5")
+    st.sidebar.caption(f"Son: {hafiza.get('son_guncelleme', '-')}")
+
     st.sidebar.markdown("---")
-    
+    st.sidebar.markdown("### 🎛️ Kontroller")
+
     if st.sidebar.button("🔄 Verileri Yenile"):
         hafiza["sektor_verileri"] = {}
         hafiza["log"] = []
+        hafiza["son_guncelleme"] = None
         hafiza["calisiyor"] = False
         if os.path.exists(VERI_DOSYASI):
-            try: os.remove(VERI_DOSYASI)
-            except: pass
+            try:
+                os.remove(VERI_DOSYASI)
+            except:
+                pass
         st.rerun()
-    
+
     if st.sidebar.button("📂 Cache Temizle"):
         if os.path.exists(VERI_DOSYASI):
-            try: os.remove(VERI_DOSYASI)
-            except: pass
+            try:
+                os.remove(VERI_DOSYASI)
+            except:
+                pass
         hafiza["sektor_verileri"] = {}
         hafiza["son_guncelleme"] = None
         hafiza["log"] = []
         st.rerun()
-    
+
     if st.sidebar.button("🚪 Oturumu Kapat"):
         st.session_state["oturum_acik"] = False
         st.rerun()
-    
+
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Puanlama:**")
-    st.sidebar.caption("Talep %35 | Ödeme %30")
-    st.sidebar.caption("Aciliyet %20 | Rekabet %15")
-    
-    # VERİ YÜKLEME
+    st.sidebar.markdown("### ⚖️ Puanlama Ağırlıkları")
+    st.sidebar.caption("Talep: %35 | Ödeme: %30")
+    st.sidebar.caption("Aciliyet: %20 | Rekabet: %15")
+
+    # =================================================================
+    # VERİ YÜKLE / TARAMA BAŞLAT
+    # =================================================================
     if not hafiza["sektor_verileri"]:
         verileri_yukle(hafiza)
-    manuel_veri_uygula(hafiza)
     
-    # OTOMATİK BAŞLAT
+    # Manuel verileri uygula
+    try:
+        manuel_veri_uygula(hafiza)
+    except:
+        pass
+
+    # Cache geçersizse ve çalışmıyorsa başlat
     if not cache_gecerli_mi(hafiza) and not hafiza["calisiyor"]:
         t = threading.Thread(target=bot_baslat, args=(hafiza,), daemon=True)
         t.start()
         time.sleep(0.5)
-    
+
+    # =================================================================
     # BAŞLIK
-    st.title("🎯 Fırsat Madenciliği — 30 Sektör")
-    st.caption("Hangi sektör çözüm bekliyor? Hangisi ödemeye hazır?")
+    # =================================================================
+    st.title("🎯 Fırsat Madenciliği — 30 Sektör Analizi")
+    st.caption("Hangi sektör çözüm bekliyor? Hangi sektör ödemeye hazır?")
     st.markdown("---")
-    
+
+    # =================================================================
     # TARAMA DURUMU
+    # =================================================================
     if hafiza["calisiyor"]:
         tamamlanan = len(hafiza["sektor_verileri"])
         toplam = len(SEKTORLER)
-        st.info(f"⏳ Tarama sürüyor... {tamamlanan}/{toplam} sektör")
-        st.progress(tamamlanan / toplam if toplam > 0 else 0)
-        if st.button("🔄 Durumu Güncelle"):
-            st.rerun()
-        st.stop()
-    
+        oran = tamamlanan / toplam if toplam > 0 else 0
+        st.info(f"⏳ Tarama devam ediyor... {tamamlanan}/{toplam} sektör bitti.")
+        st.progress(oran)
+
+    # =================================================================
+    # VERİ YOKSA UYARI
+    # =================================================================
     if not hafiza["sektor_verileri"]:
-        st.warning("Henüz veri yok. Tarama başlatılıyor...")
-        if st.button("🔄 Yenile"):
-            st.rerun()
+        st.warning("Henüz veri yok. Tarama başlatılıyor... Sayfayı birkaç saniye sonra yenileyin.")
+        if not hafiza["calisiyor"]:
+            if st.button("🚀 Taramayı Şimdi Başlat"):
+                t = threading.Thread(target=bot_baslat, args=(hafiza,), daemon=True)
+                t.start()
+                time.sleep(1)
+                st.rerun()
         st.stop()
-    
-    # SONUÇLAR
+
+    # =================================================================
+    # SONUÇLARI HESAPLA
+    # =================================================================
     sonuclar = tum_sektorleri_puanla(hafiza)
+    
     if not sonuclar:
-        st.warning("Puanlanacak veri yok.")
+        st.warning("Puanlanacak veri bulunamadı.")
         st.stop()
-    
+
+    # =================================================================
     # ÜST METRİKLER
+    # =================================================================
+    toplam_sektor = len(sonuclar)
     odemeye_hazir_sayisi = sum(1 for s in sonuclar if s["odemeye_hazir"])
-    en_yuksek = max(s["toplam_puan"] for s in sonuclar)
-    ort = sum(s["toplam_puan"] for s in sonuclar) / len(sonuclar)
-    
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("📊 Analiz", f"{len(sonuclar)} Sektör")
-    with c2: st.metric("✅ Hazır", f"{odemeye_hazir_sayisi} Sektör")
-    with c3: st.metric("🏆 En Yüksek", f"{en_yuksek:.1f}")
-    with c4: st.metric("📈 Ortalama", f"{ort:.1f}")
-    
+    en_yuksek_puan = max(s["toplam_puan"] for s in sonuclar)
+    ortalama_puan = sum(s["toplam_puan"] for s in sonuclar) / toplam_sektor if toplam_sektor > 0 else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Analiz", f"{toplam_sektor} Sektör")
+    with col2:
+        st.metric("✅ Hazır", f"{odemeye_hazir_sayisi} Sektör")
+    with col3:
+        st.metric("🏆 En Yüksek", f"{en_yuksek_puan:.1f}")
+    with col4:
+        st.metric("📈 Ortalama", f"{ortalama_puan:.1f}")
+
     st.markdown("---")
-    
+
+    # =================================================================
     # KAYNAK DURUMU
-    with st.expander("📡 Kaynak Durumu"):
-        kaynak_etiket = {"google_trends": "Google Trends", "sikayetvar": "Şikayetvar",
-                        "eksisozluk": "Ekşi Sözlük", "donanimhaber": "Donanım Haber",
-                        "sahibinden": "Sahibinden"}
-        durum = []
-        for kaynak, etiket in kaynak_etiket.items():
-            bas = 0; hat = 0
+    # =================================================================
+    with st.expander("📡 Veri Kaynağı Durumu"):
+        kaynak_isimleri = ["google_trends", "sikayetvar", "eksisozluk", "donanimhaber", "sahibinden"]
+        etiketler = {
+            "google_trends": "Google Trends",
+            "sikayetvar": "Şikayetvar",
+            "eksisozluk": "Ekşi Sözlük",
+            "donanimhaber": "Donanım Haber",
+            "sahibinden": "Sahibinden",
+        }
+        
+        durum_listesi = []
+        for kaynak in kaynak_isimleri:
+            basarili = 0
+            hatali = 0
             for s in hafiza["sektor_verileri"].values():
-                v = s.get("kaynaklar", {}).get(kaynak, {})
-                if "hata" in v: hat += 1
-                else: bas += 1
-            tot = bas + hat
-            orani = (bas / tot * 100) if tot > 0 else 0
-            durum.append({
-                "Kaynak": etiket,
-                "Başarılı": bas,
-                "Hatalı": hat,
-                "Başarı %": f"{orani:.0f}%",
-                "Durum": "✅" if orani > 70 else "⚠️" if orani > 30 else "❌"
+                k_veri = s.get("kaynaklar", {}).get(kaynak, {})
+                if "hata" in k_veri:
+                    hatali += 1
+                else:
+                    basarili += 1
+            toplam = basarili + hatali
+            oran = (basarili / toplam * 100) if toplam > 0 else 0
+            durum = "✅ Çalışıyor" if oran > 70 else "⚠️ Kısmi" if oran > 30 else "❌ Çalışmıyor"
+            durum_listesi.append({
+                "Kaynak": etiketler.get(kaynak, kaynak),
+                "Başarılı": basarili,
+                "Hatalı": hatali,
+                "Başarı %": f"{oran:.0f}%",
+                "Durum": durum,
             })
-        st.dataframe(pd.DataFrame(durum), use_container_width=True, hide_index=True)
-    
+        
+        df_durum = pd.DataFrame(durum_listesi)
+        st.dataframe(df_durum, use_container_width=True, hide_index=True)
+
     st.markdown("---")
+
+    # =================================================================
+    # ÖDEMEYE HAZIR SEKTÖRLER
+    # =================================================================
+    st.subheader("💰 Ödemeye Hazır Sektörler (Öncelikli)")
     
-    # ÖDEMEYE HAZIR
-    st.subheader("💰 Ödemeye Hazır Sektörler")
-    hazir = [s for s in sonuclar if s["odemeye_hazir"]]
+    hazir_sektorler = [s for s in sonuclar if s["odemeye_hazir"]]
     
-    if hazir:
-        for s in hazir[:10]:
-            col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
-            with col_a:
-                st.markdown(f"### 🎯 {s['isim']}")
-                st.caption(f"{s['kategori']} | Trend: {s.get('trend','-')}")
-            with col_b: st.metric("Fırsat", f"{s['toplam_puan']:.1f}")
-            with col_c: st.metric("İşletme", f"{s['isletme_sayisi']:,}")
-            with col_d: st.metric("Bütçe", f"{s['aylik_butce']} TL")
-            cc1, cc2, cc3, cc4 = st.columns(4)
-            with cc1: st.caption(f"📈 Talep: {s['talep_puani']:.0f}")
-            with cc2: st.caption(f"💵 Ödeme: {s['odeme_puani']:.0f}")
-            with cc3: st.caption(f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}")
-            with cc4: st.caption(f"🥊 Rekabet: {s['rekabet_puani']:.0f}")
-            st.markdown("---")
+    if hazir_sektorler:
+        st.caption("Bu sektörler 4 kriteri de geçti: yüksek talep, ödeme gücü, aciliyet ve düşük rekabet.")
+        
+        for s in hazir_sektorler[:10]:
+            with st.container():
+                col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
+                with col_a:
+                    st.markdown(f"### 🎯 {s['isim']}")
+                    st.caption(f"Kategori: {s['kategori']} | Trend: {s.get('trend', '-')}")
+                with col_b:
+                    st.metric("Fırsat Puanı", f"{s['toplam_puan']:.1f}")
+                with col_c:
+                    st.metric("İşletme", f"{s['isletme_sayisi']:,}")
+                with col_d:
+                    st.metric("Aylık Bütçe", f"{s['aylik_butce']} TL")
+                
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.caption(f"📈 Talep: {s['talep_puani']:.0f}/100")
+                with c2:
+                    st.caption(f"💵 Ödeme: {s['odeme_puani']:.0f}/100")
+                with c3:
+                    st.caption(f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}/100")
+                with c4:
+                    st.caption(f"🥊 Rekabet: {s['rekabet_puani']:.0f}/100")
+                
+                st.markdown("---")
     else:
-        st.info("Kriterleri geçen sektör yok.")
+        st.info("Şu an 4 kriteri de geçen sektör yok. Aşağıdaki genel sıralamaya bakın.")
+
+    # =================================================================
+    # TÜM SEKTÖRLER TABLOSU
+    # =================================================================
+    st.subheader("📋 Tüm Sektörler Sıralaması")
     
-    # TÜM SEKTÖRLER TABLO
-    st.subheader("📋 Tüm Sektörler")
     df_veri = []
     for s in sonuclar:
         df_veri.append({
@@ -638,68 +846,162 @@ else:
             "Trend": s.get("trend", "-"),
             "İşletme": s["isletme_sayisi"],
             "Bütçe": s["aylik_butce"],
+            "Yazılım": s["yazilim_sayisi"],
             "Durum": "✅" if s["odemeye_hazir"] else "—",
         })
+    
     df = pd.DataFrame(df_veri)
-    sadece_hazir = st.checkbox("Sadece ödemeye hazır")
-    df_goster = df[df["Durum"] == "✅"] if sadece_hazir else df
+    
+    filtre_col1, filtre_col2 = st.columns(2)
+    with filtre_col1:
+        sadece_hazir = st.checkbox("Sadece ödemeye hazır olanları göster")
+    with filtre_col2:
+        min_puan = st.slider("Minimum puan", 0, 100, 0, 5)
+    
+    if sadece_hazir:
+        df_goster = df[df["Durum"] == "✅"]
+    else:
+        df_goster = df[df["Fırsat"] >= min_puan]
+    
     st.dataframe(df_goster, use_container_width=True, hide_index=True)
-    
+    st.caption(f"Toplam {len(df_goster)} sektör gösteriliyor.")
+
     st.markdown("---")
-    
+
+    # =================================================================
     # KATEGORİ ÖZETİ
-    st.subheader("📂 Kategori Özeti")
-    kat = kategori_ozeti(sonuclar)
-    st.dataframe(pd.DataFrame(kat), use_container_width=True, hide_index=True)
-    
+    # =================================================================
+    st.subheader("📂 Kategori Bazında Özet")
+    kat_ozet = kategori_ozeti(sonuclar)
+    if kat_ozet:
+        df_kat = pd.DataFrame(kat_ozet)
+        df_kat.columns = ["Kategori", "Ortalama Puan", "Sektör Sayısı", "Toplam İşletme"]
+        st.dataframe(df_kat, use_container_width=True, hide_index=True)
+
     st.markdown("---")
+
+    # =================================================================
+    # EN İYİ 5 DETAY RAPORU
+    # =================================================================
+    st.subheader("🏆 En İyi 5 Sektör — Detaylı Rapor")
+    rapor = rapor_olustur(sonuclar)
     
-    # EN İYİ 5 RAPOR
-    st.subheader("🏆 En İyi 5 Detay")
-    for r in rapor_olustur(sonuclar):
-        with st.expander(f"#{r['sira']} {r['sektor']} — {r['toplam_puan']:.1f}"):
-            cc1, cc2 = st.columns(2)
-            with cc1:
+    for r in rapor:
+        with st.expander(f"#{r['sira']} {r['sektor']} — Puan: {r['toplam_puan']:.1f}"):
+            col1, col2 = st.columns(2)
+            with col1:
                 st.markdown(f"**Kategori:** {r['kategori']}")
                 st.markdown(f"**Trend:** {r['trend']}")
-                st.markdown(f"**İşletme:** {r['isletme_sayisi']:,}")
-                st.markdown(f"**Bütçe:** {r['aylik_butce']} TL")
-            with cc2:
-                st.markdown(f"**Talep:** {r['talep']:.0f}")
-                st.markdown(f"**Ödeme:** {r['odeme']:.0f}")
-                st.markdown(f"**Aciliyet:** {r['aciliyet']:.0f}")
-                st.markdown(f"**Rekabet:** {r['rekabet']:.0f}")
-            st.markdown(f"**Potansiyel:** {r['potansiyel_aylik_gelir']:,.0f} TL/ay")
+                st.markdown(f"**İşletme Sayısı:** {r['isletme_sayisi']:,}")
+                st.markdown(f"**Aylık Bütçe:** {r['aylik_butce']} TL")
+            with col2:
+                st.markdown(f"**Talep:** {r['talep']:.0f}/100")
+                st.markdown(f"**Ödeme:** {r['odeme']:.0f}/100")
+                st.markdown(f"**Aciliyet:** {r['aciliyet']:.0f}/100")
+                st.markdown(f"**Rekabet:** {r['rekabet']:.0f}/100")
+            
+            st.markdown(f"**Potansiyel Aylık Gelir:** {r['potansiyel_aylik_gelir']:,.0f} TL")
+            st.markdown(f"**Mevcut Yazılım:** {r['yazilim_sayisi']}")
+            
             if r["odemeye_hazir"]:
-                st.success("✅ Ödemeye hazır")
-    
+                st.success("✅ Bu sektör ödemeye hazır")
+            else:
+                st.warning("⚠️ Bazı kriterler yetersiz")
+
     st.markdown("---")
-    
+
+    # =================================================================
     # MANUEL VERİ GİRİŞİ
+    # =================================================================
     with st.expander("✍️ Manuel Veri Girişi"):
-        manuel = manuel_veri_yukle()
-        secenekler = {s["id"]: s["isim"] for s in SEKTORLER}
-        secili = st.selectbox("Sektör", list(secenekler.keys()),
-                             format_func=lambda x: secenekler[x])
-        cc1, cc2, cc3 = st.columns(3)
-        with cc1: sv = st.number_input("Şikayetvar", 0, 100, 50)
-        with cc2: eks = st.number_input("Ekşi", 0, 100, 50)
-        with cc3: dh = st.number_input("Donanım Haber", 0, 100, 50)
-        if st.button("💾 Kaydet"):
-            if str(secili) not in manuel: manuel[str(secili)] = {}
-            manuel[str(secili)]["sikayetvar"] = {"kaynak": "Şikayetvar",
-                "sikayet_sayisi": sv * 10, "aciliyet_puani": sv, "manuel": True}
-            manuel[str(secili)]["eksisozluk"] = {"kaynak": "Ekşi Sözlük",
-                "baslik_sayisi": eks, "tartisma_puani": eks, "manuel": True}
-            manuel[str(secili)]["donanimhaber"] = {"kaynak": "Donanım Haber",
-                "konu_sayisi": dh, "teknik_soru_puani": dh, "manuel": True}
+        st.caption("Scraping başarısız olduğunda manuel puan girebilirsiniz.")
+        
+        sektor_secenekleri = {s["id"]: s["isim"] for s in SEKTORLER}
+        secili_sektor = st.selectbox(
+            "Sektör seçin",
+            options=list(sektor_secenekleri.keys()),
+            format_func=lambda x: sektor_secenekleri[x]
+        )
+        
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            sv_puan = st.number_input("Şikayetvar puanı", 0, 100, 50)
+        with col_m2:
+            eks_puan = st.number_input("Ekşi puanı", 0, 100, 50)
+        with col_m3:
+            dh_puan = st.number_input("Donanım Haber puanı", 0, 100, 50)
+        
+        if st.button("💾 Manuel Veriyi Kaydet"):
+            manuel = manuel_veri_yukle()
+            if str(secili_sektor) not in manuel:
+                manuel[str(secili_sektor)] = {}
+            
+            manuel[str(secili_sektor)]["sikayetvar"] = {
+                "kaynak": "Şikayetvar",
+                "sikayet_sayisi": sv_puan * 10,
+                "aciliyet_puani": sv_puan,
+                "manuel": True,
+            }
+            manuel[str(secili_sektor)]["eksisozluk"] = {
+                "kaynak": "Ekşi Sözlük",
+                "baslik_sayisi": eks_puan,
+                "tartisma_puani": eks_puan,
+                "manuel": True,
+            }
+            manuel[str(secili_sektor)]["donanimhaber"] = {
+                "kaynak": "Donanım Haber",
+                "konu_sayisi": dh_puan,
+                "teknik_soru_puani": dh_puan,
+                "manuel": True,
+            }
+            
             manuel_veri_kaydet(manuel)
-            manuel_veri_uygula(hafiza)
-            st.success("Kaydedildi. Sayfayı yenileyin.")
-    
+            manuel_veri_uygela = None  # placeholder
+            try:
+                manuel_veri_uygula(hafiza)
+            except:
+                pass
+            st.success("✅ Kaydedildi. Sayfayı yenileyin.")
+            time.sleep(1)
+            st.rerun()
+
     st.markdown("---")
-    
-    # LOGLAR
-    with st.expander("🔧 Sistem Logları"):
-        for log in hafiza.get("log", [])[-50:]:
-            st.text(log)
+
+    # =================================================================
+    # SİSTEM LOGLARI
+    # =================================================================
+    with st.expander("🔧 Sistem Logları (Son 50)"):
+        loglar = hafiza.get("log", [])
+        if loglar:
+            for log in loglar[-50:]:
+                st.text(log)
+        else:
+            st.text("Henüz log kaydı yok.")
+
+    # =================================================================
+    # BİLGİLENDİRME
+    # =================================================================
+    with st.expander("❓ Sistem Nasıl Çalışır?"):
+        st.markdown(
+            "**Bu sistem ne yapar?**\n\n"
+            "30 sektörü 5 farklı kaynaktan tarar ve her sektöre **fırsat puanı** verir.\n\n"
+            "**5 Kaynak:**\n"
+            "- Google Trends → Ne aranıyor?\n"
+            "- Şikayetvar → Neyden şikayet ediliyor?\n"
+            "- Ekşi Sözlük → Ne tartışılıyor?\n"
+            "- Donanım Haber → Hangi teknik sorunlar var?\n"
+            "- Sahibinden → Pazar canlı mı? (Manuel)\n\n"
+            "**4 Kriter:**\n"
+            "- Talep (%35), Ödeme (%30), Aciliyet (%20), Rekabet (%15)\n\n"
+            "**Ödemeye Hazır Şartları:**\n"
+            "- Toplam ≥ 60, Ödeme ≥ 50, Aciliyet ≥ 40, Rekabet ≥ 40\n\n"
+            f"**Mevcut Mod:** {'🧪 DEMO' if DEMO_MODE else '🔴 GERÇEK'}\n\n"
+            "**Gerçek moda geçmek için:** `DEMO_MODE = False` yapın."
+        )
+
+    # =================================================================
+    # OTOMATİK YENİLEME (sadece tarama sürerken)
+    # =================================================================
+    if hafiza["calisiyor"]:
+        time.sleep(5)
+        st.rerun()
