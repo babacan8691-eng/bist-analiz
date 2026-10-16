@@ -3,397 +3,542 @@ import asyncio
 import aiohttp
 import threading
 import time
+import json
+import os
+import re
 from datetime import datetime, timedelta
-import random
+from bs4 import BeautifulSoup
+import pandas as pd
 
 # =====================================================================
-# 1. MOD VE AYARLAR
+# 1. AYARLAR
 # =====================================================================
-# ⚠️ DEMO_MODE = True: Gerçek API bağlantısı olmadan test edilir.
-# ⚠️ DEMO_MODE = False: Gerçek API'lerden canlı veri çekilir.
-DEMO_MODE = True
+DEMO_MODE = True  # True: gerçek scraping yapılmaz, simüle veri üretir
+                  # False: gerçek veri çekilir (yavaş ama gerçek)
+
+VERI_DOSYASI = "firsat_verileri.json"
+CACHE_SURESI = 24 * 60 * 60  # 24 saat — veriyi bu süre boyunca tekrar çekmez
 
 # =====================================================================
-# 2. GERÇEK PİYASA PARAMETRELERİ
+# 2. 30 SEKTÖR TANIMI
 # =====================================================================
-PLATFORM_KOMISYON = {
-    "Vast.ai": 0.25,
-    "RunPod": 0.20,
-    "Shadeform": 0.15,
-    "GPU.ai": 0.18,
-    "Massed Compute": 0.15,
-}
+SEKTORLER = [
+    # === SAĞLIK ===
+    {"id": 1,  "isim": "Veteriner Klinikleri",     "kategori": "Sağlık",     "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
+    {"id": 2,  "isim": "Diş Hekimleri",            "kategori": "Sağlık",     "isletme_sayisi": 25000, "aylik_butce": 2000, "yazilim_sayisi": 8},
+    {"id": 3,  "isim": "Psikologlar",              "kategori": "Sağlık",     "isletme_sayisi": 15000, "aylik_butce": 800,  "yazilim_sayisi": 4},
+    {"id": 4,  "isim": "Fizyoterapistler",         "kategori": "Sağlık",     "isletme_sayisi": 8000,  "aylik_butce": 900,  "yazilim_sayisi": 2},
+    {"id": 5,  "isim": "Eczaneler",                "kategori": "Sağlık",     "isletme_sayisi": 28000, "aylik_butce": 1200, "yazilim_sayisi": 6},
+    {"id": 6,  "isim": "Optikçiler",               "kategori": "Sağlık",     "isletme_sayisi": 6000,  "aylik_butce": 1000, "yazilim_sayisi": 3},
+    
+    # === HUKUK / MUHASEBE ===
+    {"id": 7,  "isim": "Avukatlar",                "kategori": "Hukuk",      "isletme_sayisi": 50000, "aylik_butce": 1500, "yazilim_sayisi": 5},
+    {"id": 8,  "isim": "Muhasebeciler",            "kategori": "Muhasebe",   "isletme_sayisi": 40000, "aylik_butce": 1200, "yazilim_sayisi": 7},
+    {"id": 9,  "isim": "Mali Müşavirler",          "kategori": "Muhasebe",   "isletme_sayisi": 30000, "aylik_butce": 1500, "yazilim_sayisi": 6},
+    
+    # === TİCARET ===
+    {"id": 10, "isim": "Kuyumcular",               "kategori": "Perakende",  "isletme_sayisi": 35000, "aylik_butce": 2500, "yazilim_sayisi": 4},
+    {"id": 11, "isim": "Emlakçılar",               "kategori": "Perakende",  "isletme_sayisi": 60000, "aylik_butce": 800,  "yazilim_sayisi": 12},
+    {"id": 12, "isim": "Oto Galeriler",            "kategori": "Perakende",  "isletme_sayisi": 25000, "aylik_butce": 1800, "yazilim_sayisi": 8},
+    {"id": 13, "isim": "Oto Servisleri",           "kategori": "Hizmet",     "isletme_sayisi": 60000, "aylik_butce": 1000, "yazilim_sayisi": 6},
+    {"id": 14, "isim": "Tornacılar",               "kategori": "Sanayi",     "isletme_sayisi": 15000, "aylik_butce": 900,  "yazilim_sayisi": 2},
+    {"id": 15, "isim": "Marangozlar",              "kategori": "Sanayi",     "isletme_sayisi": 20000, "aylik_butce": 800,  "yazilim_sayisi": 2},
+    
+    # === GIDA / SERVİS ===
+    {"id": 16, "isim": "Restoranlar",              "kategori": "Gıda",       "isletme_sayisi": 200000,"aylik_butce": 1500, "yazilim_sayisi": 25},
+    {"id": 17, "isim": "Kafeler",                  "kategori": "Gıda",       "isletme_sayisi": 80000, "aylik_butce": 800,  "yazilim_sayisi": 20},
+    {"id": 18, "isim": "Pastaneler",               "kategori": "Gıda",       "isletme_sayisi": 30000, "aylik_butce": 1000, "yazilim_sayisi": 5},
+    {"id": 19, "isim": "Kasaplar",                 "kategori": "Gıda",       "isletme_sayisi": 40000, "aylik_butce": 700,  "yazilim_sayisi": 3},
+    {"id": 20, "isim": "Manavlar",                 "kategori": "Gıda",       "isletme_sayisi": 50000, "aylik_butce": 500,  "yazilim_sayisi": 2},
+    
+    # === GÜZELLİK / KUAFÖR ===
+    {"id": 21, "isim": "Berberler",                "kategori": "Güzellik",   "isletme_sayisi": 80000, "aylik_butce": 500,  "yazilim_sayisi": 8},
+    {"id": 22, "isim": "Kuaförler",                "kategori": "Güzellik",   "isletme_sayisi": 70000, "aylik_butce": 700,  "yazilim_sayisi": 8},
+    {"id": 23, "isim": "Güzellik Salonları",       "kategori": "Güzellik",   "isletme_sayisi": 40000, "aylik_butce": 1500, "yazilim_sayisi": 10},
+    {"id": 24, "isim": "Spor Salonları",           "kategori": "Spor",       "isletme_sayisi": 10000, "aylik_butce": 2000, "yazilim_sayisi": 7},
+    
+    # === ETKİNLİK ===
+    {"id": 25, "isim": "Düğün Salonları",          "kategori": "Etkinlik",   "isletme_sayisi": 8000,  "aylik_butce": 1800, "yazilim_sayisi": 4},
+    {"id": 26, "isim": "Fotoğrafçılar",            "kategori": "Etkinlik",   "isletme_sayisi": 20000, "aylik_butce": 900,  "yazilim_sayisi": 6},
+    {"id": 27, "isim": "Organizasyon Şirketleri",  "kategori": "Etkinlik",   "isletme_sayisi": 5000,  "aylik_butce": 2500, "yazilim_sayisi": 3},
+    
+    # === DİĞER ===
+    {"id": 28, "isim": "Matbaalar",                "kategori": "Sanayi",     "isletme_sayisi": 12000, "aylik_butce": 1500, "yazilim_sayisi": 3},
+    {"id": 29, "isim": "Çiçekçiler",               "kategori": "Perakende",  "isletme_sayisi": 25000, "aylik_butce": 600,  "yazilim_sayisi": 3},
+    {"id": 30, "isim": "Terziler",                 "kategori": "Hizmet",     "isletme_sayisi": 30000, "aylik_butce": 500,  "yazilim_sayisi": 1},
+]
 
-ODEME_TRANSFER_UCRETI = 0.05       # İşlem başına sabit transfer ücreti (USD)
-KIRALAMA_BASLATMA_SURESI = 45      # saniye
-COOLDOWN_SURESI = 60               # saniye — aynı havuz çifti için bekleme
-FIRSAT_PENCERESI = 15              # saniye — farkın devam etmesi gereken süre
-FIRSAT_ZAMAN_ASIMI = 90            # saniye — bu süreden fazla bekleyen fırsat otomatik silinir
-MIN_LIKIDITE = 2
-
 # =====================================================================
-# 3. FIKHİ FİLTRE PARAMETRELERİ
-# =====================================================================
-FIKHI_FILTRE = {
-    "faizsiz_odeme": True,
-    "garar_yok": True,
-    "ihtikar_yok": True,
-    "meşru_hizmet": True,
-    "vade_farki_yok": True,
-}
-
-# =====================================================================
-# 4. PAYLAŞIMLI HAFIZA (THREAD-SAFE)
+# 3. HAFIZA
 # =====================================================================
 @st.cache_resource
-def paylasimli_hafiza():
+def get_hafiza():
     return {
-        "fiyatlar": {},
-        "basarili_eslesme": 0,
-        "kacirilan_firsat": 0,
-        "karsiz_firsat": 0,             # YENİ: Komisyonlar farkı yediği durumlar
-        "reddedilen_firsat": 0,
-        "toplam_kar": 0.0,
-        "toplam_komisyon": 0.0,
-        "toplam_transfer": 0.0,
-        "sanal_bakiye": 500.0,
-        "gecikme_ms": 0,
-        "kontratlar": [],
-        "son_guncelleme": "-",
+        "sektor_verileri": {},     # Her sektör için toplanan veriler
+        "son_guncelleme": None,
         "log": [],
-        "firsat_gecmisi": {},
-        "bekleyen_firsatlar": {},       # {havuz_cifti: {"fark": X, "ilk_zaman": dt, "son_fark": Y}}
-        "demo_aktif": DEMO_MODE,
-        "filtre_red_sebepleri": [],
+        "calisiyor": False,
     }
 
 # =====================================================================
-# 5. DEMO VERİ ÜRETİCİ (GERÇEKÇİLEŞTİRİLDİ)
+# 4. VERİ TOPLAYICI — GOOGLE TRENDS
 # =====================================================================
-def demo_fiyat_uret():
+async def google_trends_ara(session, sektor_adi):
     """
-    Gerçek piyasaya benzer dalgalanan fiyatlar üretir.
-    Bazen büyük farklar oluşur ki komisyonları yenebilsin.
-    """
-    time.sleep(0.05)
-    temel = {
-        "Vast.ai": 0.180,          # Daha düşük taban
-        "RunPod": 0.420,           # Daha yüksek taban
-        "Shadeform": 0.280,
-        "GPU.ai": 0.310,
-        "Massed Compute": 0.290,
-    }
-    fiyatlar = {}
-    for havuz, fiyat in temel.items():
-        dalgalanma = random.uniform(-0.08, 0.08)
-        # %10 ihtimalle büyük fırsat (komisyonları yenecek kadar)
-        if random.random() < 0.10:
-            dalgalanma = random.uniform(-0.25, 0.25)
-        fiyatlar[havuz] = round(max(0.100, fiyat * (1 + dalgalanma)), 3)
-    return fiyatlar
-
-# =====================================================================
-# 6. FIKHİ FİLTRE FONKSİYONU
-# =====================================================================
-def fikhi_filtre_kontrol(alis_havuz, satis_havuz, brut_fark):
-    """
-    İslami kurallara uygunluk kontrolü yapar.
-    Dönüş: (uygun_mu: bool, sebep: str)
-    """
-    if not FIKHI_FILTRE["faizsiz_odeme"]:
-        return False, "Faizsiz ödeme şartı sağlanmıyor"
-    if brut_fark < 0.01:
-        return False, "Garar riski: Fark çok küçük, belirsizlik yüksek"
-    if brut_fark > 0.500:
-        return False, "Şüpheli fark: Manipülasyon riski"
-    if not FIKHI_FILTRE["meşru_hizmet"]:
-        return False, "Hizmet meşru değil"
-    if alis_havuz == satis_havuz:
-        return False, "Aynı havuzdan alım-satım yapılamaz"
-    return True, "Uygun"
-
-# =====================================================================
-# 7. GERÇEKÇİ KÂR HESABI
-# =====================================================================
-def gercek_kar_hesapla(alis_havuz, satis_havuz, alis_fiyat, satis_fiyat):
-    """
-    Tüm gerçek piyasa maliyetlerini düşerek net kârı hesaplar.
-    """
-    brut_fark = satis_fiyat - alis_fiyat
-    
-    # Her iki platformdan da komisyon kesilir
-    komisyon_alis = alis_fiyat * PLATFORM_KOMISYON.get(alis_havuz, 0.20)
-    komisyon_satis = satis_fiyat * PLATFORM_KOMISYON.get(satis_havuz, 0.20)
-    toplam_komisyon = komisyon_alis + komisyon_satis
-    
-    # Transfer/ödeme ücreti
-    toplam_transfer = ODEME_TRANSFER_UCRETI
-    
-    # Kiralama başlatma süresi maliyeti (%2 kayıp varsayımı)
-    baslatma_maliyeti = alis_fiyat * 0.02
-    
-    # Net kâr
-    net_kar = brut_fark - toplam_komisyon - toplam_transfer - baslatma_maliyeti
-    
-    return {
-        "brut_fark": brut_fark,
-        "toplam_komisyon": toplam_komisyon,
-        "toplam_transfer": toplam_transfer,
-        "baslatma_maliyeti": baslatma_maliyeti,
-        "net_kar": net_kar,
-    } # =====================================================================
-# 8. API VERİ ÇEKME FONKSİYONU (Gerçek Mod İçin)
-# =====================================================================
-async def havuz_tara(session, url, headers, params=None, json_data=None, method="GET", havuz_adi="Bilinmeyen"):
-    """
-    Belirtilen API'ye istek atar. Demo modunda sanal veri döner.
+    Google Trends üzerinden arama hacmini ölçer.
+    Demo modda simüle veri üretir.
     """
     if DEMO_MODE:
-        await asyncio.sleep(random.uniform(0.1, 0.3))
-        return None, random.randint(30, 80)
+        # Demo: sektöre göre rastgele bir talep puanı üret
+        import random
+        return {
+            "kaynak": "Google Trends",
+            "talep_puani": random.randint(30, 95),
+            "trend": random.choice(["yükseliyor", "sabit", "düşüyor"]),
+            "arama_hacmi": random.randint(1000, 50000),
+        }
     
-    start = time.time()
     try:
-        if method == "GET":
-            async with session.get(url, headers=headers, params=params, timeout=5) as resp:
-                if resp.status == 200:
-                    return await resp.json(), int((time.time() - start) * 1000)
-                return {"_hata": f"HTTP {resp.status}"}, 0
-        elif method == "POST":
-            async with session.post(url, headers=headers, json=json_data, timeout=5) as resp:
-                if resp.status == 200:
-                    return await resp.json(), int((time.time() - start) * 1000)
-                return {"_hata": f"HTTP {resp.status}"}, 0
-    except asyncio.TimeoutError:
-        return {"_hata": "Zaman Aşımı"}, 0
-    except aiohttp.ClientError as e:
-        return {"_hata": f"Bağlantı: {str(e)[:50]}"}, 0
+        from pytrends.request import TrendReq
+        pytrends = TrendReq(hl='tr-TR', tz=180)
+        pytrends.build_payload([sektor_adi], cat=0, timeframe='today 12-m', geo='TR')
+        df = pytrends.interest_over_time()
+        if not df.empty:
+            ortalama = int(df[sektor_adi].mean())
+            son_ay = int(df[sektor_adi].tail(30).mean())
+            ilk_ay = int(df[sektor_adi].head(30).mean())
+            trend = "yükseliyor" if son_ay > ilk_ay * 1.1 else "düşüyor" if son_ay < ilk_ay * 0.9 else "sabit"
+            return {
+                "kaynak": "Google Trends",
+                "talep_puani": ortalama,
+                "trend": trend,
+                "arama_hacmi": ortalama * 100,
+            }
     except Exception as e:
-        return {"_hata": f"Beklenmeyen: {str(e)[:50]}"}, 0
+        return {"kaynak": "Google Trends", "hata": str(e)[:80]}
+    return {"kaynak": "Google Trends", "talep_puani": 0}
 
 # =====================================================================
-# 9. ÖLÜ FIRSAT TEMİZLEYİCİ
+# 5. VERİ TOPLAYICI — ŞİKAYETVAR
 # =====================================================================
-def olu_firsatlari_temizle(hafiza, simdi_dt):
+async def sikayetvar_ara(session, sektor_adi):
     """
-    Zaman aşımına uğrayan veya artık geçerli olmayan fırsatları temizler.
+    Şikayetvar.com'da o sektörle ilgili şikayet sayısını ölçer.
+    Yüksek şikayet = çözülmemiş sorun = fırsat
     """
-    temizlenecek = []
-    for cift, veri in hafiza["bekleyen_firsatlar"].items():
-        gecen = (simdi_dt - veri["ilk_zaman"]).total_seconds()
-        
-        # Zaman aşımı kontrolü
-        if gecen > FIRSAT_ZAMAN_ASIMI:
-            temizlenecek.append(cift)
-            hafiza["log"].append(f"⏰ Zaman aşımı: {cift} ({gecen:.0f} sn) fırsatı elendi.")
-            continue
-        
-        # Fark negatife döndüyse temizle
-        if veri["son_fark"] <= 0:
-            temizlenecek.append(cift)
-            hafiza["log"].append(f"📉 Fark kapandı: {cift} elendi.")
-            continue
+    if DEMO_MODE:
+        import random
+        return {
+            "kaynak": "Şikayetvar",
+            "sikayet_sayisi": random.randint(50, 3000),
+            "aciliyet_puani": random.randint(30, 95),
+        }
     
-    for cift in temizlenecek:
-        hafiza["bekleyen_firsatlar"].pop(cift, None)
+    try:
+        url = f"https://www.sikayetvar.com/arama?q={sektor_adi.replace(' ', '+')}"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        async with session.get(url, headers=headers, timeout=15) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                soup = BeautifulSoup(html, "html.parser")
+                # Şikayet sayısını bul
+                sayi_metni = soup.find(string=re.compile(r'\d+\s*şikayet', re.IGNORECASE))
+                sayi = 0
+                if sayi_metni:
+                    match = re.search(r'(\d+)', sayi_metni)
+                    if match:
+                        sayi = int(match.group(1))
+                return {
+                    "kaynak": "Şikayetvar",
+                    "sikayet_sayisi": sayi,
+                    "aciliyet_puani": min(100, sayi // 10),
+                }
+    except Exception as e:
+        return {"kaynak": "Şikayetvar", "hata": str(e)[:80]}
+    return {"kaynak": "Şikayetvar", "sikayet_sayisi": 0, "aciliyet_puani": 0}
 
 # =====================================================================
-# 10. ANA ARBITRAJ MOTORU (TÜM DÜZELTMELER UYGULANDI)
+# 6. VERİ TOPLAYICI — EKŞİ SÖZLÜK
 # =====================================================================
-async def arbitraj_motoru(kar_esigi, hafiza):
+async def eksisozluk_ara(session, sektor_adi):
+    """
+    Ekşi Sözlük'te o sektörle ilgili başlıkları ve tartışmaları ölçer.
+    """
+    if DEMO_MODE:
+        import random
+        return {
+            "kaynak": "Ekşi Sözlük",
+            "baslik_sayisi": random.randint(10, 500),
+            "tartisma_puani": random.randint(20, 90),
+        }
+    
+    try:
+        url = f"https://eksisozluk.com/basliklar/ara?SearchForm.Keywords={sektor_adi.replace(' ', '+')}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        async with session.get(url, headers=headers, timeout=15) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                soup = BeautifulSoup(html, "html.parser")
+                basliklar = soup.find_all("a", class_="content-title")
+                return {
+                    "kaynak": "Ekşi Sözlük",
+                    "baslik_sayisi": len(basliklar),
+                    "tartisma_puani": min(100, len(basliklar) * 2),
+                }
+    except Exception as e:
+        return {"kaynak": "Ekşi Sözlük", "hata": str(e)[:80]}
+    return {"kaynak": "Ekşi Sözlük", "baslik_sayisi": 0, "tartisma_puani": 0}
+
+# =====================================================================
+# 7. VERİ TOPLAYICI — DONANIM HABER
+# =====================================================================
+async def donanimhaber_ara(session, sektor_adi):
+    """
+    Donanım Haber forumunda o sektörle ilgili konu sayısını ölçer.
+    """
+    if DEMO_MODE:
+        import random
+        return {
+            "kaynak": "Donanım Haber",
+            "konu_sayisi": random.randint(20, 800),
+            "teknik_soru_puani": random.randint(30, 90),
+        }
+    
+    try:
+        url = f"https://forum.donanimhaber.com/search?q={sektor_adi.replace(' ', '+')}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        async with session.get(url, headers=headers, timeout=15) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                soup = BeautifulSoup(html, "html.parser")
+                konular = soup.find_all("a", class_="topic-title")
+                return {
+                    "kaynak": "Donanım Haber",
+                    "konu_sayisi": len(konular),
+                    "teknik_soru_puani": min(100, len(konular)),
+                }
+    except Exception as e:
+        return {"kaynak": "Donanım Haber", "hata": str(e)[:80]}
+    return {"kaynak": "Donanım Haber", "konu_sayisi": 0, "teknik_soru_puani": 0}
+
+# =====================================================================
+# 8. VERİ TOPLAYICI — SAHİBİNDEN
+# =====================================================================
+async def sahibinden_ara(session, sektor_adi):
+    """
+    Sahibinden.com'da o sektörle ilgili ilan sayısını ölçer.
+    Yüksek ilan = canlı pazar
+    """
+    if DEMO_MODE:
+        import random
+        return {
+            "kaynak": "Sahibinden",
+            "ilan_sayisi": random.randint(100, 10000),
+            "pazar_canliligi": random.randint(30, 95),
+        }
+    # Gerçek scraping Sahibinden tarafından engellenir, demo modda kalacak
+    return {"kaynak": "Sahibinden", "ilan_sayisi": 0, "pazar_canliligi": 0}
+
+# =====================================================================
+# 9. TEK SEKTÖRÜ TARA (5 kaynağı paralel)
+# =====================================================================
+async def sektor_tara(session, sektor):
+    """
+    Bir sektörü 5 farklı kaynaktan paralel tarar.
+    """
+    sektor_adi = sektor["isim"]
+    
+    gorevler = [
+        google_trends_ara(session, sektor_adi),
+        sikayetvar_ara(session, sektor_adi),
+        eksisozluk_ara(session, sektor_adi),
+        donanimhaber_ara(session, sektor_adi),
+        sahibinden_ara(session, sektor_adi),
+    ]
+    
+    sonuclar = await asyncio.gather(*gorevler, return_exceptions=True)
+    
+    return {
+        "sektor_id": sektor["id"],
+        "isim": sektor_adi,
+        "kategori": sektor["kategori"],
+        "isletme_sayisi": sektor["isletme_sayisi"],
+        "aylik_butce": sektor["aylik_butce"],
+        "yazilim_sayisi": sektor["yazilim_sayisi"],
+        "kaynaklar": {
+            "google_trends": sonuclar[0] if not isinstance(sonuclar[0], Exception) else {"hata": "exception"},
+            "sikayetvar": sonuclar[1] if not isinstance(sonuclar[1], Exception) else {"hata": "exception"},
+            "eksisozluk": sonuclar[2] if not isinstance(sonuclar[2], Exception) else {"hata": "exception"},
+            "donanimhaber": sonuclar[3] if not isinstance(sonuclar[3], Exception) else {"hata": "exception"},
+            "sahibinden": sonuclar[4] if not isinstance(sonuclar[4], Exception) else {"hata": "exception"},
+        },
+        "tarama_zamani": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+# =====================================================================
+# 10. TÜM SEKTÖRLERİ TARA (30 sektör)
+# =====================================================================
+async def tum_sektorleri_tara(hafiza):
+    """
+    30 sektörü sırayla tarar (aynı anda değil, rate limit için).
+    """
+    hafiza["log"].append(f"🔍 Tarama başladı: {len(SEKTORLER)} sektör")
+    
     async with aiohttp.ClientSession() as session:
-        while True:
+        for i, sektor in enumerate(SEKTORLER):
             try:
-                # --- FİYATLARI ÇEK ---
-                if DEMO_MODE:
-                    hafiza["fiyatlar"] = demo_fiyat_uret()
-                    hafiza["gecikme_ms"] = random.randint(30, 80)
-                    if random.random() < 0.15:
-                        hafiza["log"].append("Demo: Fiyatlar güncellendi")
-                else:
-                    # Gerçek modda buraya API çağrıları gelecek
-                    pass
-
-                simdi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                simdi_dt = datetime.now()
-                hafiza["son_guncelleme"] = simdi
-
-                # --- ÖLÜ FIRSATLARI TEMİZLE ---
-                olu_firsatlari_temizle(hafiza, simdi_dt)
-
-                # --- FİYAT KONTROLÜ ---
-                fiyatlar = hafiza["fiyatlar"]
-                if len(fiyatlar) < 2:
-                    await asyncio.sleep(5)
-                    continue
-
-                en_ucuz = min(fiyatlar, key=fiyatlar.get)
-                en_pahali = max(fiyatlar, key=fiyatlar.get)
-                alis = fiyatlar[en_ucuz]
-                satis = fiyatlar[en_pahali]
-                brut_fark = satis - alis
-
-                havuz_cifti = f"{en_ucuz}->{en_pahali}"
-
-                # =========================================================
-                # COOLDOWN KONTROLÜ
-                # =========================================================
-                if havuz_cifti in hafiza["firsat_gecmisi"]:
-                    son_islem = hafiza["firsat_gecmisi"][havuz_cifti]
-                    gecen_sure = (simdi_dt - son_islem).total_seconds()
-                    if gecen_sure < COOLDOWN_SURESI:
-                        if havuz_cifti in hafiza["bekleyen_firsatlar"]:
-                            hafiza["bekleyen_firsatlar"][havuz_cifti]["son_fark"] = brut_fark
-                        await asyncio.sleep(5)
-                        continue
-
-                # =========================================================
-                # FIRSAT PENCERESİ KONTROLÜ
-                # =========================================================
-                if havuz_cifti in hafiza["bekleyen_firsatlar"]:
-                    veri = hafiza["bekleyen_firsatlar"][havuz_cifti]
-                    veri["son_fark"] = brut_fark
-                    gecen = (simdi_dt - veri["ilk_zaman"]).total_seconds()
-
-                    if gecen >= FIRSAT_PENCERESI:
-                        # Pencere doldu, işleme devam et
-                        if brut_fark > 0:
-                            hafiza["log"].append(
-                                f"✅ Pencere doldu: {havuz_cifti} ({gecen:.0f} sn, ${brut_fark:.3f})"
-                            )
-                        else:
-                            hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-                            await asyncio.sleep(5)
-                            continue
-                    else:
-                        # Pencere henüz dolmadı
-                        await asyncio.sleep(5)
-                        continue
-                else:
-                    # Yeni fırsat kaydet
-                    hafiza["bekleyen_firsatlar"][havuz_cifti] = {
-                        "fark": brut_fark,
-                        "ilk_zaman": simdi_dt,
-                        "son_fark": brut_fark,
-                    }
-                    hafiza["log"].append(
-                        f"🆕 Yeni fırsat: {havuz_cifti} (${brut_fark:.3f}) — pencere başladı"
-                    )
-                    await asyncio.sleep(5)
-                    continue
-
-                # =========================================================
-                # FIKHİ FİLTRE
-                # =========================================================
-                uygun, sebep = fikhi_filtre_kontrol(en_ucuz, en_pahali, brut_fark)
-                if not uygun:
-                    hafiza["reddedilen_firsat"] += 1
-                    hafiza["filtre_red_sebepleri"].append(f"{simdi} - {sebep}")
-                    if len(hafiza["filtre_red_sebepleri"]) > 20:
-                        hafiza["filtre_red_sebepleri"].pop(0)
-                    hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-                    hafiza["log"].append(f"🚫 Fıkhi filtre reddi: {sebep}")
-                    await asyncio.sleep(5)
-                    continue
-
-                # =========================================================
-                # GERÇEKÇİ KÂR HESABI
-                # =========================================================
-                kar_detay = gercek_kar_hesapla(en_ucuz, en_pahali, alis, satis)
-                net_kar = kar_detay["net_kar"]
-
-                # =========================================================
-                # KÂR DURUMU KONTROLÜ (YENİ DÜZELTME)
-                # =========================================================
-                # 1) Net kâr negatif veya sıfır → komisyonlar farkı yedi
-                if net_kar <= 0:
-                    hafiza["karsiz_firsat"] += 1
-                    hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-                    hafiza["log"].append(
-                        f"❌ Kârsız: {havuz_cifti} — net ${net_kar:.3f} (komisyonlar farkı yedi)"
-                    )
-                    await asyncio.sleep(5)
-                    continue
-
-                # 2) Pozitif ama eşiğin altında → kaçırılan fırsat
-                if 0.005 < net_kar < kar_esigi:
-                    hafiza["kacirilan_firsat"] += 1
-                    hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-                    hafiza["log"].append(
-                        f"⚠️ Kaçırılan: {havuz_cifti} — net ${net_kar:.3f} < eşik ${kar_esigi:.3f}"
-                    )
-                    await asyncio.sleep(5)
-                    continue
-
-                # =========================================================
-                # BAŞARILI EŞLEŞME
-                # =========================================================
-                if net_kar >= kar_esigi:
-                    # Emir gerçekleşme simülasyonu (~%65)
-                    if random.random() < 0.65:
-                        hafiza["basarili_eslesme"] += 1
-                        hafiza["toplam_kar"] += net_kar
-                        hafiza["sanal_bakiye"] += net_kar
-                        hafiza["toplam_komisyon"] += kar_detay["toplam_komisyon"]
-                        hafiza["toplam_transfer"] += kar_detay["toplam_transfer"]
-
-                        # Cooldown'u başlat
-                        hafiza["firsat_gecmisi"][havuz_cifti] = simdi_dt
-                        hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-
-                        hafiza["kontratlar"].insert(0, {
-                            "Zaman": simdi,
-                            "Alış": f"{en_ucuz} (${alis:.3f})",
-                            "Satış": f"{en_pahali} (${satis:.3f})",
-                            "Brüt": f"${kar_detay['brut_fark']:.3f}",
-                            "Komisyon": f"${kar_detay['toplam_komisyon']:.3f}",
-                            "Net Kâr": f"${net_kar:.3f}",
-                        })
-                        if len(hafiza["kontratlar"]) > 10:
-                            hafiza["kontratlar"].pop()
-
-                        hafiza["log"].append(
-                            f"✅ İŞLEM: {havuz_cifti} | Net ${net_kar:.3f}"
-                        )
-                    else:
-                        # Emir gerçekleşmedi — fırsat kaçtı
-                        hafiza["log"].append(
-                            f"❌ Emir gerçekleşmedi: {havuz_cifti}"
-                        )
-                        hafiza["bekleyen_firsatlar"].pop(havuz_cifti, None)
-
-                # Logları sınırla
-                if len(hafiza["log"]) > 30:
-                    hafiza["log"] = hafiza["log"][-30:]
-
+                hafiza["log"].append(f"⏳ [{i+1}/{len(SEKTORLER)}] {sektor['isim']} taranıyor...")
+                sonuc = await sektor_tara(session, sektor)
+                hafiza["sektor_verileri"][sektor["id"]] = sonuc
+                await asyncio.sleep(0.5)  # Rate limit için bekle
             except Exception as e:
-                hafiza["log"].append(f"Motor hatası: {str(e)[:100]}")
-
-            await asyncio.sleep(5)
+                hafiza["log"].append(f"❌ {sektor['isim']}: {str(e)[:80]}")
+    
+    hafiza["son_guncelleme"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    hafiza["log"].append(f"✅ Tarama tamamlandı.")
+    
+    # Log'u 100 ile sınırla
+    if len(hafiza["log"]) > 100:
+        hafiza["log"] = hafiza["log"][-100:]
 
 # =====================================================================
 # 11. ARKA PLAN BOT BAŞLATICI
 # =====================================================================
-def bot_baslat(kar_esigi, hafiza):
-    """
-    Arka planda asyncio event loop'u başlatır ve arbitraj motorunu çalıştırır.
-    """
+def bot_baslat(hafiza):
+    if hafiza["calisiyor"]:
+        return
+    hafiza["calisiyor"] = True
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(arbitraj_motoru(kar_esigi, hafiza))
+        loop.run_until_complete(tum_sektorleri_tara(hafiza))
     except Exception as e:
-        print(f"Bot çöktü: {e}") # =====================================================================
-# 12. STREAMLIT ARAYÜZÜ
+        hafiza["log"].append(f"Bot çöktü: {str(e)[:100]}")
+    finally:
+        hafiza["calisiyor"] = False # =====================================================================
+# 12. PUANLAMA MOTORU
 # =====================================================================
-st.set_page_config(page_title="5-Way Pro Arbitraj - Gerçek Piyasa", layout="wide")
+def sektor_puanla(veri):
+    """
+    Bir sektörün verilerini alır, 4 kriterde puanlar ve toplam fırsat puanı üretir.
+    
+    Puanlama:
+    - Talep (0-100)      → Google Trends + Ekşi Sözlük + Donanım Haber
+    - Ödeme Gücü (0-100) → İşletme sayısı + aylık bütçe
+    - Aciliyet (0-100)   → Şikayetvar şikayetleri
+    - Rekabet (0-100)    → Yazılım sayısı (düşük = iyi)
+    
+    Toplam = (Talep×0.35) + (Ödeme×0.30) + (Aciliyet×0.20) + (Rekabet×0.15)
+    """
+    kaynaklar = veri.get("kaynaklar", {})
+    
+    # --- TALEP PUANI ---
+    talep_puani = 0
+    gt = kaynaklar.get("google_trends", {})
+    if "talep_puani" in gt:
+        talep_puani += gt["talep_puani"] * 0.5
+    eks = kaynaklar.get("eksisozluk", {})
+    if "tartisma_puani" in eks:
+        talep_puani += eks["tartisma_puani"] * 0.3
+    dh = kaynaklar.get("donanimhaber", {})
+    if "teknik_soru_puani" in dh:
+        talep_puani += dh["teknik_soru_puani"] * 0.2
+    talep_puani = min(100, talep_puani)
+    
+    # --- ÖDEME GÜCÜ PUANI ---
+    isletme = veri.get("isletme_sayisi", 0)
+    butce = veri.get("aylik_butce", 0)
+    # İşletme sayısı: 5.000 → 50 puan, 100.000+ → 100 puan
+    isletme_puan = min(100, (isletme / 100000) * 100)
+    # Bütçe: 500 TL → 30 puan, 3.000 TL+ → 100 puan
+    butce_puan = min(100, (butce / 3000) * 100)
+    odeme_puani = (isletme_puan * 0.4) + (butce_puan * 0.6)
+    
+    # --- ACİLİYET PUANI ---
+    sv = kaynaklar.get("sikayetvar", {})
+    aciliyet_puani = sv.get("aciliyet_puani", 0)
+    
+    # --- REKABET PUANI (düşük yazılım = yüksek puan) ---
+    yazilim = veri.get("yazilim_sayisi", 0)
+    # 0 yazılım → 100 puan, 25+ yazılım → 0 puan
+    rekabet_puani = max(0, 100 - (yazilim * 4))
+    
+    # --- TOPLAM FIRSAT PUANI ---
+    toplam = (
+        talep_puani * 0.35 +
+        odeme_puani * 0.30 +
+        aciliyet_puani * 0.20 +
+        rekabet_puani * 0.15
+    )
+    
+    return {
+        "talep_puani": round(talep_puani, 1),
+        "odeme_puani": round(odeme_puani, 1),
+        "aciliyet_puani": round(aciliyet_puani, 1),
+        "rekabet_puani": round(rekabet_puani, 1),
+        "toplam_puan": round(toplam, 1),
+        "trend": gt.get("trend", "bilinmiyor"),
+    }
+
+# =====================================================================
+# 13. ÖDEMEYE HAZIR FİLTRESİ
+# =====================================================================
+def odemeye_hazir_mi(sektor_veri, puanlar):
+    """
+    Bir sektörün 'ödemeye hazır' olup olmadığını kontrol eder.
+    
+    Şartlar:
+    - Toplam puan ≥ 60
+    - Ödeme gücü ≥ 50
+    - Aciliyet ≥ 40
+    - Rekabet puanı ≥ 40 (yani yazılım sayısı az)
+    """
+    return (
+        puanlar["toplam_puan"] >= 60 and
+        puanlar["odeme_puani"] >= 50 and
+        puanlar["aciliyet_puani"] >= 40 and
+        puanlar["rekabet_puani"] >= 40
+    )
+
+# =====================================================================
+# 14. TÜM SEKTÖRLERİ PUANLA VE SIRALA
+# =====================================================================
+def tum_sektorleri_puanla(hafiza):
+    """
+    Hafızadaki tüm sektör verilerini puanlar, sıralar ve rapor üretir.
+    """
+    sonuclar = []
+    
+    for sektor_id, veri in hafiza.get("sektor_verileri", {}).items():
+        try:
+            puanlar = sektor_puanla(veri)
+            sektor = veri.copy()
+            sektor.update(puanlar)
+            sektor["odemeye_hazir"] = odemeye_hazir_mi(veri, puanlar)
+            sonuclar.append(sektor)
+        except Exception as e:
+            hafiza["log"].append(f"Puanlama hatası (ID {sektor_id}): {str(e)[:80]}")
+    
+    # Toplam puana göre sırala (yüksekten düşüğe)
+    sonuclar.sort(key=lambda x: x["toplam_puan"], reverse=True)
+    
+    return sonuclar
+
+# =====================================================================
+# 15. KATEGORİ BAZINDA ÖZET
+# =====================================================================
+def kategori_ozeti(sonuclar):
+    """
+    Kategorilere göre ortalama puanları hesaplar.
+    """
+    kategoriler = {}
+    for s in sonuclar:
+        kat = s["kategori"]
+        if kat not in kategoriler:
+            kategoriler[kat] = {"toplam": 0, "sayi": 0, "isletme_toplami": 0}
+        kategoriler[kat]["toplam"] += s["toplam_puan"]
+        kategoriler[kat]["sayi"] += 1
+        kategoriler[kat]["isletme_toplami"] += s["isletme_sayisi"]
+    
+    ozet = []
+    for kat, veri in kategoriler.items():
+        ozet.append({
+            "kategori": kat,
+            "ortalama_puan": round(veri["toplam"] / veri["sayi"], 1),
+            "sektor_sayisi": veri["sayi"],
+            "toplam_isletme": veri["isletme_toplami"],
+        })
+    
+    ozet.sort(key=lambda x: x["ortalama_puan"], reverse=True)
+    return ozet
+
+# =====================================================================
+# 16. VERİ KAYDETME / YÜKLEME
+# =====================================================================
+def verileri_kaydet(hafiza):
+    """Hafızadaki verileri JSON dosyasına kaydeder."""
+    try:
+        veri = {
+            "sektor_verileri": hafiza.get("sektor_verileri", {}),
+            "son_guncelleme": hafiza.get("son_guncelleme"),
+            "kayit_zamani": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        with open(VERI_DOSYASI, "w", encoding="utf-8") as f:
+            json.dump(veri, f, ensure_ascii=False, indent=2)
+        hafiza["log"].append("💾 Veriler dosyaya kaydedildi.")
+    except Exception as e:
+        hafiza["log"].append(f"Kayıt hatası: {str(e)[:80]}")
+
+def verileri_yukle(hafiza):
+    """JSON dosyasından verileri hafızaya yükler."""
+    try:
+        if os.path.exists(VERI_DOSYASI):
+            with open(VERI_DOSYASI, "r", encoding="utf-8") as f:
+                veri = json.load(f)
+            # JSON anahtarları string olur, int'e çevir
+            hafiza["sektor_verileri"] = {int(k): v for k, v in veri.get("sektor_verileri", {}).items()}
+            hafiza["son_guncelleme"] = veri.get("son_guncelleme")
+            hafiza["log"].append(f"📂 Veriler yüklendi (son güncelleme: {hafiza['son_guncelleme']})")
+            return True
+    except Exception as e:
+        hafiza["log"].append(f"Yükleme hatası: {str(e)[:80]}")
+    return False
+
+# =====================================================================
+# 17. CACHE KONTROLÜ
+# =====================================================================
+def cache_gecerli_mi(hafiza):
+    """Son güncellemenin 24 saatten yeni olup olmadığını kontrol eder."""
+    son = hafiza.get("son_guncelleme")
+    if not son:
+        return False
+    try:
+        son_dt = datetime.strptime(son, "%Y-%m-%d %H:%M:%S")
+        return (datetime.now() - son_dt).total_seconds() < CACHE_SURESI
+    except:
+        return False
+
+# =====================================================================
+# 18. RAPOR OLUŞTURMA
+# =====================================================================
+def rapor_olustur(sonuclar):
+    """
+    En iyi 5 sektör için detaylı rapor üretir.
+    """
+    rapor = []
+    for i, s in enumerate(sonuclar[:5], 1):
+        rapor.append({
+            "sira": i,
+            "sektor": s["isim"],
+            "kategori": s["kategori"],
+            "toplam_puan": s["toplam_puan"],
+            "talep": s["talep_puani"],
+            "odeme": s["odeme_puani"],
+            "aciliyet": s["aciliyet_puani"],
+            "rekabet": s["rekabet_puani"],
+            "trend": s.get("trend", "-"),
+            "isletme_sayisi": s["isletme_sayisi"],
+            "aylik_butce": s["aylik_butce"],
+            "yazilim_sayisi": s["yazilim_sayisi"],
+            "odemeye_hazir": s["odemeye_hazir"],
+            "potansiyel_aylik_gelir": s["isletme_sayisi"] * s["aylik_butce"] * 0.001,
+        })
+    return rapor # =====================================================================
+# 19. STREAMLIT ARAYÜZÜ
+# =====================================================================
+st.set_page_config(
+    page_title="Fırsat Madenciliği - 30 Sektör Analizi",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # --- OTURUM AÇMA ---
 if "oturum_acik" not in st.session_state:
     st.session_state["oturum_acik"] = False
 
 if not st.session_state["oturum_acik"]:
-    st.markdown("<h2>🔒 5-Way Pro Arbitraj Paneli Girişi</h2>", unsafe_allow_html=True)
+    st.markdown("<h2>🔒 Fırsat Madenciliği Paneli Girişi</h2>", unsafe_allow_html=True)
+    st.caption("30 sektör analizi — hangi sektör ödemeye hazır?")
     k = st.text_input("Kullanıcı Adı", key="u")
     s = st.text_input("Şifre", type="password", key="p")
     if st.button("Sisteme Giriş Yap"):
@@ -403,7 +548,7 @@ if not st.session_state["oturum_acik"]:
         else:
             st.error("Hatalı Kullanıcı Adı veya Şifre!")
 else:
-    hafiza = paylasimli_hafiza()
+    hafiza = get_hafiza()
 
     # =================================================================
     # SOL MENÜ
@@ -414,264 +559,271 @@ else:
     if DEMO_MODE:
         st.sidebar.success("🧪 DEMO MODU (Sanal Veri)")
     else:
-        st.sidebar.warning("🔴 GERÇEK MOD (Canlı API)")
+        st.sidebar.warning("🔴 GERÇEK MOD (Canlı Scraping)")
 
-    kar_esigi = st.sidebar.slider(
-        "Dinamik Kâr Eşiği ($/saat)",
-        min_value=0.000, max_value=0.200, value=0.030, step=0.005
-    )
-    st.sidebar.caption("Bu eşiğin altındaki kârlar 'kaçırılan fırsat' sayılır.")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ⚙️ Gerçek Piyasa Parametreleri")
-    st.sidebar.caption(f"⏱️ Cooldown: {COOLDOWN_SURESI} sn")
-    st.sidebar.caption(f"🎯 Fırsat Penceresi: {FIRSAT_PENCERESI} sn")
-    st.sidebar.caption(f"⏰ Zaman Aşımı: {FIRSAT_ZAMAN_ASIMI} sn")
-    st.sidebar.caption(f"💳 Transfer Ücreti: ${ODEME_TRANSFER_UCRETI}")
-    st.sidebar.caption("📉 Emir Gerçekleşme: ~%65")
+    st.sidebar.markdown("### 📊 Sistem Bilgisi")
+    st.sidebar.caption(f"Sektör sayısı: {len(SEKTORLER)}")
+    st.sidebar.caption(f"Kaynak sayısı: 5")
+    st.sidebar.caption(f"Son güncelleme: {hafiza.get('son_guncelleme', '-')}")
 
     st.sidebar.markdown("---")
-    if st.sidebar.button("🔄 Botu Yeniden Başlat"):
-        st.session_state["bot_calisiyor"] = False
-        hafiza["log"].append("Bot manuel olarak yeniden başlatıldı.")
-        time.sleep(1)
+    st.sidebar.markdown("### 🎛️ Kontroller")
+
+    if st.sidebar.button("🔄 Verileri Yenile"):
+        hafiza["sektor_verileri"] = {}
+        hafiza["log"] = []
+        hafiza["calisiyor"] = False
+        verileri_kaydet(hafiza)
+        st.rerun()
+
+    if st.sidebar.button("📂 Cache'i Temizle"):
+        if os.path.exists(VERI_DOSYASI):
+            os.remove(VERI_DOSYASI)
+        hafiza["sektor_verileri"] = {}
+        hafiza["son_guncelleme"] = None
+        hafiza["log"] = []
         st.rerun()
 
     if st.sidebar.button("🚪 Oturumu Kapat"):
         st.session_state["oturum_acik"] = False
         st.rerun()
 
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### ⚖️ Puanlama Ağırlıkları")
+    st.sidebar.caption("Talep: %35")
+    st.sidebar.caption("Ödeme: %30")
+    st.sidebar.caption("Aciliyet: %20")
+    st.sidebar.caption("Rekabet: %15")
+
     # =================================================================
-    # ARKA PLAN BOTUNU BAŞLAT
+    # VERİ DURUMU KONTROLÜ
     # =================================================================
-    if "bot_calisiyor" not in st.session_state or st.session_state["bot_calisiyor"] == False:
-        st.session_state["bot_calisiyor"] = True
-        t = threading.Thread(target=bot_baslat, args=(kar_esigi, hafiza), daemon=True)
+    # Cache varsa yükle
+    if not hafiza["sektor_verileri"]:
+        verileri_yukle(hafiza)
+
+    # Cache geçerli değilse veya boşsa taramayı başlat
+    if not cache_gecerli_mi(hafiza) and not hafiza["calisiyor"]:
+        t = threading.Thread(target=bot_baslat, args=(hafiza,), daemon=True)
         t.start()
+        time.sleep(0.5)
 
     # =================================================================
     # BAŞLIK
     # =================================================================
-    st.title("⚡ Pro Otonom Altyapı Arbitraj Motoru")
-    st.caption("Gerçek Piyasa Mantığı — Komisyon, Transfer ve Fıkhi Filtre Aktif")
+    st.title("🎯 Fırsat Madenciliği — 30 Sektör Analizi")
+    st.caption("Hangi sektör çözüm bekliyor? Hangi sektör ödemeye hazır?")
     st.markdown("---")
 
     # =================================================================
-    # CANLI FİYATLAR
+    # TARAMA DURUMU
     # =================================================================
-    st.subheader("🌐 Canlı Küresel RTX 4090 Pazar Fiyat Endeksi")
-
-    fiyatlar = hafiza.get("fiyatlar", {})
-    if fiyatlar:
-        if len(fiyatlar) >= 2:
-            en_ucuz = min(fiyatlar, key=fiyatlar.get)
-            en_pahali = max(fiyatlar, key=fiyatlar.get)
-        else:
-            en_ucuz, en_pahali = None, None
-
-        emojiler = {
-            "Vast.ai": "🟢", "RunPod": "🔵", "Shadeform": "🟣",
-            "GPU.ai": "🟠", "Massed Compute": "🟡"
-        }
-
-        for havuz, fiyat in fiyatlar.items():
-            emoji = emojiler.get(havuz, "⚪")
-            etiket = ""
-            if havuz == en_ucuz:
-                etiket = " 🏷️ (EN UCUZ - ALIM)"
-            elif havuz == en_pahali:
-                etiket = " 💰 (EN PAHALI - SATIM)"
-            st.write(f"{emoji} **{havuz}:** ${fiyat:.3f} / saat{etiket}")
-    else:
-        st.info("Fiyatlar yükleniyor...")
-
-    st.caption(f"🕐 Son güncelleme: {hafiza['son_guncelleme']}")
-    st.markdown("---")
+    if hafiza["calisiyor"]:
+        st.info(f"⏳ Tarama devam ediyor... {len(hafiza['sektor_verileri'])}/{len(SEKTORLER)} sektör tamamlandı.")
+        st.progress(min(1.0, len(hafiza["sektor_verileri"]) / len(SEKTORLER)))
 
     # =================================================================
-    # HESAP DURUMU
+    # SONUÇLARI HESAPLA
     # =================================================================
-    st.subheader("📊 Canlı Hesap Durumu ve Metrikler")
+    if not hafiza["sektor_verileri"]:
+        st.warning("Henüz veri yok. Sol menüden '🔄 Verileri Yenile' butonuna basın.")
+        st.stop()
 
-    col1, col2, col3 = st.columns(3)
+    sonuclar = tum_sektorleri_puanla(hafiza)
+    
+    if not sonuclar:
+        st.warning("Puanlanacak veri bulunamadı.")
+        st.stop()
+
+    # =================================================================
+    # ÜST ÖZET METRİKLERİ
+    # =================================================================
+    toplam_sektor = len(sonuclar)
+    odemeye_hazir_sayisi = sum(1 for s in sonuclar if s["odemeye_hazir"])
+    en_yuksek_puan = max(s["toplam_puan"] for s in sonuclar)
+    ortalama_puan = sum(s["toplam_puan"] for s in sonuclar) / toplam_sektor
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("💰 Sanal Bakiye", f"${hafiza['sanal_bakiye']:.3f}")
-        st.metric("📈 Toplam Net Kâr", f"${hafiza['toplam_kar']:.3f}")
+        st.metric("📊 Analiz Edilen", f"{toplam_sektor} Sektör")
     with col2:
-        st.metric("⚡ Başarılı Eşleşme", f"{hafiza['basarili_eslesme']} Adet")
-        st.metric("📶 Ortalama Gecikme", f"{hafiza['gecikme_ms']} ms")
+        st.metric("✅ Ödemeye Hazır", f"{odemeye_hazir_sayisi} Sektör")
     with col3:
-        st.metric("💸 Toplam Komisyon", f"${hafiza['toplam_komisyon']:.3f}")
-        st.metric("💳 Toplam Transfer", f"${hafiza['toplam_transfer']:.3f}")
+        st.metric("🏆 En Yüksek Puan", f"{en_yuksek_puan:.1f}")
+    with col4:
+        st.metric("📈 Ortalama Puan", f"{ortalama_puan:.1f}")
 
     st.markdown("---")
 
     # =================================================================
-    # OPERASYON VE FIKHİ ANALİZ (4 SÜTUN)
+    # ÖDEMEYE HAZIR SEKTÖRLER (EN ÖNEMLİ BÖLÜM)
     # =================================================================
-    st.subheader("📈 Operasyon ve Fıkhî Güvence Analitiği")
+    st.subheader("💰 Ödemeye Hazır Sektörler (Öncelikli)")
+    
+    hazir_sektorler = [s for s in sonuclar if s["odemeye_hazir"]]
+    
+    if hazir_sektorler:
+        st.caption(f"Bu sektörler 4 kriteri de geçti: yüksek talep, ödeme gücü, aciliyet ve düşük rekabet.")
+        
+        for s in hazir_sektorler[:10]:
+            with st.container():
+                col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
+                with col_a:
+                    st.markdown(f"### 🎯 {s['isim']}")
+                    st.caption(f"Kategori: {s['kategori']} | Trend: {s.get('trend', '-')}")
+                with col_b:
+                    st.metric("Fırsat Puanı", f"{s['toplam_puan']:.1f}")
+                with col_c:
+                    st.metric("İşletme Sayısı", f"{s['isletme_sayisi']:,}")
+                with col_d:
+                    st.metric("Aylık Bütçe", f"{s['aylik_butce']} TL")
+                
+                # Alt detaylar
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.caption(f"📈 Talep: {s['talep_puani']:.0f}/100")
+                with c2:
+                    st.caption(f"💵 Ödeme: {s['odeme_puani']:.0f}/100")
+                with c3:
+                    st.caption(f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}/100")
+                with c4:
+                    st.caption(f"🥊 Rekabet: {s['rekabet_puani']:.0f}/100")
+                
+                st.markdown("---")
+    else:
+        st.info("Şu an 4 kriteri de geçen sektör yok. Aşağıdaki genel sıralamaya bakın.")
 
-    col_a, col_b, col_c, col_d = st.columns(4)
-    with col_a:
-        st.write(f"✔️ **Başarılı:** {hafiza['basarili_eslesme']}")
-    with col_b:
-        st.write(f"⚠️ **Kaçırılan:** {hafiza['kacirilan_firsat']}")
-    with col_c:
-        st.write(f"❌ **Kârsız:** {hafiza['karsiz_firsat']}")
-    with col_d:
-        st.write(f"🚫 **Fıkhi Red:** {hafiza['reddedilen_firsat']}")
-
-    st.caption(
-        "❌ **Kârsız Fırsat:** Brüt fark var ama komisyonlar + transfer ücreti farkı yiyor "
-        "(gerçek piyasada en sık görülen durum). "
-        "⚠️ **Kaçırılan:** Net kâr pozitif ama eşik altında."
-    )
+    # =================================================================
+    # TÜM SEKTÖRLER SIRALAMASI (TABLO)
+    # =================================================================
+    st.subheader("📋 Tüm Sektörler Sıralaması")
+    
+    df_veri = []
+    for s in sonuclar:
+        df_veri.append({
+            "Sıra": len(df_veri) + 1,
+            "Sektör": s["isim"],
+            "Kategori": s["kategori"],
+            "Fırsat Puanı": s["toplam_puan"],
+            "Talep": s["talep_puani"],
+            "Ödeme": s["odeme_puani"],
+            "Aciliyet": s["aciliyet_puani"],
+            "Rekabet": s["rekabet_puani"],
+            "Trend": s.get("trend", "-"),
+            "İşletme": s["isletme_sayisi"],
+            "Bütçe (TL)": s["aylik_butce"],
+            "Yazılım": s["yazilim_sayisi"],
+            "Durum": "✅ Hazır" if s["odemeye_hazir"] else "—",
+        })
+    
+    df = pd.DataFrame(df_veri)
+    
+    # Filtreleme
+    filtre_col1, filtre_col2 = st.columns(2)
+    with filtre_col1:
+        sadece_hazir = st.checkbox("Sadece ödemeye hazır olanları göster")
+    with filtre_col2:
+        min_puan = st.slider("Minimum puan", 0, 100, 0, 5)
+    
+    if sadece_hazir:
+        df_goster = df[df["Durum"] == "✅ Hazır"]
+    else:
+        df_goster = df[df["Fırsat Puanı"] >= min_puan]
+    
+    st.dataframe(df_goster, use_container_width=True, hide_index=True)
+    st.caption(f"Toplam {len(df_goster)} sektör gösteriliyor.")
 
     st.markdown("---")
 
     # =================================================================
-    # FIRSAT PENCERESİ (İLERLEME ÇUBUĞU)
+    # KATEGORİ ÖZETİ
     # =================================================================
-    bekleyen = hafiza.get("bekleyen_firsatlar", {})
-    if bekleyen:
-        st.subheader(f"⏳ Fırsat Penceresinde Bekleyen ({len(bekleyen)} adet)")
-        st.caption(
-            f"Bu fırsatlar {FIRSAT_PENCERESI} saniyelik pencereyi doldurmayı bekliyor. "
-            f"Pencere dolduğunda fıkhi filtreden geçerse işlem açılır. "
-            f"{FIRSAT_ZAMAN_ASIMI} saniyeden fazla bekleyen fırsatlar otomatik elenir."
-        )
+    st.subheader("📂 Kategori Bazında Özet")
+    
+    kat_ozet = kategori_ozeti(sonuclar)
+    df_kat = pd.DataFrame(kat_ozet)
+    df_kat.columns = ["Kategori", "Ortalama Puan", "Sektör Sayısı", "Toplam İşletme"]
+    st.dataframe(df_kat, use_container_width=True, hide_index=True)
 
-        simdi_dt = datetime.now()
-        for cift, veri in list(bekleyen.items()):
-            gecen = (simdi_dt - veri["ilk_zaman"]).total_seconds()
-            kalan = max(0, FIRSAT_PENCERESI - gecen)
-            ilerleme = min(1.0, gecen / FIRSAT_PENCERESI)
+    st.markdown("---")
 
-            col1, col2, col3 = st.columns([2, 2, 1])
+    # =================================================================
+    # EN İYİ 5 SEKTÖR DETAY RAPORU
+    # =================================================================
+    st.subheader("🏆 En İyi 5 Sektör — Detaylı Rapor")
+    
+    rapor = rapor_olustur(sonuclar)
+    
+    for r in rapor:
+        with st.expander(f"#{r['sira']} {r['sektor']} — Puan: {r['toplam_puan']:.1f}"):
+            col1, col2 = st.columns(2)
             with col1:
-                st.write(f"**{cift}**")
-                st.write(f"İlk Fark: ${veri['fark']:.3f} | Son Fark: ${veri['son_fark']:.3f}")
+                st.markdown(f"**Kategori:** {r['kategori']}")
+                st.markdown(f"**Trend:** {r['trend']}")
+                st.markdown(f"**İşletme Sayısı:** {r['isletme_sayisi']:,}")
+                st.markdown(f"**Aylık Bütçe:** {r['aylik_butce']} TL")
             with col2:
-                st.progress(ilerleme, text=f"Pencere: {gecen:.1f} / {FIRSAT_PENCERESI} sn")
-            with col3:
-                if kalan > 0:
-                    st.write(f"⏱️ **{kalan:.0f} sn**")
-                else:
-                    st.write("✅ Hazır")
-
-            if gecen > FIRSAT_ZAMAN_ASIMI:
-                st.warning("⚠️ Bu fırsat zaman aşımına uğradı, silinecek.")
+                st.markdown(f"**Talep Puanı:** {r['talep']:.0f}/100")
+                st.markdown(f"**Ödeme Puanı:** {r['odeme']:.0f}/100")
+                st.markdown(f"**Aciliyet Puanı:** {r['aciliyet']:.0f}/100")
+                st.markdown(f"**Rekabet Puanı:** {r['rekabet']:.0f}/100")
+            
             st.markdown("---")
-    else:
-        st.info("ℹ️ Şu an bekleyen fırsat yok. Sistem uygun fırsat arıyor...")
+            st.markdown(f"**Potansiyel Aylık Gelir (tahmini):** {r['potansiyel_aylik_gelir']:,.0f} TL")
+            st.markdown(f"**Mevcut Yazılım Sayısı:** {r['yazilim_sayisi']}")
+            if r["odemeye_hazir"]:
+                st.success("✅ Bu sektör ödemeye hazır — 4 kriteri de geçti")
+            else:
+                st.warning("⚠️ Bazı kriterler yetersiz — dikkatli değerlendirilmeli")
 
     st.markdown("---")
 
     # =================================================================
-    # FIKHİ FİLTRE DETAYLARI
+    # SİSTEM LOGLARI
     # =================================================================
-    with st.expander("🕌 Fıkhî Filtre Aktif Kuralları"):
-        st.markdown(
-            "Bu sistem, aşağıdaki İslami finans kurallarına göre her fırsatı denetler:\n\n"
-            "| Kural | Açıklama | Durum |\n"
-            "|-------|----------|-------|\n"
-            "| **Faizsiz Ödeme** | Platform faizsiz ödeme kabul etmeli | ✅ Aktif |\n"
-            "| **Garar Yok** | Fark 0.01$'dan küçükse belirsizlik nedeniyle reddedilir | ✅ Aktif |\n"
-            "| **İhtikar Yok** | Fark 0.500$'dan büyükse manipülasyon şüphesiyle reddedilir | ✅ Aktif |\n"
-            "| **Meşru Hizmet** | GPU kiralama meşru bir hizmettir | ✅ Aktif |\n"
-            "| **Vade Farkı Yok** | Vadeli işlem faizi yasaktır | ✅ Aktif |\n\n"
-            "**Reddedilen Fırsatlar** aşağıda listelenir."
-        )
-
-        if hafiza["filtre_red_sebepleri"]:
-            st.markdown("**Son Red Sebepleri:**")
-            for sebep in hafiza["filtre_red_sebepleri"][-5:]:
-                st.text(f"🚫 {sebep}")
-        else:
-            st.text("Henüz fıkhi filtre reddi yok.")
-
-    st.markdown("---")
-
-    # =================================================================
-    # GERÇEKÇİ KÂR HESABI AÇIKLAMASI
-    # =================================================================
-    with st.expander("💡 Net Kâr Nasıl Hesaplanıyor? (Gerçek Maliyetler)"):
-        st.markdown(
-            "Panelde görünen **Net Kâr**, gerçek piyasa maliyetleri düşülerek hesaplanır:\n\n"
-            "**Formül:**\n"
-            "```\n"
-            "Net Kâr = Brüt Fark \n"
-            "          - (Alış Komisyonu + Satış Komisyonu)\n"
-            f"          - Transfer Ücreti (${ODEME_TRANSFER_UCRETI})\n"
-            "          - Kiralama Başlatma Maliyeti (%2 kayıp)\n"
-            "```\n\n"
-            "**Platform Komisyon Oranları:**\n"
-            "| Platform | Komisyon |\n"
-            "|----------|----------|\n"
-            "| Vast.ai | %25 |\n"
-            "| RunPod | %20 |\n"
-            "| Shadeform | %15 |\n"
-            "| GPU.ai | %18 |\n"
-            "| Massed Compute | %15 |\n\n"
-            "⚠️ Bu nedenle panelde gördüğünüz **brüt fark** ile **net kâr** arasında ciddi fark olabilir.\n\n"
-            "**Örnek:** Vast.ai $0.212 → RunPod $0.365\n"
-            "- Brüt fark: $0.153\n"
-            "- Komisyon: -$0.126\n"
-            "- Transfer: -$0.050\n"
-            "- Başlatma: -$0.004\n"
-            "- **Net: -$0.027** (Kârsız!)"
-        )
-
-    st.markdown("---")
-
-    # =================================================================
-    # SON GERÇEKLEŞEN İŞLEMLER
-    # =================================================================
-    if hafiza["kontratlar"]:
-        st.subheader("📋 Son Gerçekleşen İşlemler")
-        for kt in hafiza["kontratlar"]:
-            st.markdown(
-                f"**{kt['Zaman']}** | {kt['Alış']} → {kt['Satış']} | "
-                f"Brüt: {kt['Brüt']} | Komisyon: {kt['Komisyon']} | "
-                f"**Net: {kt['Net Kâr']}**"
-            )
-        st.markdown("---")
-    else:
-        st.info("ℹ️ Henüz gerçekleşen işlem yok. Sistem fırsat bekliyor...")
-
-    # =================================================================
-    # SİSTEM LOGLARI (GELİŞMİŞ)
-    # =================================================================
-    with st.expander("🔧 Sistem Logları ve Hata Kayıtları (Son 30)"):
-        if hafiza["log"]:
-            for log in hafiza["log"][-30:]:
+    with st.expander("🔧 Sistem Logları (Son 30 Kayıt)"):
+        loglar = hafiza.get("log", [])
+        if loglar:
+            for log in loglar[-30:]:
                 st.text(log)
         else:
-            st.text("Henüz log kaydı yok. Sistem sorunsuz çalışıyor.")
+            st.text("Henüz log kaydı yok.")
 
     # =================================================================
-    # SORUN GİDERME
+    # BİLGİLENDİRME
     # =================================================================
-    mevcut_mod_metni = "🧪 DEMO (Sanal Veri)" if DEMO_MODE else "🔴 GERÇEK (Canlı API)"
-
-    with st.expander("❓ Sistem Nasıl Çalışır? (Gerçek Piyasa Mantığı)"):
+    with st.expander("❓ Sistem Nasıl Çalışır?"):
         st.markdown(
-            f"**Mevcut Mod:** {mevcut_mod_metni}\n\n"
-            "**Gerçek Piyasa Mantığı Farkları:**\n\n"
-            f"1. **Cooldown ({COOLDOWN_SURESI} sn):** Aynı havuz çifti için 60 saniye boyunca yeni işlem açılmaz.\n\n"
-            f"2. **Fırsat Penceresi ({FIRSAT_PENCERESI} sn):** Bir farkın en az 15 saniye devam etmesi gerekir.\n\n"
-            f"3. **Zaman Aşımı ({FIRSAT_ZAMAN_ASIMI} sn):** Bu süreden fazla bekleyen fırsatlar silinir.\n\n"
-            "4. **Emir Gerçekleşme Oranı (~%65):** Her fırsat yakalanamaz.\n\n"
-            "5. **Komisyon + Transfer + Kiralama Maliyeti:** Brüt fark değil, net kâr önemli.\n\n"
-            "6. **Fıkhi Filtre:** Faizsiz, gararsız, meşru hizmet kontrolü yapılır.\n\n"
-            "7. **Kârsız Fırsat Temizliği:** Net kâr negatifse fırsat listeden silinir.\n\n"
-            "**Gerçek Moda Nasıl Geçilir?**  \n"
-            "Kodun en üstündeki `DEMO_MODE = True` satırını `False` yapın.  \n"
-            "Vast.ai ve RunPod hesaplarınızdan aldığınız **gerçek API anahtarlarını** kodda ilgili yerlere yapıştırın."
+            "**Bu sistem ne yapar?**\n\n"
+            "30 farklı sektörü 5 farklı kaynaktan tarar ve her sektöre **fırsat puanı** verir.\n\n"
+            "**5 Kaynak:**\n"
+            "- Google Trends → İnsanlar ne arıyor?\n"
+            "- Şikayetvar → İnsanlar neyden şikayet ediyor?\n"
+            "- Ekşi Sözlük → Ne tartışılıyor?\n"
+            "- Donanım Haber → Hangi teknik sorunlar var?\n"
+            "- Sahibinden → Hangi pazar canlı?\n\n"
+            "**4 Kriter (Puanlama):**\n"
+            "- **Talep (%35):** Bu sektör ne kadar aranıyor?\n"
+            "- **Ödeme (%30):** Bu sektör ne kadar ödeyebilir?\n"
+            "- **Aciliyet (%20):** Ne kadar şikayet var?\n"
+            "- **Rekabet (%15):** Kaç yazılım var? (Az = iyi)\n\n"
+            "**Ödemeye Hazır Şartları:**\n"
+            "- Toplam puan ≥ 60\n"
+            "- Ödeme gücü ≥ 50\n"
+            "- Aciliyet ≥ 40\n"
+            "- Rekabet puanı ≥ 40 (yani yazılım sayısı az)\n\n"
+            "**Nasıl Kullanılır?**\n"
+            "1. 'Ödemeye Hazır Sektörler' bölümüne bak\n"
+            "2. En yüksek puanlı 3 sektörü not al\n"
+            "3. O sektörlerdeki işletmelerle konuş\n"
+            "4. Ürünü onlara göre tasarla\n\n"
+            f"**Şu anki mod:** {'🧪 DEMO (sanal veri)' if DEMO_MODE else '🔴 GERÇEK (canlı veri)'}\n\n"
+            "Gerçek moda geçmek için kodun başındaki `DEMO_MODE = True` satırını `False` yapın."
         )
 
     # =================================================================
-    # SAYFAYI PERİYODİK YENİLE
+    # SAYFAYI PERİYODİK YENİLE (Tarama devam ediyorsa)
     # =================================================================
-    time.sleep(3)
-    st.rerun()
+    if hafiza["calisiyor"]:
+        time.sleep(3)
+        st.rerun()
