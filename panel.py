@@ -1,434 +1,173 @@
-# =====================================================================
-# FIRSAT MADENCİLİĞİ — 20 SEKTÖR (BASİT ve STABİL)
-# =====================================================================
-
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+import pandas as pd
 import streamlit as st
+import yfinance as yf
+from streamlit_autorefresh import st_autorefresh
+
+from veri.katilim_listesi import KATILIM_VARLIKLARI
 
 st.set_page_config(
-    page_title="Fırsat Madenciliği",
+    page_title="BIST Katılım Takip & Analiz Paneli",
+    page_icon="🟢",
     layout="wide",
-    initial_sidebar_state="expanded"
 )
 
-import json
-import os
-import re
-import random
-import time
-from datetime import datetime
-import pandas as pd
+# Kullanıcı adı ve şifre kontrolü
+KULLANICI_ADI = "Cuma Babacan"
+SIFRE = "784512"
 
-# =====================================================================
-# 1. AYARLAR
-# =====================================================================
-DEMO_MODE = True
-VERI_DOSYASI = "firsat_verileri.json"
-CACHE_SURESI = 24 * 60 * 60
+if "giris_yapildi" not in st.session_state:
+    st.session_state.giris_yapildi = False
 
-# =====================================================================
-# 2. 20 SEKTÖR
-# =====================================================================
-SEKTORLER = [
-    {"id": 1,  "isim": "Veteriner Klinikleri",    "kategori": "Sağlık",    "isletme_sayisi": 12000,  "aylik_butce": 1500, "yazilim_sayisi": 3},
-    {"id": 2,  "isim": "Diş Hekimleri",           "kategori": "Sağlık",    "isletme_sayisi": 25000,  "aylik_butce": 2000, "yazilim_sayisi": 8},
-    {"id": 3,  "isim": "Psikologlar",             "kategori": "Sağlık",    "isletme_sayisi": 15000,  "aylik_butce": 800,  "yazilim_sayisi": 4},
-    {"id": 4,  "isim": "Eczaneler",               "kategori": "Sağlık",    "isletme_sayisi": 28000,  "aylik_butce": 1200, "yazilim_sayisi": 6},
-    {"id": 5,  "isim": "Avukatlar",               "kategori": "Hukuk",     "isletme_sayisi": 50000,  "aylik_butce": 1500, "yazilim_sayisi": 5},
-    {"id": 6,  "isim": "Muhasebeciler",           "kategori": "Muhasebe",  "isletme_sayisi": 40000,  "aylik_butce": 1200, "yazilim_sayisi": 7},
-    {"id": 7,  "isim": "Kuyumcular",              "kategori": "Perakende", "isletme_sayisi": 35000,  "aylik_butce": 2500, "yazilim_sayisi": 4},
-    {"id": 8,  "isim": "Emlakçılar",              "kategori": "Perakende", "isletme_sayisi": 60000,  "aylik_butce": 800,  "yazilim_sayisi": 12},
-    {"id": 9,  "isim": "Oto Galeriler",           "kategori": "Perakende", "isletme_sayisi": 25000,  "aylik_butce": 1800, "yazilim_sayisi": 8},
-    {"id": 10, "isim": "Oto Servisleri",          "kategori": "Hizmet",    "isletme_sayisi": 60000,  "aylik_butce": 1000, "yazilim_sayisi": 6},
-    {"id": 11, "isim": "Marangozlar",             "kategori": "Sanayi",    "isletme_sayisi": 20000,  "aylik_butce": 800,  "yazilim_sayisi": 2},
-    {"id": 12, "isim": "Restoranlar",             "kategori": "Gıda",      "isletme_sayisi": 200000, "aylik_butce": 1500, "yazilim_sayisi": 25},
-    {"id": 13, "isim": "Kafeler",                 "kategori": "Gıda",      "isletme_sayisi": 80000,  "aylik_butce": 800,  "yazilim_sayisi": 20},
-    {"id": 14, "isim": "Pastaneler",              "kategori": "Gıda",      "isletme_sayisi": 30000,  "aylik_butce": 1000, "yazilim_sayisi": 5},
-    {"id": 15, "isim": "Kasaplar",                "kategori": "Gıda",      "isletme_sayisi": 40000,  "aylik_butce": 700,  "yazilim_sayisi": 3},
-    {"id": 16, "isim": "Berberler",               "kategori": "Güzellik",  "isletme_sayisi": 80000,  "aylik_butce": 500,  "yazilim_sayisi": 8},
-    {"id": 17, "isim": "Kuaförler",               "kategori": "Güzellik",  "isletme_sayisi": 70000,  "aylik_butce": 700,  "yazilim_sayisi": 8},
-    {"id": 18, "isim": "Spor Salonları",          "kategori": "Spor",      "isletme_sayisi": 10000,  "aylik_butce": 2000, "yazilim_sayisi": 7},
-    {"id": 19, "isim": "Düğün Salonları",         "kategori": "Etkinlik",  "isletme_sayisi": 8000,   "aylik_butce": 1800, "yazilim_sayisi": 4},
-    {"id": 20, "isim": "Matbaalar",               "kategori": "Sanayi",    "isletme_sayisi": 12000,  "aylik_butce": 1500, "yazilim_sayisi": 3},
-]
-
-# =====================================================================
-# 3. HAFIZA
-# =====================================================================
-@st.cache_resource
-def get_hafiza():
-    return {"sektor_verileri": {}, "son_guncelleme": None} # =====================================================================
-# 4. TARAYICI
-# =====================================================================
-def sektor_tara(sektor):
-    google = {
-        "talep_puani": random.randint(30, 95),
-        "trend": random.choice(["yükseliyor", "sabit", "düşüyor"]),
-    }
-    sv_sayi = random.randint(50, 3000)
-    sikayetvar = {
-        "sikayet_sayisi": sv_sayi,
-        "aciliyet_puani": min(100, sv_sayi // 10),
-    }
-    eks_sayi = random.randint(10, 500)
-    eksisozluk = {
-        "baslik_sayisi": eks_sayi,
-        "tartisma_puani": min(100, eks_sayi * 2),
-    }
-    dh_sayi = random.randint(20, 800)
-    donanimhaber = {
-        "konu_sayisi": dh_sayi,
-        "teknik_soru_puani": min(100, dh_sayi),
-    }
-    sahibinden = {
-        "ilan_sayisi": random.randint(100, 10000),
-        "pazar_canliligi": random.randint(30, 95),
-    }
-    
-    return {
-        "sektor_id": sektor["id"],
-        "isim": sektor["isim"],
-        "kategori": sektor["kategori"],
-        "isletme_sayisi": sektor["isletme_sayisi"],
-        "aylik_butce": sektor["aylik_butce"],
-        "yazilim_sayisi": sektor["yazilim_sayisi"],
-        "kaynaklar": {
-            "google_trends": google,
-            "sikayetvar": sikayetvar,
-            "eksisozluk": eksisozluk,
-            "donanimhaber": donanimhaber,
-            "sahibinden": sahibinden,
-        },
-        "tarama_zamani": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-def tum_sektorleri_tara(hafiza):
-    hafiza["sektor_verileri"] = {}
-    for i, sektor in enumerate(SEKTORLER):
-        try:
-            sonuc = sektor_tara(sektor)
-            hafiza["sektor_verileri"][sektor["id"]] = sonuc
-        except Exception as e:
-            pass
-    
-    hafiza["son_guncelleme"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    verileri_kaydet(hafiza)
-
-# =====================================================================
-# 5. PUANLAMA
-# =====================================================================
-def sektor_puanla(veri):
-    kaynaklar = veri.get("kaynaklar", {})
-    
-    talep_puani = 0
-    gt = kaynaklar.get("google_trends", {})
-    if "talep_puani" in gt:
-        talep_puani += gt["talep_puani"] * 0.5
-    eks = kaynaklar.get("eksisozluk", {})
-    if "tartisma_puani" in eks:
-        talep_puani += eks["tartisma_puani"] * 0.3
-    dh = kaynaklar.get("donanimhaber", {})
-    if "teknik_soru_puani" in dh:
-        talep_puani += dh["teknik_soru_puani"] * 0.2
-    talep_puani = min(100, talep_puani)
-    
-    isletme = veri.get("isletme_sayisi", 0)
-    butce = veri.get("aylik_butce", 0)
-    isletme_puan = min(100, (isletme / 100000) * 100)
-    butce_puan = min(100, (butce / 3000) * 100)
-    odeme_puani = (isletme_puan * 0.4) + (butce_puan * 0.6)
-    
-    sv = kaynaklar.get("sikayetvar", {})
-    aciliyet_puani = sv.get("aciliyet_puani", 0)
-    
-    yazilim = veri.get("yazilim_sayisi", 0)
-    rekabet_puani = max(0, 100 - (yazilim * 4))
-    
-    toplam = (
-        talep_puani * 0.35 +
-        odeme_puani * 0.30 +
-        aciliyet_puani * 0.20 +
-        rekabet_puani * 0.15
-    )
-    
-    return {
-        "talep_puani": round(talep_puani, 1),
-        "odeme_puani": round(odeme_puani, 1),
-        "aciliyet_puani": round(aciliyet_puani, 1),
-        "rekabet_puani": round(rekabet_puani, 1),
-        "toplam_puan": round(toplam, 1),
-        "trend": gt.get("trend", "bilinmiyor"),
-    }
-
-def odemeye_hazir_mi(puanlar):
-    return (
-        puanlar["toplam_puan"] >= 60 and
-        puanlar["odeme_puani"] >= 50 and
-        puanlar["aciliyet_puani"] >= 40 and
-        puanlar["rekabet_puani"] >= 40
-    )
-
-def tum_sektorleri_puanla(hafiza):
-    sonuclar = []
-    for sektor_id, veri in hafiza.get("sektor_verileri", {}).items():
-        try:
-            puanlar = sektor_puanla(veri)
-            sektor = veri.copy()
-            sektor.update(puanlar)
-            sektor["odemeye_hazir"] = odemeye_hazir_mi(puanlar)
-            sonuclar.append(sektor)
-        except:
-            continue
-    sonuclar.sort(key=lambda x: x["toplam_puan"], reverse=True)
-    return sonuclar
-
-def kategori_ozeti(sonuclar):
-    kategoriler = {}
-    for s in sonuclar:
-        kat = s["kategori"]
-        if kat not in kategoriler:
-            kategoriler[kat] = {"toplam": 0, "sayi": 0, "isletme_toplami": 0}
-        kategoriler[kat]["toplam"] += s["toplam_puan"]
-        kategoriler[kat]["sayi"] += 1
-        kategoriler[kat]["isletme_toplami"] += s["isletme_sayisi"]
-    
-    ozet = []
-    for kat, veri in kategoriler.items():
-        ozet.append({
-            "kategori": kat,
-            "ortalama_puan": round(veri["toplam"] / veri["sayi"], 1),
-            "sektor_sayisi": veri["sayi"],
-            "toplam_isletme": veri["isletme_toplami"],
-        })
-    ozet.sort(key=lambda x: x["ortalama_puan"], reverse=True)
-    return ozet
-
-# =====================================================================
-# 6. CACHE
-# =====================================================================
-def verileri_kaydet(hafiza):
-    try:
-        veri = {
-            "sektor_verileri": hafiza.get("sektor_verileri", {}),
-            "son_guncelleme": hafiza.get("son_guncelleme"),
-        }
-        with open(VERI_DOSYASI, "w", encoding="utf-8") as f:
-            json.dump(veri, f, ensure_ascii=False, default=str)
-    except:
-        pass
-
-def verileri_yukle(hafiza):
-    try:
-        if os.path.exists(VERI_DOSYASI):
-            with open(VERI_DOSYASI, "r", encoding="utf-8") as f:
-                veri = json.load(f)
-            hafiza["sektor_verileri"] = {int(k): v for k, v in veri.get("sektor_verileri", {}).items()}
-            hafiza["son_guncelleme"] = veri.get("son_guncelleme")
-            return True
-    except:
-        pass
-    return False # =====================================================================
-# 7. ARAYÜZ
-# =====================================================================
-if "oturum_acik" not in st.session_state:
-    st.session_state["oturum_acik"] = False
-
-if not st.session_state["oturum_acik"]:
-    st.markdown("<h2>🔒 Fırsat Madenciliği Paneli</h2>", unsafe_allow_html=True)
-    st.caption("20 sektör analizi — hangi sektör ödemeye hazır?")
-
-    k = st.text_input("Kullanıcı Adı", key="giris_u")
-    s = st.text_input("Şifre", type="password", key="giris_p")
-
-    if st.button("Sisteme Giriş Yap"):
-        if k.strip() == "Cuma Babacan" and s.strip() == "784512":
-            st.session_state["oturum_acik"] = True
-            st.rerun()
-        else:
-            st.error("Hatalı Kullanıcı Adı veya Şifre!")
-
+if not st.session_state.giris_yapildi:
+    st.title("Panel Girişi")
+    st.caption("Kişisel analiz paneline erişmek için bilgilerinizi girin.")
+    with st.form("giris_formu"):
+        girilen_ad = st.text_input("Kullanıcı Adı")
+        girilen_sifre = st.text_input("Şifre", type="password")
+        gonder = st.form_submit_button("Giriş Yap")
+        if gonder:
+            if girilen_ad.strip() == KULLANICI_ADI and girilen_sifre.strip() == SIFRE:
+                st.session_state.giris_yapildi = True
+                st.rerun()
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı.")
     st.stop()
 
-hafiza = get_hafiza()
+# Üst bilgi ve çıkış butonu
+ust_sol, ust_sag = st.columns([5, 1])
+with ust_sol:
+    st.title("Katılım Varlıkları Günlük Analiz Paneli")
+    st.caption("Kurallar: Açılışta tek işlem • Günlük kâr veya akşam stop • Gerçek fiyat ve maliyet matematiği")
+with ust_sag:
+    st.write("")
+    if st.button("Çıkış Yap"):
+        st.session_state.giris_yapildi = False
+        st.rerun()
 
-# SOL MENÜ
-st.sidebar.markdown("👤 **Yönetici:** Cuma Babacan")
-st.sidebar.markdown("---")
-st.sidebar.success("🧪 DEMO MODU")
-st.sidebar.caption(f"Sektör: {len(SEKTORLER)}")
-st.sidebar.caption(f"Son: {hafiza.get('son_guncelleme', 'Tarama yok')}")
+# Türkiye saati ve 09:50 - 18:20 otomatik yenileme kontrolü
+tr_saat = datetime.now(ZoneInfo("Europe/Istanbul"))
+su_anki_zaman = tr_saat.time()
+baslangic = time(9, 50)
+bitis = time(18, 20)
+seans_aktif = baslangic <= su_anki_zaman <= bitis
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🎛️ Kontroller")
-
-if st.sidebar.button("▶️ Taramayı Başlat", type="primary"):
-    with st.spinner("20 sektör taranıyor... (5-10 saniye)"):
-        tum_sektorleri_tara(hafiza)
-    st.sidebar.success("✅ Tarama tamamlandı! Sayfayı F5 ile yenileyin.")
-    st.rerun()
-
-if st.sidebar.button("🗑️ Cache Temizle"):
-    hafiza["sektor_verileri"] = {}
-    hafiza["son_guncelleme"] = None
-    try:
-        if os.path.exists(VERI_DOSYASI):
-            os.remove(VERI_DOSYASI)
-    except:
-        pass
-    st.sidebar.success("Cache temizlendi. F5 yapın.")
-    st.rerun()
-
-if st.sidebar.button("🚪 Oturumu Kapat"):
-    st.session_state["oturum_acik"] = False
-    st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚖️ Puanlama")
-st.sidebar.caption("Talep: %35 | Ödeme: %30")
-st.sidebar.caption("Aciliyet: %20 | Rekabet: %15")
-
-# VERİ YÜKLE
-if not hafiza["sektor_verileri"]:
-    verileri_yukle(hafiza)
-
-# BAŞLIK
-st.title("🎯 Fırsat Madenciliği — 20 Sektör")
-st.caption("Hangi sektör çözüm bekliyor? Hangi sektör ödemeye hazır?")
-st.markdown("---")
-
-if not hafiza["sektor_verileri"]:
-    st.info("👈 Sol menüden **▶️ Taramayı Başlat** butonuna tıklayın.")
-    st.caption("20 sektör 5-10 saniyede taranır.")
-    st.stop()
-
-sonuclar = tum_sektorleri_puanla(hafiza)
-
-if not sonuclar:
-    st.warning("Puanlanacak veri yok.")
-    st.stop()
-
-# METRİKLER
-toplam = len(sonuclar)
-hazir_sayisi = sum(1 for s in sonuclar if s["odemeye_hazir"])
-en_yuksek = max(s["toplam_puan"] for s in sonuclar)
-ortalama = sum(s["toplam_puan"] for s in sonuclar) / toplam
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("📊 Analiz", f"{toplam} Sektör")
-col2.metric("✅ Hazır", f"{hazir_sayisi} Sektör")
-col3.metric("🏆 En Yüksek", f"{en_yuksek:.1f}")
-col4.metric("📈 Ortalama", f"{ortalama:.1f}")
-
-st.caption(f"🕐 Son tarama: {hafiza.get('son_guncelleme', '-')}")
-st.markdown("---")
-
-# ÖDEMEYE HAZIR
-st.subheader("💰 Ödemeye Hazır Sektörler")
-hazir_sektorler = [s for s in sonuclar if s["odemeye_hazir"]]
-
-if hazir_sektorler:
-    for s in hazir_sektorler:
-        with st.container(border=True):
-            col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 1])
-            with col_a:
-                st.markdown(f"### 🎯 {s['isim']}")
-                st.caption(f"{s['kategori']} | Trend: {s.get('trend', '-')}")
-            with col_b:
-                st.metric("Puan", f"{s['toplam_puan']:.1f}")
-            with col_c:
-                st.metric("İşletme", f"{s['isletme_sayisi']:,}")
-            with col_d:
-                st.metric("Bütçe", f"{s['aylik_butce']} TL")
-            st.caption(
-                f"📈 Talep: {s['talep_puani']:.0f}  |  "
-                f"💵 Ödeme: {s['odeme_puani']:.0f}  |  "
-                f"⚠️ Aciliyet: {s['aciliyet_puani']:.0f}  |  "
-                f"🥊 Rekabet: {s['rekabet_puani']:.0f}"
-            )
+if seans_aktif:
+    st_autorefresh(interval=60 * 1000, key="bist_1dk_yenileme")
+    st.success(f"Otomatik Güncelleme Aktif (09:50 - 18:20 • Her 1 Dakika) — Son Kontrol: {tr_saat.strftime('%H:%M:%S')}")
 else:
-    st.info("Şu an 4 kriteri de geçen sektör yok.")
+    st.info(f"Otomatik 1 dakikalık yenileme 09:50 - 18:20 saatleri arasında çalışır. Şu anki saat: {tr_saat.strftime('%H:%M:%S')}")
 
-st.markdown("---")
+# Parametre çubuğu
+st.sidebar.header("Rakamsal Sistem Ayarları")
+komisyon_binde = st.sidebar.number_input("Toplam Komisyon (Alış+Satış Binde)", min_value=0.0, max_value=20.0, value=2.0, step=0.2)
+tahmini_makas_yuzde = st.sidebar.number_input("Tahmini Makas / Spread (%)", min_value=0.0, max_value=5.0, value=0.25, step=0.05)
+min_odul_risk = st.sidebar.number_input("Minimum Ödül / Risk Oranı", min_value=1.0, max_value=5.0, value=1.5, step=0.1)
+max_enerji_oran = st.sidebar.slider("Maks. Sabah Enerji Tüketimi (%)", min_value=20, max_value=90, value=60, step=5)
 
-# TABLO
-st.subheader("📋 Tüm Sektörler")
-df_veri = []
-for i, s in enumerate(sonuclar, 1):
-    df_veri.append({
-        "Sıra": i,
-        "Sektör": s["isim"],
-        "Kategori": s["kategori"],
-        "Fırsat": s["toplam_puan"],
-        "Talep": s["talep_puani"],
-        "Ödeme": s["odeme_puani"],
-        "Aciliyet": s["aciliyet_puani"],
-        "Rekabet": s["rekabet_puani"],
-        "Trend": s.get("trend", "-"),
-        "İşletme": s["isletme_sayisi"],
-        "Bütçe": s["aylik_butce"],
-        "Yazılım": s["yazilim_sayisi"],
-        "Durum": "✅" if s["odemeye_hazir"] else "—",
+toplam_maliyet_yuzde = (komisyon_binde / 10.0) + tahmini_makas_yuzde
+
+
+@st.cache_data(ttl=55)
+def veri_cek(sembol: str):
+    try:
+        df = yf.download(sembol, period="10d", interval="1d", progress=False, auto_adjust=False)
+        if df is None or df.empty or len(df) < 3:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df = df.dropna(subset=["High", "Low", "Close"])
+        if len(df) < 3:
+            return None
+        return df
+    except Exception:
+        return None
+
+
+satirlar = []
+
+for varlik in KATILIM_VARLIKLARI:
+    kod = varlik["kod"]
+    ad = varlik["ad"]
+    tur = varlik["tur"]
+
+    df = veri_cek(kod)
+    if df is None or len(df) < 2:
+        satirlar.append({
+            "Durum": "⚪ VERİ YOK",
+            "Kod": kod,
+            "Ad / Tür": f"{ad} ({tur})",
+            "Son Fiyat": "-",
+            "OGH (Ort. Hareket)": "-",
+            "Enerji Tüketimi": "-",
+            "Hedef Fiyat": "-",
+            "Akşam Stop": "-",
+            "Not": "Veri çekilemedi veya sembol farklı.",
+        })
+        continue
+
+    # Son 5 tamamlanmış günün günlük aralığı (OGH)
+    gecmis = df.iloc[-6:-1] if len(df) >= 6 else df.iloc[:-1]
+    araliklar = (gecmis["High"] - gecmis["Low"]).astype(float)
+    ogh = float(araliklar.mean()) if len(araliklar) > 0 else 0.0
+
+    son_gun = df.iloc[-1]
+    son_fiyat = float(son_gun["Close"])
+    bugun_yuksek = float(son_gun["High"])
+    bugun_dusuk = float(son_gun["Low"])
+    bugun_aralik = max(0.0, bugun_yuksek - bugun_dusuk)
+
+    enerji_yuzde = (bugun_aralik / ogh * 100.0) if ogh > 0 else 999.0
+
+    # Stop ve Hedef hesabı
+    risk_tutar = max(ogh * 0.30, son_fiyat * 0.008)
+    hedef_tutar = risk_tutar * min_odul_risk
+
+    stop_fiyat = max(0.01, son_fiyat - risk_tutar)
+    hedef_fiyat = son_fiyat + hedef_tutar
+
+    hedef_yuzde = (hedef_tutar / son_fiyat * 100.0) if son_fiyat > 0 else 0.0
+    maliyet_esigi = toplam_maliyet_yuzde * 3.0
+
+    enerji_uygun = enerji_yuzde <= max_enerji_oran
+    maliyet_uygun = hedef_yuzde >= maliyet_esigi
+    odul_risk_uygun = (hedef_tutar / risk_tutar) >= min_odul_risk if risk_tutar > 0 else False
+
+    if enerji_uygun and maliyet_uygun and odul_risk_uygun:
+        durum = "🟢 UYGUN"
+        not_metni = "Tüm rakamsal filtreler sağlandı."
+    else:
+        durum = "🔴 BEKLE"
+        eksikler = []
+        if not enerji_uygun:
+            eksikler.append("Enerji yüksek")
+        if not maliyet_uygun:
+            eksikler.append("Hedef/maliyet marjı dar")
+        if not odul_risk_uygun:
+            eksikler.append("Ödül/risk düşük")
+        not_metni = ", ".join(eksikler)
+
+    satirlar.append({
+        "Durum": durum,
+        "Kod": kod,
+        "Ad / Tür": f"{ad} ({tur})",
+        "Son Fiyat": round(son_fiyat, 2),
+        "OGH (Ort. Hareket)": round(ogh, 2),
+        "Enerji Tüketimi": f"%{enerji_yuzde:.0f}" if enerji_yuzde < 900 else "-",
+        "Hedef Fiyat": round(hedef_fiyat, 2),
+        "Akşam Stop": round(stop_fiyat, 2),
+        "Not": not_metni,
     })
 
-df = pd.DataFrame(df_veri)
+tablo = pd.DataFrame(satirlar)
+st.dataframe(tablo, use_container_width=True, hide_index=True)
 
-col_f1, col_f2 = st.columns(2)
-with col_f1:
-    sadece_hazir = st.checkbox("Sadece ödemeye hazır")
-with col_f2:
-    min_puan = st.slider("Minimum puan", 0, 100, 0, 5)
-
-if sadece_hazir:
-    df_goster = df[df["Durum"] == "✅"]
-else:
-    df_goster = df[df["Fırsat"] >= min_puan]
-
-st.dataframe(df_goster, use_container_width=True, hide_index=True)
-st.markdown("---")
-
-# KATEGORİ
-st.subheader("📂 Kategori Özeti")
-kat_ozet = kategori_ozeti(sonuclar)
-if kat_ozet:
-    df_kat = pd.DataFrame(kat_ozet)
-    df_kat.columns = ["Kategori", "Ortalama Puan", "Sektör Sayısı", "Toplam İşletme"]
-    st.dataframe(df_kat, use_container_width=True, hide_index=True)
-
-st.markdown("---")
-
-# EN İYİ 5
-st.subheader("🏆 En İyi 5 Sektör")
-for i, s in enumerate(sonuclar[:5], 1):
-    with st.expander(f"#{i} {s['isim']} — Puan: {s['toplam_puan']:.1f}"):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**Kategori:** {s['kategori']}")
-            st.markdown(f"**Trend:** {s.get('trend', '-')}")
-            st.markdown(f"**İşletme:** {s['isletme_sayisi']:,}")
-            st.markdown(f"**Aylık Bütçe:** {s['aylik_butce']} TL")
-        with col2:
-            st.markdown(f"**Talep:** {s['talep_puani']:.0f}/100")
-            st.markdown(f"**Ödeme:** {s['odeme_puani']:.0f}/100")
-            st.markdown(f"**Aciliyet:** {s['aciliyet_puani']:.0f}/100")
-            st.markdown(f"**Rekabet:** {s['rekabet_puani']:.0f}/100")
-        
-        tahmini = s["isletme_sayisi"] * s["aylik_butce"] * 0.001
-        st.markdown(f"**Potansiyel Aylık Gelir:** {tahmini:,.0f} TL")
-        st.markdown(f"**Mevcut Yazılım Sayısı:** {s['yazilim_sayisi']}")
-        
-        if s["odemeye_hazir"]:
-            st.success("✅ Bu sektör ödemeye hazır")
-        else:
-            st.warning("⚠️ Bazı kriterler yetersiz")
-
-st.markdown("---")
-
-with st.expander("❓ Sistem Nasıl Çalışır?"):
-    st.markdown(
-        "**Bu sistem 20 sektörü 4 kriterde puanlar:**\n\n"
-        "- **Talep (%35):** Google Trends, Ekşi, Donanım Haber\n"
-        "- **Ödeme (%30):** İşletme sayısı × Aylık bütçe\n"
-        "- **Aciliyet (%20):** Şikayetvar şikayetleri\n"
-        "- **Rekabet (%15):** Mevcut yazılım sayısı (az = iyi)\n\n"
-        "**Ödemeye Hazır Şartları:**\n"
-        "- Toplam ≥ 60, Ödeme ≥ 50, Aciliyet ≥ 40, Rekabet ≥ 40"
-) 
+st.divider()
+st.markdown(
+    """
+    **Hatırlatma ve Sınırlar:**
+    * **🟢 UYGUN** ışığı yalnızca belirlediğin rakamsal oranları (enerji tüketimi, maliyet marjı ve ödül/risk oranı) geçen varlıkları gösterir; **kesin kâr garantisi vermez** ve zararlı günler her zaman mümkündür.
+    * Ücretsiz piyasa verilerinde fiyatlar gecikmeli gelebilir; gerçek emir vermeden önce kendi hesabındaki anlık fiyatı ve katılım uygunluğunu teyit etmelisin.
+    """
+)
